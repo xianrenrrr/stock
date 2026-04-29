@@ -1,8 +1,27 @@
-# Mobile — AI 研报 Android shell
+# Mobile — AI 研报 Android app
 
-Minimal Kotlin WebView wrapper around the Render-hosted dashboard. Boss installs
-the APK once, gets a home-screen icon, taps to launch the dashboard fullscreen
-without browser chrome.
+Native Kotlin / Jetpack Compose app that talks directly to the Render-hosted
+`/channel/api/*` endpoints. No WebView, no URL visible to the user — just a
+real Android app: home-screen icon, opens to today's research note, reply box,
+14 days of history.
+
+## Architecture
+
+```
+Compose UI  →  StockViewModel  →  StockClient (HttpURLConnection + JSON)
+                                       │
+                                       └→  https://stock-research-qw85.onrender.com/channel/api/*
+                                            (Bearer token baked into BuildConfig at compile time)
+```
+
+Endpoints called:
+- `GET /channel/api/me`            — identity check on first open
+- `GET /channel/api/notes?days=14` — list recent notes
+- `GET /channel/api/notes/{id}`    — full body of a specific note
+- `POST /channel/api/reply`        — submit boss reply
+
+The boss's token is baked into `BuildConfig.API_TOKEN` via `STOCK_DEFAULT_TOKEN`
+at build time. Each recipient gets a separate APK build with their own token.
 
 ```
 mobile/
