@@ -17,6 +17,8 @@ import httpx
 import openai
 
 from stock import action_queue, anomaly, conversation, holdings, intent, prompt_rewriter
+from stock.cloud_sync import run_local_sync
+from stock.config import get_settings
 from stock.db import get_conn
 from stock.discover import run_discovery
 from stock.features import extract_features
@@ -449,9 +451,47 @@ def _job_research_push() -> None:
         conn.close()
 
 
+def _job_sync_to_render() -> None:
+    """Push local state to the Render free-tier proxy and pull boss replies.
+
+    Acts as a 5-min keepalive on the Render free instance so it doesn't sleep,
+    and bridges boss replies typed into the dashboard back into the F13 feedback
+    pipeline.
+    """
+    settings = get_settings()
+    if not (settings.render_sync_url or "").strip():
+        return  # not configured -- silently skip
+    conn = get_conn()
+    try:
+        result = run_local_sync(conn)
+        if result.error:
+            logger.warning("Render sync error: %s", result.error)
+        else:
+            logger.info(
+                "Render sync ok: notes=%d tokens=%d replies=%d",
+                result.notes_pushed, result.tokens_pushed, result.replies_pulled,
+            )
+    except Exception:
+        logger.exception("Render sync raised unexpectedly")
+    finally:
+        conn.close()
+
+
 def create_scheduler() -> BlockingScheduler:
-    """Create and configure the APScheduler instance with all pipeline jobs."""
+    """Create and configure the APScheduler instance with all pipeline jobs.
+
+    In `STOCK_MODE=cloud_proxy` (Render-side passive mode) the scheduler is empty:
+    Render only serves /channel/* and /sync/* endpoints, the local laptop drives
+    everything else.
+    """
     scheduler = BlockingScheduler(timezone="UTC")
+
+    settings = get_settings()
+    if (settings.stock_mode or "").strip().lower() == "cloud_proxy":
+        logger.info(
+            "STOCK_MODE=cloud_proxy -- scheduler is a no-op; FastAPI serves /channel/* and /sync/* only"
+        )
+        return scheduler
 
     # News + prices + features every 15 min during market hours (Mon-Fri)
     scheduler.add_job(
@@ -624,6 +664,17 @@ def create_scheduler() -> BlockingScheduler:
         ),
         id="research_push_evening",
         name="Evening research + WeChat push",
+    )
+
+    # Hybrid local + Render-free architecture: every 5 min, push local state to
+    # the Render proxy and pull any boss replies. This is also the keepalive
+    # ping that prevents Render free tier from sleeping. No-op when
+    # render_sync_url is unset (laptop-only mode).
+    scheduler.add_job(
+        _job_sync_to_render,
+        CronTrigger(minute="*/5", timezone="UTC"),
+        id="sync_to_render",
+        name="Push state to Render free tier + pull boss replies",
     )
 
     return scheduler

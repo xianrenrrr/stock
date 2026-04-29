@@ -252,6 +252,12 @@ CREATE TABLE IF NOT EXISTS recipient_tokens (
     revoked INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_recipient_tokens_recipient ON recipient_tokens (recipient);
+
+CREATE TABLE IF NOT EXISTS cloud_sync_state (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 """
 
 

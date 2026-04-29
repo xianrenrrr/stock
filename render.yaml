@@ -16,50 +16,53 @@ services:
     name: stock-research
     runtime: docker
     dockerfilePath: ./Dockerfile
-    plan: starter        # use `free` to test without billing; the scheduler will
-                         # stop while sleeping, missing morning/evening pushes
-    region: oregon       # change to `singapore` if you want lower latency to CN
+    # FREE tier: $0/mo, 512 MB RAM, ephemeral disk, sleeps after 15 min idle.
+    # The local laptop pushes to /sync/* every 5 min, which doubles as a
+    # keepalive so the free instance never actually sleeps.
+    plan: free
+    region: oregon
     healthCheckPath: /stock/health
-    autoDeploy: true     # auto-deploy on git push to main
+    autoDeploy: true
     envVars:
-      # --- secret env vars (set these in the Render dashboard, NEVER commit) ---
-      - key: MINIMAX_API_KEY
-        sync: false
-      - key: ANTHROPIC_API_KEY
-        sync: false
+      # Cloud-proxy mode: no scheduler, no MiniMax/Tavily calls. Render is just
+      # a passive cache of the latest research notes + a buffer for boss replies.
+      - key: STOCK_MODE
+        value: cloud_proxy
+
+      # Render auto-generates this and stores it. Copy from the dashboard and
+      # set it as RENDER_SYNC_TOKEN on your laptop's .env so the laptop can
+      # authenticate against /sync/*.
       - key: STOCK_API_TOKEN
-        generateValue: true     # Render creates and stores a strong random value
+        generateValue: true
+
+      # SQLite ephemeral location -- /tmp survives within an instance lifetime;
+      # local laptop refills it via /sync every 5 min.
+      - key: DB_PATH
+        value: /tmp/stock.db
+
+      # Cloud-proxy doesn't make LLM/Tavily calls but the modules are still
+      # imported. Empty values are safe (Settings load fine).
+      - key: MINIMAX_API_KEY
+        value: ""
+      - key: ANTHROPIC_API_KEY
+        value: ""
       - key: TAVILY_API_KEY
-        sync: false
+        value: ""
       - key: SERPER_API_KEY
-        sync: false
+        value: ""
       - key: BRAVE_API_KEY
-        sync: false
+        value: ""
 
-      # --- non-secret config (defaults that work in cloud) ---
-      - key: DAILY_COST_CEILING_USD
-        value: "10"
-      - key: RESEARCH_LANGUAGE
-        value: zh
-      - key: WEB_SEARCH_BACKEND
-        value: tavily
-      - key: MINIMAX_BASE_URL
-        value: https://api.minimaxi.com/v1
-
-      # --- WeChat / OpenClaw delivery -- DISABLED in cloud ---
-      # The cloud host has no Windows desktop, so pyautogui-based delivery
-      # is a no-op. The custom APK channel (Plan F) will hit the FastAPI
-      # endpoints directly when it ships.
+      # Cloud-proxy never delivers via pyautogui or OpenClaw.
       - key: OPENCLAW_AUTO_DELIVER
         value: "false"
       - key: WECHAT_PUSH_URL
         value: ""
 
-      # --- DB path on the persistent disk mount ---
-      - key: DB_PATH
-        value: /var/data/stock.db
+      - key: DAILY_COST_CEILING_USD
+        value: "10"
+      - key: RESEARCH_LANGUAGE
+        value: zh
 
-    disk:
-      name: stock-data
-      mountPath: /var/data
-      sizeGB: 1
+    # No persistent disk -- free tier doesn't support it. State refilled
+    # every 5 min by the laptop's /sync push.

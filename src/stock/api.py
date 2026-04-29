@@ -24,6 +24,7 @@ from stock.channel import (
     channel_exception_handler,
     create_router as create_channel_router,
 )
+from stock.cloud_sync import create_router as create_sync_router
 from stock.config import get_settings
 from stock.db import get_conn
 from stock.discover import (
@@ -1092,6 +1093,10 @@ def create_app() -> FastAPI:
     # separate auth boundary from the admin /stock/* routes).
     api.include_router(create_channel_router())
     api.add_exception_handler(ChannelHTTPError, channel_exception_handler)
+
+    # Sync endpoints at /sync/* -- only used by the local laptop pushing to a
+    # Render-hosted cloud_proxy instance. Same admin-token auth as /stock/*.
+    api.include_router(create_sync_router())
 
     return api
 

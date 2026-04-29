@@ -44,6 +44,16 @@ class Settings(BaseSettings):
     # Override at install time so SEC can identify the operator if a request misbehaves.
     edgar_user_agent: str = "stock-research 0.1 ops@example.com"
 
+    # Hybrid local + Render-free architecture.
+    # `local` (default): full pipeline runs (scheduler, ingest, predictions, research, GUI delivery).
+    # `cloud_proxy`: passive Render-side mode -- no scheduler, no MiniMax/Tavily calls.
+    #   Just serves /channel/* (boss dashboard) and /sync/* (local laptop pushes data here).
+    stock_mode: str = "local"
+
+    # Local laptop pushes notes/tokens to this URL every 5 min and pulls boss replies.
+    # Empty = sync disabled (laptop-only mode). Set after Render deploy.
+    render_sync_url: str = ""
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

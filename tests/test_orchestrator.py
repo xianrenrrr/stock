@@ -350,11 +350,11 @@ def test_job_reflect_weekly_cost_ceiling(
 
 
 def test_create_scheduler_has_expected_jobs() -> None:
-    """Scheduler registers all F00-F13 pipeline jobs."""
+    """Scheduler registers all F00-F13 pipeline jobs + cloud sync."""
     scheduler = create_scheduler()
 
-    # 10 pre-F11 + action_queue + anomaly + insiders + health + learn_feedback = 15
-    assert len(scheduler.get_jobs()) == 15
+    # 15 pre-cloud_sync + sync_to_render = 16
+    assert len(scheduler.get_jobs()) == 16
 
 
 def test_create_scheduler_job_ids() -> None:
@@ -378,8 +378,25 @@ def test_create_scheduler_job_ids() -> None:
         "insiders_pull",
         "health_check_weekly",
         "learn_from_feedback",
+        "sync_to_render",
     }
     assert job_ids == expected
+
+
+def test_create_scheduler_cloud_proxy_mode_is_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When STOCK_MODE=cloud_proxy, the scheduler registers zero jobs."""
+    from stock.config import get_settings as _get_settings
+
+    monkeypatch.setenv("STOCK_MODE", "cloud_proxy")
+    _get_settings.cache_clear()
+    try:
+        scheduler = create_scheduler()
+        assert len(scheduler.get_jobs()) == 0
+    finally:
+        monkeypatch.delenv("STOCK_MODE", raising=False)
+        _get_settings.cache_clear()
 
 
 # -- get_schedule_info tests -------------------------------------------------
@@ -391,7 +408,7 @@ def test_get_schedule_info_format() -> None:
     info = get_schedule_info(scheduler)
 
     assert isinstance(info, ScheduleInfo)
-    assert len(info.jobs) == 15
+    assert len(info.jobs) == 16
 
     # Each entry has name and next_run keys
     for entry in info.jobs:
