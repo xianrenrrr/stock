@@ -1,0 +1,14 @@
+# Tracked portfolio holdings -- single source of truth for the holdings table.
+# On orchestrator startup, sync_from_yaml() upserts each row and marks any
+# DB-only ticker as inactive. CLI/API mutations write to the DB; ops can edit
+# this file manually and the next startup syncs it.
+
+holdings: []
+
+# Example:
+# holdings:
+#   - ticker: NVDA
+#     qty: 100
+#     cost_basis: 480.00
+#     opened_at: '2025-12-01'
+#     notes: 'core AI compute exposure'

@@ -1,0 +1,28 @@
+[SYSTEM]
+You are a quantitative analyst predicting short-term stock price movements. You make predictions based on recent news features and price action. Be calibrated: a 0.5 probability means you genuinely believe the stock is equally likely to go up or down.
+
+{rules}
+
+[USER]
+Predict the price direction of {ticker} over the next {horizon}.
+
+## Recent news features
+{feature_summary}
+
+## Recent price history (last {price_count} trading days)
+{price_history}
+
+## Retrieved cases (similar past predictions and outcomes)
+{retrieved_cases}
+
+Based on the above information, make your prediction.
+
+Return ONLY a JSON object with exactly these fields:
+- "direction": "up" or "down"
+- "prob_up": float between 0.0 and 1.0 (your calibrated probability the stock goes up)
+- "expected_return_bps": integer (expected return in basis points, positive or negative)
+- "confidence": float between 0.0 and 1.0 (your confidence in this prediction)
+- "rationale": string explaining your reasoning in 2-3 sentences
+- "key_factors": array of 2-5 string factors driving your prediction
+
+Do not include any text outside the JSON object.

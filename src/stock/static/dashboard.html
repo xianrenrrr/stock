@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>AI 供应链每日研报</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
+<style>
+  :root {
+    --bg: #0e1116;
+    --panel: #161b22;
+    --panel-2: #1f2630;
+    --text: #e6edf3;
+    --text-dim: #9aa6b2;
+    --accent: #f0883e;
+    --accent-2: #58a6ff;
+    --border: #30363d;
+    --good: #3fb950;
+    --bad: #f85149;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                 "Microsoft YaHei", "Hiragino Sans GB", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.55;
+    min-height: 100vh;
+  }
+  .topbar {
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+  }
+  .topbar h1 {
+    font-size: 17px;
+    margin: 0;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+  .topbar .who {
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  main {
+    max-width: 820px;
+    margin: 0 auto;
+    padding: 18px 16px 120px;
+  }
+  .login {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px;
+    margin-top: 60px;
+  }
+  .login h2 { margin: 0 0 10px; font-size: 16px; }
+  .login p { color: var(--text-dim); font-size: 14px; margin: 0 0 14px; }
+  .login input, .login button, .reply textarea, .reply button {
+    width: 100%;
+    padding: 11px 12px;
+    font-size: 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+    color: var(--text);
+    font-family: inherit;
+  }
+  .login input:focus, .reply textarea:focus { outline: 1px solid var(--accent-2); }
+  .login button, .reply button {
+    margin-top: 10px;
+    background: var(--accent);
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+    color: #1a1107;
+  }
+  .login button:hover, .reply button:hover { filter: brightness(1.08); }
+  .login .err { color: var(--bad); font-size: 13px; margin-top: 8px; }
+  .latest {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 20px;
+    margin-bottom: 18px;
+  }
+  .latest .meta {
+    color: var(--text-dim);
+    font-size: 12px;
+    margin-bottom: 8px;
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .latest .meta b { color: var(--accent); font-weight: 600; }
+  .body {
+    font-size: 15px;
+    word-break: break-word;
+  }
+  .body h1, .body h2, .body h3 {
+    color: var(--accent);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 4px;
+    margin: 18px 0 10px;
+  }
+  .body h1 { font-size: 18px; }
+  .body h2 { font-size: 16px; }
+  .body h3 { font-size: 15px; }
+  .body table {
+    border-collapse: collapse;
+    margin: 12px 0;
+    width: 100%;
+    font-size: 13px;
+  }
+  .body th, .body td {
+    border: 1px solid var(--border);
+    padding: 6px 8px;
+    text-align: left;
+    vertical-align: top;
+  }
+  .body th { background: var(--panel-2); }
+  .body code {
+    background: var(--panel-2);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+  .body pre {
+    background: var(--panel-2);
+    padding: 10px 12px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13px;
+  }
+  .body ul, .body ol { padding-left: 22px; }
+  .body blockquote {
+    border-left: 3px solid var(--accent);
+    margin: 8px 0;
+    padding: 4px 12px;
+    color: var(--text-dim);
+    background: var(--panel-2);
+    border-radius: 0 6px 6px 0;
+  }
+  .reply {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 18px;
+  }
+  .reply h3 {
+    margin: 0 0 8px;
+    font-size: 14px;
+    color: var(--accent-2);
+  }
+  .reply textarea {
+    min-height: 90px;
+    resize: vertical;
+    font-family: inherit;
+  }
+  .reply .status {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 6px;
+    min-height: 16px;
+  }
+  .reply .status.ok { color: var(--good); }
+  .reply .status.err { color: var(--bad); }
+  .history h3 {
+    color: var(--text-dim);
+    font-weight: 500;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin: 18px 0 8px;
+  }
+  .history-item {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .history-item:hover { border-color: var(--accent-2); }
+  .history-item .row1 {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+  }
+  .history-item .preview {
+    font-size: 13px;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .footer {
+    color: var(--text-dim);
+    font-size: 11px;
+    text-align: center;
+    margin-top: 20px;
+  }
+  .badge {
+    display: inline-block;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  button.refresh {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  button.refresh:hover { color: var(--text); border-color: var(--accent-2); }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>AI 供应链研报</h1>
+  <div class="who" id="whoami">…</div>
+</div>
+
+<main>
+
+  <!-- login screen -->
+  <div id="loginPane" class="login hidden">
+    <h2>登录</h2>
+    <p>请输入管理员发给你的访问令牌（一次性，浏览器会记住）。</p>
+    <input id="tokenInput" type="text" placeholder="令牌 (Bearer token)" autocomplete="off">
+    <button id="loginBtn">进入</button>
+    <div id="loginErr" class="err"></div>
+  </div>
+
+  <!-- dashboard -->
+  <div id="dashPane" class="hidden">
+
+    <div class="latest" id="latestNote">
+      <div class="meta">
+        <span><b id="latestKind">—</b></span>
+        <span id="latestTopic"></span>
+        <span id="latestLayer"></span>
+        <span id="latestTime">—</span>
+        <button class="refresh" onclick="refreshAll()">刷新</button>
+      </div>
+      <div class="body" id="latestBody">读取中…</div>
+    </div>
+
+    <div class="reply">
+      <h3>回复 / 给系统的指令</h3>
+      <textarea id="replyText" placeholder="例如：再写短一些 / 多看 A 股 / 帮我深挖 PAM4 DSP"></textarea>
+      <button id="replyBtn">发送</button>
+      <div class="status" id="replyStatus">系统会在下一次研报中根据你的反馈调整。</div>
+    </div>
+
+    <div class="history">
+      <h3>过去 14 天</h3>
+      <div id="historyList">读取中…</div>
+    </div>
+
+    <div class="footer">
+      <span class="badge">不构成投资建议 / Not financial advice.</span>
+    </div>
+  </div>
+</main>
+
+<script>
+const API_BASE = "/channel/api";
+let TOKEN = null;
+
+function el(id) { return document.getElementById(id); }
+
+function renderMarkdown(text) {
+  if (window.marked) {
+    return window.marked.parse(text || "", { gfm: true, breaks: true });
+  }
+  // fallback: minimal escape + line-breaks
+  return (text || "").replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/\n/g, "<br>");
+}
+
+async function api(path, opts = {}) {
+  const headers = Object.assign(
+    { "Content-Type": "application/json" },
+    opts.headers || {},
+    { "Authorization": "Bearer " + TOKEN }
+  );
+  const resp = await fetch(API_BASE + path, Object.assign({}, opts, { headers }));
+  const data = resp.headers.get("content-type")?.includes("json")
+    ? await resp.json()
+    : await resp.text();
+  if (!resp.ok) {
+    const msg = (data && data.error) ? data.error : ("HTTP " + resp.status);
+    throw new Error(msg);
+  }
+  return data;
+}
+
+function showLogin(errMsg) {
+  el("loginPane").classList.remove("hidden");
+  el("dashPane").classList.add("hidden");
+  el("whoami").textContent = "未登录";
+  el("loginErr").textContent = errMsg || "";
+}
+
+function showDash(recipient) {
+  el("loginPane").classList.add("hidden");
+  el("dashPane").classList.remove("hidden");
+  el("whoami").textContent = recipient ? "你好，" + recipient : "已登录";
+}
+
+async function loadDashboard() {
+  try {
+    const me = await api("/me");
+    showDash(me.recipient);
+    await Promise.all([loadLatest(), loadHistory()]);
+  } catch (e) {
+    localStorage.removeItem("stock_token");
+    TOKEN = null;
+    showLogin("登录失效：" + e.message);
+  }
+}
+
+async function loadLatest() {
+  const list = await api("/notes?days=14&limit=1");
+  const note = (list.notes || [])[0];
+  if (!note) {
+    el("latestBody").innerHTML = "<em>暂无研报。系统会在每天 10:30 / 22:30 北京时间生成。</em>";
+    el("latestKind").textContent = "—";
+    el("latestTopic").textContent = "";
+    el("latestLayer").textContent = "";
+    el("latestTime").textContent = "";
+    return;
+  }
+  const detail = await api("/notes/" + note.research_id);
+  el("latestKind").textContent = detail.kind === "deep_dive" ? "深挖" : "每日";
+  el("latestTopic").textContent = detail.topic ? "• " + detail.topic : "";
+  el("latestLayer").textContent = detail.layer_focus ? "• " + detail.layer_focus : "";
+  el("latestTime").textContent = formatTime(detail.created_at);
+  el("latestBody").innerHTML = renderMarkdown(detail.body);
+}
+
+async function loadHistory() {
+  const list = await api("/notes?days=14&limit=30");
+  const wrap = el("historyList");
+  if (!list.notes || list.notes.length === 0) {
+    wrap.innerHTML = "<em>过去 14 天没有研报记录。</em>";
+    return;
+  }
+  wrap.innerHTML = list.notes.map(n => `
+    <div class="history-item" data-id="${n.research_id}">
+      <div class="row1">
+        <span>${n.kind === "deep_dive" ? "深挖" : "每日"} ${n.topic || n.layer_focus || ""}</span>
+        <span>${formatTime(n.created_at)}</span>
+      </div>
+      <div class="preview">${escapeHtml(n.body_preview)}</div>
+    </div>
+  `).join("");
+  wrap.querySelectorAll(".history-item").forEach(div => {
+    div.addEventListener("click", async () => {
+      const id = div.getAttribute("data-id");
+      try {
+        const detail = await api("/notes/" + id);
+        el("latestKind").textContent = detail.kind === "deep_dive" ? "深挖" : "每日";
+        el("latestTopic").textContent = detail.topic ? "• " + detail.topic : "";
+        el("latestLayer").textContent = detail.layer_focus ? "• " + detail.layer_focus : "";
+        el("latestTime").textContent = formatTime(detail.created_at);
+        el("latestBody").innerHTML = renderMarkdown(detail.body);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } catch (e) {
+        alert("加载失败：" + e.message);
+      }
+    });
+  });
+}
+
+function formatTime(iso) {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString("zh-CN", { hour12: false });
+  } catch (e) {
+    return iso;
+  }
+}
+
+function escapeHtml(s) {
+  return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+async function sendReply() {
+  const text = el("replyText").value.trim();
+  if (!text) return;
+  el("replyBtn").disabled = true;
+  el("replyStatus").className = "status";
+  el("replyStatus").textContent = "发送中…";
+  try {
+    const r = await api("/reply", { method: "POST", body: JSON.stringify({ text }) });
+    el("replyStatus").className = "status ok";
+    el("replyStatus").textContent = "已记录 (" + formatTime(r.recorded_at) + ")。系统会在下一份研报中调整。";
+    el("replyText").value = "";
+  } catch (e) {
+    el("replyStatus").className = "status err";
+    el("replyStatus").textContent = "发送失败：" + e.message;
+  } finally {
+    el("replyBtn").disabled = false;
+  }
+}
+
+function refreshAll() {
+  loadLatest().catch(() => {});
+  loadHistory().catch(() => {});
+}
+
+function pickupTokenFromUrl() {
+  const url = new URL(window.location.href);
+  const t = url.searchParams.get("token");
+  if (t) {
+    localStorage.setItem("stock_token", t);
+    url.searchParams.delete("token");
+    window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
+    return t;
+  }
+  return null;
+}
+
+function init() {
+  TOKEN = pickupTokenFromUrl() || localStorage.getItem("stock_token");
+  el("loginBtn").addEventListener("click", () => {
+    const t = el("tokenInput").value.trim();
+    if (!t) return;
+    TOKEN = t;
+    localStorage.setItem("stock_token", t);
+    loadDashboard();
+  });
+  el("tokenInput").addEventListener("keydown", e => {
+    if (e.key === "Enter") el("loginBtn").click();
+  });
+  el("replyBtn").addEventListener("click", sendReply);
+
+  if (TOKEN) {
+    loadDashboard();
+  } else {
+    showLogin("");
+  }
+
+  // light auto-refresh of the latest note every 5 minutes
+  setInterval(() => { if (TOKEN) refreshAll(); }, 5 * 60 * 1000);
+}
+
+document.addEventListener("DOMContentLoaded", init);
+</script>
+</body>
+</html>

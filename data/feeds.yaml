@@ -1,0 +1,15 @@
+# RSS feeds for news ingestion.
+# Per-ticker feeds use {ticker} as a placeholder in the URL.
+feeds:
+  - url: "https://finance.yahoo.com/rss/headline?s={ticker}"
+    source: "yahoo_rss"
+    per_ticker: true
+  - url: "https://rss.marketwatch.com/rss/topstories"
+    source: "marketwatch"
+    per_ticker: false
+  - url: "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114"
+    source: "cnbc"
+    per_ticker: false
+  - url: "https://efts.sec.gov/LATEST/search-index?q=%22{ticker}%22&forms=8-K&dateRange=custom"
+    source: "sec_edgar"
+    per_ticker: true

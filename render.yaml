@@ -1,0 +1,65 @@
+# Render blueprint: one web service running both FastAPI (uvicorn) + the APScheduler
+# orchestrator in a single process. Persistent disk holds the SQLite DB so research
+# notes, predictions, conversations, and rules survive restarts.
+#
+# Apply via the Render dashboard: New > Blueprint > point at this repo. Render reads
+# this file and prompts for the secret env vars below.
+#
+# Cost estimate (free tier):
+#   - 1x web service on `Free` instance: $0/mo (sleeps after 15 min idle -- not ideal)
+#   - Recommended: `Starter` instance ($7/mo) so the scheduler runs continuously
+#   - 1 GB persistent disk: $0.25/mo
+# Total: ~$7.25/mo for always-on.
+
+services:
+  - type: web
+    name: stock-research
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter        # use `free` to test without billing; the scheduler will
+                         # stop while sleeping, missing morning/evening pushes
+    region: oregon       # change to `singapore` if you want lower latency to CN
+    healthCheckPath: /stock/health
+    autoDeploy: true     # auto-deploy on git push to main
+    envVars:
+      # --- secret env vars (set these in the Render dashboard, NEVER commit) ---
+      - key: MINIMAX_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: STOCK_API_TOKEN
+        generateValue: true     # Render creates and stores a strong random value
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: SERPER_API_KEY
+        sync: false
+      - key: BRAVE_API_KEY
+        sync: false
+
+      # --- non-secret config (defaults that work in cloud) ---
+      - key: DAILY_COST_CEILING_USD
+        value: "10"
+      - key: RESEARCH_LANGUAGE
+        value: zh
+      - key: WEB_SEARCH_BACKEND
+        value: tavily
+      - key: MINIMAX_BASE_URL
+        value: https://api.minimaxi.com/v1
+
+      # --- WeChat / OpenClaw delivery -- DISABLED in cloud ---
+      # The cloud host has no Windows desktop, so pyautogui-based delivery
+      # is a no-op. The custom APK channel (Plan F) will hit the FastAPI
+      # endpoints directly when it ships.
+      - key: OPENCLAW_AUTO_DELIVER
+        value: "false"
+      - key: WECHAT_PUSH_URL
+        value: ""
+
+      # --- DB path on the persistent disk mount ---
+      - key: DB_PATH
+        value: /var/data/stock.db
+
+    disk:
+      name: stock-data
+      mountPath: /var/data
+      sizeGB: 1

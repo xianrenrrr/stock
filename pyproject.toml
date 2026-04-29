@@ -1,0 +1,76 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stock"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "anthropic",
+    "openai",
+    "yfinance",
+    "feedparser",
+    "beautifulsoup4",
+    "httpx",
+    "pandas",
+    "numpy",
+    "scikit-learn",
+    "scipy",
+    "sentence-transformers",
+    "sqlite-vec",
+    "fastapi",
+    "uvicorn",
+    "typer",
+    "apscheduler>=3.10,<4.0",
+    "PyYAML",
+    "pydantic>=2.0",
+    "pydantic-settings",
+    "python-dotenv",
+]
+
+[project.optional-dependencies]
+# pyautogui/pyperclip + screen capture are only needed on the local Windows
+# desktop that runs WeChat. Linux / Render deployments skip these.
+gui = [
+    "pyautogui",
+    "pyperclip",
+    "pyscreeze",
+    "pillow",
+]
+dev = [
+    "pytest",
+    "mypy",
+    "ruff",
+    "respx",
+    "types-PyYAML",
+    "types-beautifulsoup4",
+]
+
+[project.scripts]
+stock = "stock.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["stock"]
+
+[tool.mypy]
+strict = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["yfinance.*", "feedparser.*", "sentence_transformers.*", "sqlite_vec.*", "sklearn.*", "apscheduler.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

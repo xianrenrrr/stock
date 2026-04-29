@@ -1,0 +1,35 @@
+# Tickers to follow. One per line under `tickers`.
+# Seed list focuses on AI supply chain layers we most want to track:
+# - GPU / hyperscaler demand drivers
+# - HBM + advanced packaging equipment
+# - PAM4 DSP / optical module / InP-LN sub-suppliers
+# - Power / cooling infrastructure beneficiaries
+#
+# yfinance ticker rules apply (US tickers only via the FastAPI on_demand path; China
+# tickers are referenced via the supply-chain knowledge base).
+tickers:
+  - NVDA
+  - AMD
+  - AVGO
+  - TSM
+  - ASML
+  - AMAT
+  - LRCX
+  - KLAC
+  - MU
+  - MRVL
+  - MTSI
+  - SMTC
+  - CRDO
+  - COHR
+  - LITE
+  - SMCI
+  - DELL
+  - VRT
+  - ETN
+  - CEG
+  - VST
+  - MSFT
+  - GOOGL
+  - META
+  - ORCL

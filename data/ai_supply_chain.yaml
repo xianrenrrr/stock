@@ -1,0 +1,193 @@
+# AI industry supply chain map.
+# Layered from raw materials and equipment up to integrated AI systems.
+# Used by the daily research generator to surface "picks-and-shovels"
+# beneficiaries that can move on AI capex without being headline names.
+#
+# Each player line:
+#   ticker      - market ticker (US, .SS Shanghai, .SZ Shenzhen, .HK Hong Kong, .KS Korea)
+#   name        - display name (English / Chinese where useful)
+#   country     - US, CN, KR, JP, NL, TW, etc.
+#   role        - one-line description of what they do in this sublayer
+#   notes       - optional, short comment on why they matter
+
+layers:
+
+  - layer: raw_materials
+    function: "Mined and refined inputs that feed the chip and optics stack."
+    sublayers:
+
+      - name: rare_earths_magnets
+        function: "Magnets for HDD spindles, motors, EV powertrains; some used in DC equipment."
+        materials: [neodymium, dysprosium, terbium]
+        players:
+          - {ticker: MP, name: "MP Materials", country: US, role: "Mountain Pass rare-earth mine + magnet build-out"}
+          - {ticker: LYC.AX, name: "Lynas Rare Earths", country: AU, role: "Heavy rare-earth ex-China supplier"}
+          - {ticker: "600111.SS", name: "中国北方稀土", country: CN, role: "Largest rare-earth producer in China"}
+          - {ticker: "000831.SZ", name: "五矿稀土", country: CN, role: "Heavy rare-earth processing"}
+
+      - name: silicon_wafer
+        function: "Polysilicon refining, mono / multi crystal pulling, wafer slicing."
+        players:
+          - {ticker: SUMCO.T, name: "SUMCO", country: JP, role: "300 mm wafers"}
+          - {ticker: "3436.T", name: "Shin-Etsu Chemical", country: JP, role: "Largest 300 mm wafer maker"}
+          - {ticker: "688126.SS", name: "沪硅产业", country: CN, role: "China largest 300 mm wafer producer"}
+          - {ticker: "603688.SS", name: "石英股份", country: CN, role: "High-purity quartz for crucibles"}
+
+      - name: indium_phosphide_inp
+        function: "InP substrate is the host crystal for laser diodes used in 800G/1.6T optical modules."
+        notes: "InP wafer/substrate makers ran 5-10x in the 2023-2024 800G optical wave."
+        players:
+          - {ticker: COHR, name: "Coherent (II-VI)", country: US, role: "InP + GaAs substrate, vertically integrated"}
+          - {ticker: "002428.SZ", name: "云南锗业", country: CN, role: "Ge / GaAs / InP wafer, key Chinese substrate"}
+          - {ticker: IIVI, name: "(legacy II-VI; merged into COHR)", country: US, role: "see COHR"}
+
+      - name: lithium_niobate_tfln
+        function: "Electro-optic crystal that modulates laser by voltage. Thin-film LN (TFLN) replaces legacy MZ modulators in next-gen optics."
+        notes: "User-flagged classic example: TFLN suppliers (Fujing 福晶 etc.) ran 10x as PAM4-DSP/optics demand exploded."
+        players:
+          - {ticker: "002222.SZ", name: "福晶科技", country: CN, role: "Largest LN crystal supplier globally; TFLN modulator angle"}
+          - {ticker: "603501.SS", name: "韦尔股份", country: CN, role: "CMOS image sensor; tangential optics"}
+          - {ticker: "688048.SS", name: "长光华芯", country: CN, role: "Laser chips; downstream of InP/LN"}
+
+      - name: photoresist_specialty_chemicals
+        function: "EUV/ArF photoresist, CMP slurry, electronic gases."
+        players:
+          - {ticker: TSE.T, name: "Tokyo Ohka Kogyo (TOK)", country: JP, role: "EUV photoresist"}
+          - {ticker: "4185.T", name: "JSR", country: JP, role: "ArF/EUV resist"}
+          - {ticker: "300285.SZ", name: "国瓷材料", country: CN, role: "MLCC ceramic powders / electronic ceramics"}
+          - {ticker: "300346.SZ", name: "南大光电", country: CN, role: "ArF photoresist + electronic gases"}
+
+  - layer: equipment
+    function: "Tools that build the chips, modules, and packages."
+    sublayers:
+
+      - name: lithography
+        function: "EUV/DUV scanners; absolute monopoly at the leading edge."
+        players:
+          - {ticker: ASML, name: "ASML", country: NL, role: "EUV monopoly"}
+          - {ticker: "8035.T", name: "Tokyo Electron", country: JP, role: "Coater/developer track for litho"}
+          - {ticker: NIKON.T, name: "Nikon", country: JP, role: "i-line / KrF litho"}
+
+      - name: deposition_etch_clean
+        function: "Thin-film deposition, plasma etch, wafer cleaning."
+        players:
+          - {ticker: AMAT, name: "Applied Materials", country: US, role: "Deposition leader"}
+          - {ticker: LRCX, name: "Lam Research", country: US, role: "Etch + ALD leader"}
+          - {ticker: KLAC, name: "KLA Corporation", country: US, role: "Process control / metrology"}
+          - {ticker: ACMR, name: "ACM Research", country: US/CN, role: "Wet wafer cleaning, exposure to China fabs"}
+          - {ticker: "688012.SS", name: "中微公司 (AMEC)", country: CN, role: "Etch + MOCVD, leading domestic equipment"}
+          - {ticker: "688126.SS", name: "北方华创", country: CN, role: "PVD/etch/diffusion broad equipment"}
+
+      - name: advanced_packaging_equipment
+        function: "Hybrid bonding, CoWoS, fan-out, flip-chip — bottleneck for HBM/AI accelerators."
+        notes: "TSMC CoWoS expansion gates AI GPU supply. Equipment makers here are direct AI capex plays."
+        players:
+          - {ticker: BESI.AS, name: "BE Semiconductor (BESI)", country: NL, role: "Hybrid bonding leader"}
+          - {ticker: "6857.T", name: "Advantest", country: JP, role: "ATE — System-level test for HBM/GPU"}
+          - {ticker: TER, name: "Teradyne", country: US, role: "ATE — competing with Advantest on AI test"}
+          - {ticker: "688362.SS", name: "甬矽电子", country: CN, role: "High-end packaging operations"}
+
+      - name: photonics_fab_equipment
+        function: "Equipment for InP/LN/Si-photonics fabs."
+        players:
+          - {ticker: VECO, name: "Veeco Instruments", country: US, role: "MOCVD for laser diode fabs"}
+          - {ticker: AXTI, name: "AXT Inc.", country: US, role: "Compound semi substrates (InP, GaAs)"}
+
+  - layer: components
+    function: "Discrete chips and modules that go into AI servers and switches."
+    sublayers:
+
+      - name: gpu_accelerator
+        function: "The end customer of the entire AI capex chain."
+        players:
+          - {ticker: NVDA, name: "NVIDIA", country: US, role: "Dominant AI GPU"}
+          - {ticker: AMD, name: "AMD", country: US, role: "MI300/MI325 challenger"}
+          - {ticker: AVGO, name: "Broadcom", country: US, role: "ASIC + networking silicon for hyperscalers"}
+          - {ticker: TSM, name: "Taiwan Semiconductor", country: TW, role: "Foundry for NVDA/AMD/AVGO"}
+
+      - name: hbm_memory
+        function: "High-bandwidth memory bonded next to the GPU."
+        players:
+          - {ticker: "000660.KS", name: "SK Hynix", country: KR, role: "HBM3E leader"}
+          - {ticker: "005930.KS", name: "Samsung Electronics", country: KR, role: "HBM3 + foundry"}
+          - {ticker: MU, name: "Micron Technology", country: US, role: "HBM3E ramping"}
+
+      - name: pam4_dsp_retimer
+        function: "Convert binary digital → 4-level (PAM4) electrical signals for >800G optical modules."
+        notes: "User-flagged: PAM4 DSP suppliers were the inflection point — converting binary to 4-level voltage that drives LN modulators on InP lasers."
+        players:
+          - {ticker: MRVL, name: "Marvell Technology", country: US, role: "PAM4 DSP + ZR/ZR+ coherent DSP"}
+          - {ticker: MTSI, name: "MACOM Technology", country: US, role: "PAM4 driver + TIA"}
+          - {ticker: SMTC, name: "Semtech", country: US, role: "PAM4 retimers (FiberEdge)"}
+          - {ticker: CRDO, name: "Credo Technology", country: US, role: "AECs + PAM4 SerDes"}
+
+      - name: optical_transceiver
+        function: "Pluggable optics (800G / 1.6T) connecting GPU racks."
+        players:
+          - {ticker: COHR, name: "Coherent", country: US, role: "Vertically integrated optics + InP"}
+          - {ticker: LITE, name: "Lumentum", country: US, role: "DCI / pluggable optics"}
+          - {ticker: "300308.SZ", name: "中际旭创 (Innolight)", country: CN, role: "Largest optical module supplier; key NVDA optics partner"}
+          - {ticker: "300570.SZ", name: "天孚通信 (Tianfu Communication)", country: CN, role: "Optical lens/passive parts"}
+          - {ticker: "300502.SZ", name: "新易盛 (Eoptolink)", country: CN, role: "800G optical modules"}
+
+      - name: networking_switching_silicon
+        function: "Switch ASICs and Ethernet NICs for AI clusters."
+        players:
+          - {ticker: AVGO, name: "Broadcom", country: US, role: "Tomahawk/Jericho switch silicon"}
+          - {ticker: ANET, name: "Arista Networks", country: US, role: "Switch systems"}
+          - {ticker: CSCO, name: "Cisco Systems", country: US, role: "Networking; Splunk integration"}
+
+      - name: china_osat_packaging
+        function: "China mainland OSAT (assembly + test) houses — boss-flagged for cycle research."
+        notes: "Boss request: track previous semi-cycle stock moves (low → peak → end) and capacity expansion since."
+        players:
+          - {ticker: "600584.SS", name: "长电科技 (JCET Group)", country: CN, role: "Largest CN OSAT; advanced + BGA packaging"}
+          - {ticker: "002156.SZ", name: "通富微电 (Tongfu)", country: CN, role: "Top-3 CN OSAT; AMD packaging partner"}
+          - {ticker: "002185.SZ", name: "华天科技 (Tianshui Huatian)", country: CN, role: "Mass-market OSAT"}
+          - {ticker: "688249.SS", name: "甬矽电子", country: CN, role: "High-end SiP / advanced packaging"}
+
+  - layer: integration_systems
+    function: "Servers, racks, and full AI clusters."
+    sublayers:
+      - name: server_oem
+        function: "GPU server assembly."
+        players:
+          - {ticker: SMCI, name: "Super Micro Computer", country: US, role: "GPU servers"}
+          - {ticker: DELL, name: "Dell Technologies", country: US, role: "PowerEdge AI servers"}
+          - {ticker: HPE, name: "Hewlett Packard Enterprise", country: US, role: "Cray + AI systems"}
+          - {ticker: "2317.TW", name: "Hon Hai (Foxconn)", country: TW, role: "AI server ODM"}
+          - {ticker: "601138.SS", name: "工业富联 (FII)", country: CN, role: "AI server assembly in China"}
+
+      - name: hyperscaler_capex_buyer
+        function: "Demand side — hyperscalers funding the entire stack."
+        players:
+          - {ticker: MSFT, name: "Microsoft", country: US, role: "Azure AI capex; OpenAI compute"}
+          - {ticker: GOOGL, name: "Alphabet", country: US, role: "GCP + TPU"}
+          - {ticker: AMZN, name: "Amazon", country: US, role: "AWS + Trainium/Inferentia"}
+          - {ticker: META, name: "Meta", country: US, role: "MTIA + GPU clusters"}
+          - {ticker: ORCL, name: "Oracle", country: US, role: "OCI clusters; OpenAI infra deals"}
+
+  - layer: power_cooling_infra
+    function: "Datacenter power, cooling, and grid build-out — second-derivative AI capex."
+    sublayers:
+      - name: power_grid_transformers
+        function: "Transformers, switchgear, generators for new DC builds."
+        players:
+          - {ticker: ETN, name: "Eaton", country: US, role: "Power management for DCs"}
+          - {ticker: VRT, name: "Vertiv Holdings", country: US, role: "Critical infrastructure for DCs"}
+          - {ticker: GE, name: "GE Vernova", country: US, role: "Heavy electrical / grid"}
+          - {ticker: HUBB, name: "Hubbell Inc.", country: US, role: "Utility T&D + DC products"}
+
+      - name: liquid_cooling
+        function: "Direct-to-chip and immersion cooling for high-power AI racks."
+        players:
+          - {ticker: VRT, name: "Vertiv Holdings", country: US, role: "CoolIT partnership / liquid cooling racks"}
+          - {ticker: SMCI, name: "Super Micro Computer", country: US, role: "L-DTC integrated servers"}
+          - {ticker: "002335.SZ", name: "科华数据", country: CN, role: "DC liquid cooling solutions"}
+
+      - name: nuclear_renewables_for_ai
+        function: "Power capacity for hyperscale AI campuses."
+        players:
+          - {ticker: VST, name: "Vistra", country: US, role: "Nuclear + thermal generation"}
+          - {ticker: CEG, name: "Constellation Energy", country: US, role: "Nuclear power for DCs"}
+          - {ticker: TLN, name: "Talen Energy", country: US, role: "AWS nuclear PPA"}

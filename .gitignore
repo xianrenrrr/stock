@@ -1,0 +1,54 @@
+# --- secrets + local state (NEVER commit) ---
+.env
+.env.local
+.env.*.local
+
+# --- generated databases + outboxes ---
+data/stock.db
+data/stock.db-journal
+data/stock.db-wal
+data/stock.db-shm
+data/wechat_outbox/
+data/wechat_inbox/
+data/wechat_feedback.md
+
+# --- caches + build artifacts ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+*.log
+
+# --- local pipeline working files ---
+pipeline/logs/
+pipeline/outputs/
+pipeline/firewall_test/firewall_test.apk
+
+# --- OS noise ---
+.DS_Store
+Thumbs.db
+
+# --- IDE ---
+.vscode/
+.idea/
+*.swp
+
+# --- Android / Gradle build artifacts ---
+mobile/.gradle/
+mobile/.idea/
+mobile/build/
+mobile/app/build/
+mobile/local.properties
+mobile/captures/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+*.jks
+*.keystore

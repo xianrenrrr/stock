@@ -1,0 +1,104 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/build-apk.yml'
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'Override STOCK_BASE_URL for this build'
+        required: false
+        default: ''
+      default_token:
+        description: 'Optional STOCK_DEFAULT_TOKEN for a pre-authenticated APK'
+        required: false
+        default: ''
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('mobile/**/*.gradle*', 'mobile/**/gradle-wrapper.properties') }}
+          restore-keys: ${{ runner.os }}-gradle-
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.5'
+
+      - name: Resolve build args
+        id: args
+        run: |
+          BASE_URL_OVERRIDE="${{ github.event.inputs.base_url }}"
+          TOKEN_OVERRIDE="${{ github.event.inputs.default_token }}"
+          ARGS=""
+          if [ -n "$BASE_URL_OVERRIDE" ]; then
+            ARGS="$ARGS -PSTOCK_BASE_URL=$BASE_URL_OVERRIDE"
+          fi
+          if [ -n "$TOKEN_OVERRIDE" ]; then
+            ARGS="$ARGS -PSTOCK_DEFAULT_TOKEN=$TOKEN_OVERRIDE"
+          fi
+          echo "args=$ARGS" >> "$GITHUB_OUTPUT"
+
+      - name: Build debug APK
+        working-directory: ./mobile
+        run: gradle assembleDebug ${{ steps.args.outputs.args }}
+
+      - name: Build release APK (debug-signed)
+        working-directory: ./mobile
+        run: gradle assembleRelease ${{ steps.args.outputs.args }}
+
+      - name: Locate APK outputs
+        id: apk
+        run: |
+          DEBUG_APK=$(find mobile/app/build/outputs/apk/debug -name "*.apk" | head -1)
+          RELEASE_APK=$(find mobile/app/build/outputs/apk/release -name "*.apk" | head -1)
+          echo "Debug APK: $DEBUG_APK"
+          echo "Release APK: $RELEASE_APK"
+          echo "debug=$DEBUG_APK" >> "$GITHUB_OUTPUT"
+          echo "release=$RELEASE_APK" >> "$GITHUB_OUTPUT"
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-research-debug
+          path: ${{ steps.apk.outputs.debug }}
+          retention-days: 30
+
+      - name: Upload release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-research-release
+          path: ${{ steps.apk.outputs.release }}
+          retention-days: 30
+
+      - name: Print install instructions
+        run: |
+          echo "=== Build complete ==="
+          echo "Download the APK from the artifacts of this run."
+          echo "Send it to the recipient via WeChat / cloud drive."
+          echo "On the phone: enable 'Install from Unknown Sources' once,"
+          echo "then tap the APK to install."

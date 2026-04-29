@@ -1,0 +1,42 @@
+# Keep the docker context lean.
+.git
+.github
+.venv
+.env
+.env.*
+!.env.example
+
+# Caches / build artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Local-only data (DB, screenshots, outbox, secrets, OpenClaw state).
+# These are recreated on the persistent disk inside the container.
+data/stock.db
+data/stock.db-journal
+data/wechat_outbox/
+data/wechat_inbox/
+data/wechat_feedback.md
+
+# Logs + ephemeral notebooks
+pipeline/logs/
+pipeline/outputs/
+*.log
+*.ipynb_checkpoints
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Docs that are useful in repo but not in the runtime image
+md/
+
+# Mobile app -- not needed in the Render container
+mobile/
+.github/

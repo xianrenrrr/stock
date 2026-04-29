@@ -1,0 +1,14 @@
+# WeChat recipients for the daily research push.
+# `alias` is the identifier passed to the OpenClaw / WeChat bridge — set this to whatever
+# string identifies the contact in your bridge (nickname, remark, room id, etc.).
+# `enabled: false` silences a recipient without removing them.
+#
+# Default delivery: scheduled morning + evening research reports go to every enabled entry.
+
+recipients:
+  - alias: 杨建中
+    nickname: "杨建中"
+    enabled: true
+  - alias: richard
+    nickname: "Richard"
+    enabled: true

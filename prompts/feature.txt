@@ -1,0 +1,15 @@
+You are a financial news analyst. Extract structured features from the following news article.
+
+Ticker: {ticker}
+Title: {title}
+Article text:
+{body}
+
+Return ONLY a JSON object with exactly these fields:
+- "sentiment": one of "bullish", "bearish", "neutral"
+- "novelty": one of "high", "medium", "low" — how unexpected is this news relative to consensus?
+- "catalyst_type": one of "earnings", "macro", "product", "regulatory", "personnel", "legal", "other"
+- "time_sensitivity": one of "hours", "days", "weeks" — how quickly will this impact the stock price?
+- "summary": one sentence summarizing the key market-relevant takeaway
+
+Do not include any text outside the JSON object. Do not wrap in markdown code fences.
