@@ -104,6 +104,34 @@ def channel_token_list_cmd(
         raise typer.Exit(code=1)
 
 
+@app.command("sync")
+def sync_cmd() -> None:
+    """Push local research notes + tokens to Render and pull any boss replies.
+
+    Runs the same logic as the scheduled `_job_sync_to_render` job, but on demand.
+    Useful for: bootstrapping after minting tokens, or when you want to confirm
+    the cloud_proxy is reachable.
+    """
+    try:
+        from stock.cloud_sync import run_local_sync
+
+        conn = get_conn()
+        result = run_local_sync(conn)
+        if result.error:
+            typer.echo(f"sync failed: {result.error}", err=True)
+            raise typer.Exit(code=1)
+        typer.echo(
+            f"sync ok: notes_pushed={result.notes_pushed}"
+            f" tokens_pushed={result.tokens_pushed}"
+            f" replies_pulled={result.replies_pulled}"
+        )
+    except typer.Exit:
+        raise
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
 @channel_app.command("revoke")
 def channel_token_revoke_cmd(
     token: Annotated[str, typer.Argument(help="Full token value to revoke")],

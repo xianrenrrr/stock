@@ -39,7 +39,10 @@ logger = logging.getLogger(__name__)
 
 SYNC_NOTES_LOOKBACK_DAYS: int = 14
 SYNC_REPLIES_DEFAULT_LOOKBACK_DAYS: int = 7
-HTTP_TIMEOUT_SECS: float = 30.0
+# Render free tier first request after sleep can take 60-90s while the container
+# cold-starts. After that subsequent calls are fast. The 5-min keepalive prevents
+# sleeps in steady state.
+HTTP_TIMEOUT_SECS: float = 120.0
 FEEDBACK_PATH: str = "data/wechat_feedback.md"
 
 
