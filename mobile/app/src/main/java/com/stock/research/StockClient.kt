@@ -9,7 +9,7 @@ import java.net.URL
 import java.nio.charset.StandardCharsets
 
 /**
- * Thin HTTP client for the /channel/api/* endpoints. No external HTTP lib --
+ * Thin HTTP client for the /channel/api endpoints. No external HTTP lib --
  * HttpURLConnection + org.json keeps the APK small and avoids OkHttp version conflicts.
  *
  * All calls block; callers must run them off the main thread (we use coroutines
