@@ -8,9 +8,15 @@ from datetime import datetime, timedelta, timezone
 
 from pydantic import BaseModel
 
+from stock.config import get_settings
 from stock.memory import _serialize_embedding, embed
 
 logger = logging.getLogger(__name__)
+
+
+def _embeddings_enabled() -> bool:
+    """False in cloud_proxy mode -- the laptop owns embedding; cloud is just a buffer."""
+    return (get_settings().stock_mode or "").strip().lower() != "cloud_proxy"
 
 CONTEXT_BODY_MAX_CHARS: int = 240
 RECENT_TURNS_DEFAULT_LIMIT: int = 6
@@ -58,6 +64,10 @@ def _embed_and_store(
 ) -> int | None:
     """Embed the body text and store it under conversation_embeddings."""
     if not body.strip():
+        return None
+    # cloud_proxy skips embedding to stay under Render free-tier 512MB ceiling;
+    # the laptop re-embeds when the conversation row syncs back over /sync/replies.
+    if not _embeddings_enabled():
         return None
     try:
         vector = embed(body)
