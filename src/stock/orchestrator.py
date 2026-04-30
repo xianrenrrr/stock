@@ -260,10 +260,9 @@ def _job_health_check() -> None:
         if not sections:
             return
 
-        body = "\n\n---\n\n".join(sections)
-        if "Not financial advice" not in body:
-            body = body.rstrip() + "\n\nNot financial advice."
-        broadcast(body, conn, research_id=last_research_id)
+        # Per-ticker health-checks already live in research_reports; APK pulls them
+        # via /channel/api/notes. No combined WeChat broadcast needed.
+        _ = last_research_id
     finally:
         conn.close()
 
@@ -319,12 +318,21 @@ def _job_learn_from_feedback() -> None:
                     reply_body = generate_reply(
                         conn, recipient=entry.recipient, boss_reply=entry.text
                     )
-                    send_message(
-                        entry.recipient, reply_body, conn, research_id=None
+                    # Persist the reply as a research_reports row so the APK shows it
+                    # via /channel/api/notes; cloud_sync pushes it to Render within 1 min.
+                    topic_short = (entry.text or "").strip().replace("\n", " ")[:120]
+                    cursor = conn.execute(
+                        "INSERT INTO research_reports"
+                        " (kind, topic, layer_focus, body, cost_usd, created_at)"
+                        " VALUES ('reply', ?, NULL, ?, 0, ?)",
+                        (topic_short, reply_body, datetime.now(timezone.utc).isoformat()),
                     )
+                    conn.commit()
+                    reply_research_id = int(cursor.lastrowid or 0) or None
                     rid = conversation.get_run_id(conn, inbound_id)
                     conversation.record_outbound(
-                        entry.recipient, reply_body, conn, run_id=rid
+                        entry.recipient, reply_body, conn,
+                        run_id=rid, related_research_id=reply_research_id,
                     )
                 except CostCeilingError:
                     logger.warning(
@@ -439,14 +447,8 @@ def _job_research_push() -> None:
             report.cost_usd,
         )
 
-        # Push the body to every enabled WeChat recipient
-        result = broadcast(report.body, conn, research_id=report.research_id)
-        logger.info(
-            "Research push: sent=%d failed=%d queued=%d",
-            result.sent,
-            result.failed,
-            result.queued,
-        )
+        # Note already in research_reports; cloud_sync will push it to Render
+        # and the APK polls /channel/api/notes. No WeChat GUI delivery needed.
     finally:
         conn.close()
 
@@ -631,13 +633,12 @@ def create_scheduler() -> BlockingScheduler:
         name="Per-holding weekly health-check deep-dive",
     )
 
-    # Learn-from-feedback fires every 30 min so boss replies pulled by the 5-min
-    # render sync are picked up within ~30 min (down from up to 12h previously).
-    # The job no-ops when there are no new inbound entries, and prompt_rewriter
-    # has a 24h-per-file rate limit guard so it can't spam-update the same prompt.
+    # Learn-from-feedback fires every 5 min so boss replies are processed within
+    # minutes (down from up to 12h originally). No-ops when no new inbound entries;
+    # prompt_rewriter has a 24h-per-file rate limit so it can't spam updates.
     scheduler.add_job(
         _job_learn_from_feedback,
-        CronTrigger(minute="*/30", timezone="UTC"),
+        CronTrigger(minute="*/5", timezone="UTC"),
         id="learn_from_feedback",
         name="Classify replies, queue follow-ups, auto-rewrite prompt",
     )
@@ -677,13 +678,11 @@ def create_scheduler() -> BlockingScheduler:
         name="Evening research + WeChat push",
     )
 
-    # Hybrid local + Render-free architecture: every 5 min, push local state to
-    # the Render proxy and pull any boss replies. This is also the keepalive
-    # ping that prevents Render free tier from sleeping. No-op when
-    # render_sync_url is unset (laptop-only mode).
+    # Sync every minute so boss replies move laptop<->cloud quickly. Doubles as
+    # keepalive on Render free tier. No-op when render_sync_url is unset.
     scheduler.add_job(
         _job_sync_to_render,
-        CronTrigger(minute="*/5", timezone="UTC"),
+        CronTrigger(minute="*", timezone="UTC"),
         id="sync_to_render",
         name="Push state to Render free tier + pull boss replies",
     )
