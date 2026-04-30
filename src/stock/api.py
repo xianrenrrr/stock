@@ -932,6 +932,18 @@ def create_app() -> FastAPI:
     """Build the FastAPI app with all routes and handlers registered."""
     api = FastAPI(title="stock", version="0.1.0")
 
+    # Log only failed (>=400) requests so /stock/health probes from Render's
+    # load balancer don't spam the log. Successful 2xx/3xx are silent.
+    @api.middleware("http")
+    async def _log_only_failures(request, call_next):  # type: ignore[no-untyped-def]
+        response = await call_next(request)
+        if response.status_code >= 400:
+            logger.warning(
+                "%s %s -> %d",
+                request.method, request.url.path, response.status_code,
+            )
+        return response
+
     # Custom exception handlers (domain + fallthrough)
     api.add_exception_handler(StockHTTPException, _stock_exception_handler)
     api.add_exception_handler(CostCeilingError, _unhandled_exception_handler)
@@ -1122,5 +1134,5 @@ def run_api() -> None:
         host=host,
         port=port,
         log_level="info",
-        access_log=True,
+        access_log=False,
     )
