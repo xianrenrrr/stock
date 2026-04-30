@@ -71,3 +71,6 @@ Never import `*`. Never import from `src.stock.*` — use `stock.*`.
 - Do not add README files per directory.
 - Do not write migration scripts for schema changes that haven't shipped — edit `stock/db.py` directly until v1.
 - No emojis in code, comments, or commit messages.
+
+## Daily self-review
+At the start of any session in this project, check `pipeline/daily_review_*.md`. If a packet from the last 48 hours exists, read the most recent one before proposing changes — it summarizes errors, boss feedback, drift, and pending items the operator may want addressed. Use the `/improve` slash command to drive a structured review.

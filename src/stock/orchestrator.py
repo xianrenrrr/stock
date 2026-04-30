@@ -16,7 +16,7 @@ import time
 import httpx
 import openai
 
-from stock import action_queue, anomaly, conversation, holdings, intent, prompt_rewriter
+from stock import action_queue, anomaly, conversation, holdings, intent, prompt_rewriter, self_review
 from stock.cloud_sync import run_local_sync
 from stock.config import get_settings
 from stock.db import get_conn
@@ -451,6 +451,19 @@ def _job_research_push() -> None:
         conn.close()
 
 
+def _job_daily_self_review() -> None:
+    """Compile pipeline/daily_review_YYYY-MM-DD.md and route to configured backend."""
+    conn = get_conn()
+    try:
+        result = self_review.run_daily_review(conn)
+        if result.path:
+            logger.info("Self-review packet: %s", result.path)
+    except Exception:
+        logger.exception("Daily self-review failed")
+    finally:
+        conn.close()
+
+
 def _job_sync_to_render() -> None:
     """Push local state to the Render free-tier proxy and pull boss replies.
 
@@ -675,6 +688,16 @@ def create_scheduler() -> BlockingScheduler:
         CronTrigger(minute="*/5", timezone="UTC"),
         id="sync_to_render",
         name="Push state to Render free tier + pull boss replies",
+    )
+
+    # Daily self-review packet at 06:00 UTC (after evening push + learn cycle complete).
+    # Writes pipeline/daily_review_YYYY-MM-DD.md; if SELF_REVIEW_BACKEND=minimax|both,
+    # also auto-calls MiniMax for ranked code-level proposals.
+    scheduler.add_job(
+        _job_daily_self_review,
+        CronTrigger(hour=6, minute=0, timezone="UTC"),
+        id="daily_self_review",
+        name="Daily self-review packet + optional MiniMax proposals",
     )
 
     return scheduler

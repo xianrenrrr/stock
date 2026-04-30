@@ -54,6 +54,137 @@ holding_app = typer.Typer(help="Manage tracked portfolio holdings.")
 app.add_typer(holding_app, name="holding")
 channel_app = typer.Typer(help="Manage per-recipient dashboard tokens (channel.py).")
 app.add_typer(channel_app, name="channel-token")
+self_review_app = typer.Typer(help="Daily self-review packet + Claude/MiniMax proposals.")
+app.add_typer(self_review_app, name="self-review")
+
+
+@self_review_app.command("compile")
+def self_review_compile_cmd(
+    date: Annotated[
+        str | None,
+        typer.Option("--date", help="Target date YYYY-MM-DD (defaults to today UTC)"),
+    ] = None,
+    print_body: Annotated[
+        bool, typer.Option("--print", help="Echo the packet body to stdout")
+    ] = False,
+) -> None:
+    """Compile pipeline/daily_review_YYYY-MM-DD.md from the local DB."""
+    try:
+        from stock import self_review as _sr
+
+        conn = get_conn()
+        result = _sr.compile_daily_packet(conn, date=date)
+        typer.echo(f"Wrote {result.path} ({len(result.body)} bytes)")
+        if print_body:
+            typer.echo("---")
+            typer.echo(result.body)
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
+@self_review_app.command("run")
+def self_review_run_cmd(
+    backend: Annotated[
+        str,
+        typer.Option(
+            "--backend",
+            help="Override SELF_REVIEW_BACKEND (claude_code | minimax | both | off)",
+        ),
+    ] = "",
+) -> None:
+    """Run today's review using the configured backend (or override via --backend)."""
+    try:
+        from stock import self_review as _sr
+
+        conn = get_conn()
+        if backend:
+            # Honor a one-shot override without mutating .env
+            from stock.config import get_settings
+
+            settings = get_settings()
+            settings.self_review_backend = backend
+        result = _sr.run_daily_review(conn)
+        if not result.path:
+            typer.echo("Self-review skipped (backend=off)")
+            return
+        typer.echo(f"Packet: {result.path}")
+        proposals = _sr.list_proposals(conn, review_date=result.date, only_unapplied=True)
+        if proposals:
+            typer.echo(f"Proposals stored ({len(proposals)}):")
+            for p in proposals:
+                typer.echo(
+                    f"  #{p['id']} [{p['impact']}/{p['risk']}] {p['title']}"
+                )
+        else:
+            typer.echo("No proposals stored.")
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
+@self_review_app.command("proposals")
+def self_review_proposals_cmd(
+    date: Annotated[
+        str | None,
+        typer.Option("--date", help="Filter by review_date YYYY-MM-DD"),
+    ] = None,
+    show_all: Annotated[
+        bool, typer.Option("--all", help="Include already-applied proposals")
+    ] = False,
+    detail: Annotated[
+        bool, typer.Option("--detail", help="Print full rationale + diff_or_steps"),
+    ] = False,
+) -> None:
+    """List recent self-review proposals."""
+    try:
+        from stock import self_review as _sr
+
+        conn = get_conn()
+        rows = _sr.list_proposals(
+            conn, review_date=date, only_unapplied=not show_all, limit=50
+        )
+        if not rows:
+            typer.echo("No proposals.")
+            return
+        for p in rows:
+            typer.echo(
+                f"#{p['id']} {p['review_date']} [{p['impact']}/{p['risk']}]"
+                f" {p['backend']}: {p['title']}"
+            )
+            if detail:
+                typer.echo(f"  rationale: {p['rationale']}")
+                typer.echo(f"  files: {', '.join(str(f) for f in p['files'])}")
+                typer.echo(f"  steps:\n{p['diff_or_steps']}")
+                typer.echo("")
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
+@self_review_app.command("apply")
+def self_review_apply_cmd(
+    proposal_id: Annotated[int, typer.Argument(help="Proposal id to mark as applied")],
+    notes: Annotated[
+        str, typer.Option("--notes", help="Free-text note about how it was applied")
+    ] = "",
+) -> None:
+    """Mark a proposal as applied (after you've actually made the code change)."""
+    try:
+        from stock import self_review as _sr
+
+        conn = get_conn()
+        ok = _sr.mark_applied(conn, proposal_id, notes=notes)
+        if ok:
+            typer.echo(f"Marked #{proposal_id} as applied")
+        else:
+            typer.echo("No matching unapplied proposal.", err=True)
+            raise typer.Exit(code=1)
+    except typer.Exit:
+        raise
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
 
 
 @channel_app.command("issue")

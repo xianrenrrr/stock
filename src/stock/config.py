@@ -54,6 +54,13 @@ class Settings(BaseSettings):
     # Empty = sync disabled (laptop-only mode). Set after Render deploy.
     render_sync_url: str = ""
 
+    # Daily self-review backend. Switches who reads the daily packet:
+    #   "claude_code" (default): only write pipeline/daily_review_*.md, you run /improve
+    #   "minimax": auto-call MiniMax with the packet, log proposals to self_review_proposals
+    #   "both": write the packet AND auto-call MiniMax
+    #   "off": skip the daily-review job entirely
+    self_review_backend: str = "claude_code"
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

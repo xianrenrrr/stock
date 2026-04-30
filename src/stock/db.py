@@ -258,6 +258,27 @@ CREATE TABLE IF NOT EXISTS cloud_sync_state (
     value TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS self_review_proposals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    review_date TEXT NOT NULL,
+    backend TEXT NOT NULL,
+    title TEXT NOT NULL,
+    rationale TEXT NOT NULL,
+    files_json TEXT NOT NULL,
+    diff_or_steps TEXT NOT NULL,
+    impact TEXT,
+    risk TEXT,
+    cost_usd REAL NOT NULL DEFAULT 0,
+    applied INTEGER NOT NULL DEFAULT 0,
+    applied_at TEXT,
+    notes TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_self_review_date
+    ON self_review_proposals (review_date DESC);
+CREATE INDEX IF NOT EXISTS idx_self_review_applied
+    ON self_review_proposals (applied, created_at DESC);
 """
 
 
