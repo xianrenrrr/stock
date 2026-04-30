@@ -361,7 +361,6 @@ def run_local_sync(conn: sqlite3.Connection) -> CloudSyncResult:
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
     }
-    notes = _read_local_notes(conn, SYNC_NOTES_LOOKBACK_DAYS)
     tokens = _read_local_tokens(conn)
 
     notes_pushed = 0
@@ -371,17 +370,7 @@ def run_local_sync(conn: sqlite3.Connection) -> CloudSyncResult:
 
     try:
         with httpx.Client(timeout=HTTP_TIMEOUT_SECS) as client:
-            # Push notes (skip the call entirely if empty so we don't spam Render)
-            if notes:
-                resp = client.post(
-                    f"{base_url}/sync/notes",
-                    json={"notes": [n.model_dump() for n in notes]},
-                    headers=headers,
-                )
-                resp.raise_for_status()
-                notes_pushed = int(resp.json().get("upserted", 0))
-
-            # Push tokens
+            # Push tokens first (cheap, idempotent)
             if tokens:
                 resp = client.post(
                     f"{base_url}/sync/tokens",
@@ -415,20 +404,30 @@ def run_local_sync(conn: sqlite3.Connection) -> CloudSyncResult:
             )
             _set_last_pull_ts(conn, new_high_water)
 
-        # Trigger F13 inline so a boss reply is processed within the same
-        # sync minute instead of waiting for the next 5-min learn cron tick.
-        # Lazy-import to avoid a cloud_sync <-> orchestrator import cycle.
-        if replies_pulled > 0:
-            try:
-                from stock.orchestrator import _job_learn_from_feedback
+            # Trigger F13 inline BEFORE pushing notes so any newly-generated
+            # reply note rides the same sync tick that pulled the question.
+            if replies_pulled > 0:
+                try:
+                    from stock.orchestrator import _job_learn_from_feedback
 
-                _job_learn_from_feedback()
-                logger.info(
-                    "Inline F13 fired after sync pulled %d replies",
-                    replies_pulled,
+                    _job_learn_from_feedback()
+                    logger.info(
+                        "Inline F13 fired after sync pulled %d replies",
+                        replies_pulled,
+                    )
+                except Exception:
+                    logger.exception("Inline F13 trigger failed")
+
+            # Re-read notes AFTER F13 so the just-generated reply is included
+            notes = _read_local_notes(conn, SYNC_NOTES_LOOKBACK_DAYS)
+            if notes:
+                resp = client.post(
+                    f"{base_url}/sync/notes",
+                    json={"notes": [n.model_dump() for n in notes]},
+                    headers=headers,
                 )
-            except Exception:
-                logger.exception("Inline F13 trigger failed")
+                resp.raise_for_status()
+                notes_pushed = int(resp.json().get("upserted", 0))
     except httpx.HTTPError as exc:
         error = f"sync failed: {exc}"
         logger.warning(error)
