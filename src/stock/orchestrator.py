@@ -631,15 +631,13 @@ def create_scheduler() -> BlockingScheduler:
         name="Per-holding weekly health-check deep-dive",
     )
 
-    # Learn-from-feedback fires 5 minutes after each push so the boss has had
-    # time to reply between the push and the next cycle's screenshot pull.
+    # Learn-from-feedback fires every 30 min so boss replies pulled by the 5-min
+    # render sync are picked up within ~30 min (down from up to 12h previously).
+    # The job no-ops when there are no new inbound entries, and prompt_rewriter
+    # has a 24h-per-file rate limit guard so it can't spam-update the same prompt.
     scheduler.add_job(
         _job_learn_from_feedback,
-        CronTrigger(
-            hour=f"{RESEARCH_MORNING_HOUR},{RESEARCH_EVENING_HOUR}",
-            minute=35,
-            timezone="UTC",
-        ),
+        CronTrigger(minute="*/30", timezone="UTC"),
         id="learn_from_feedback",
         name="Classify replies, queue follow-ups, auto-rewrite prompt",
     )
