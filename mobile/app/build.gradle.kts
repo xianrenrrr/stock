@@ -17,7 +17,7 @@ android {
         // Strip a trailing "/channel/" or "/" so the user can paste either form
         // (we want just the host root for native API calls).
         val rawBase = (project.findProperty("STOCK_BASE_URL") as? String)?.trim().orEmpty()
-            .ifEmpty { "https://stock-research-qw85.onrender.com" }
+            .ifEmpty { "https://stock-research-9aq3.onrender.com" }
         val apiBase = rawBase.removeSuffix("/channel/").removeSuffix("/channel").removeSuffix("/")
 
         val token = (project.findProperty("STOCK_DEFAULT_TOKEN") as? String)?.trim().orEmpty()

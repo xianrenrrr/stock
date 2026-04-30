@@ -10,7 +10,7 @@ real Android app: home-screen icon, opens to today's research note, reply box,
 ```
 Compose UI  →  StockViewModel  →  StockClient (HttpURLConnection + JSON)
                                        │
-                                       └→  https://stock-research-qw85.onrender.com/channel/api/*
+                                       └→  https://stock-research-9aq3.onrender.com/channel/api/*
                                             (Bearer token baked into BuildConfig at compile time)
 ```
 
