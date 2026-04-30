@@ -320,12 +320,7 @@ def _set_last_pull_ts(conn: sqlite3.Connection, ts: str) -> None:
 def _record_pulled_reply(
     conn: sqlite3.Connection, recipient: str, body: str, created_at: str
 ) -> None:
-    """Append the boss's reply to wechat_feedback.md and conversations table.
-
-    F13's `_job_learn_from_feedback` (already scheduled) reads
-    `wechat_feedback.md` and processes new entries -- so this is the only
-    integration point we need on the local side.
-    """
+    """Append the boss's reply to wechat_feedback.md so F13 picks it up next call."""
     fp = Path(FEEDBACK_PATH)
     fp.parent.mkdir(parents=True, exist_ok=True)
     ts = (created_at or datetime.now(timezone.utc).isoformat())[:16]
@@ -342,25 +337,8 @@ def _record_pulled_reply(
                 "Append-only log of replies. F13 picks these up and adapts.\n"
             )
         fh.write(entry)
-
-    # Also insert into local conversations table so F13's vec retrieval sees it.
-    # Use the F13 module if available; otherwise minimal direct insert.
-    try:
-        from stock import conversation as _conv
-
-        _conv.record_inbound(recipient=recipient, body=body, conn=conn)
-    except Exception:  # noqa: BLE001 -- F13 module is optional during early bootstrap
-        import uuid
-
-        run_id = str(uuid.uuid4())
-        now = datetime.now(timezone.utc).isoformat()
-        conn.execute(
-            "INSERT INTO conversations"
-            " (run_id, recipient, direction, body, created_at)"
-            " VALUES (?, ?, 'inbound', ?, ?)",
-            (run_id, recipient, body, now),
-        )
-        conn.commit()
+    # Conversations row is created by F13 itself; no pre-insert here so we
+    # don't race the F13 inline trigger and produce duplicate rows.
 
 
 def run_local_sync(conn: sqlite3.Connection) -> CloudSyncResult:
@@ -436,6 +414,21 @@ def run_local_sync(conn: sqlite3.Connection) -> CloudSyncResult:
                 or datetime.now(timezone.utc).isoformat()
             )
             _set_last_pull_ts(conn, new_high_water)
+
+        # Trigger F13 inline so a boss reply is processed within the same
+        # sync minute instead of waiting for the next 5-min learn cron tick.
+        # Lazy-import to avoid a cloud_sync <-> orchestrator import cycle.
+        if replies_pulled > 0:
+            try:
+                from stock.orchestrator import _job_learn_from_feedback
+
+                _job_learn_from_feedback()
+                logger.info(
+                    "Inline F13 fired after sync pulled %d replies",
+                    replies_pulled,
+                )
+            except Exception:
+                logger.exception("Inline F13 trigger failed")
     except httpx.HTTPError as exc:
         error = f"sync failed: {exc}"
         logger.warning(error)
