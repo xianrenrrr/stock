@@ -74,25 +74,31 @@ def _is_ticker_relevant(title: str, body: str, ticker: str) -> bool:
 
 
 def _parse_date(entry: dict[str, object]) -> str:
-    """Extract a publication date from an RSS entry as ISO-8601 UTC."""
-    published = entry.get("published")
-    if isinstance(published, str):
-        try:
-            return parsedate_to_datetime(published).astimezone(timezone.utc).isoformat()
-        except (ValueError, TypeError):
-            pass
+    """Extract a publication date from an RSS or Atom entry as ISO-8601 UTC.
 
-    parsed_tuple = entry.get("published_parsed")
-    if parsed_tuple is not None:
-        try:
-            from time import mktime
+    Tries `published` (RSS) then `updated` (Atom, e.g. SEC EDGAR), falling back
+    to the parsed-tuple variants and finally to wall clock if nothing parses.
+    """
+    for key in ("published", "updated"):
+        value = entry.get(key)
+        if isinstance(value, str):
+            try:
+                return parsedate_to_datetime(value).astimezone(timezone.utc).isoformat()
+            except (ValueError, TypeError):
+                pass
 
-            return (
-                datetime.fromtimestamp(mktime(parsed_tuple), tz=timezone.utc)  # type: ignore[arg-type]
-                .isoformat()
-            )
-        except (OverflowError, OSError, TypeError):
-            pass
+    for key in ("published_parsed", "updated_parsed"):
+        parsed_tuple = entry.get(key)
+        if parsed_tuple is not None:
+            try:
+                from time import mktime
+
+                return (
+                    datetime.fromtimestamp(mktime(parsed_tuple), tz=timezone.utc)  # type: ignore[arg-type]
+                    .isoformat()
+                )
+            except (OverflowError, OSError, TypeError):
+                pass
 
     logger.warning("Missing or unparseable date in RSS entry: %s", entry.get("link", "unknown"))
     return datetime.now(timezone.utc).isoformat()

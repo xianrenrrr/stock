@@ -127,5 +127,18 @@ def extract_features(
                 "Cost ceiling reached during feature extraction, returning partial results"
             )
             break
+        except json.JSONDecodeError as exc:
+            # MiniMax occasionally returns empty or truncated content even on 200 OK.
+            # Skip just this news item rather than failing the whole ticker.
+            logger.warning(
+                "Skipping news_id=%s: MiniMax returned unparseable JSON (%s)",
+                news_id, exc,
+            )
+            continue
+        except Exception:
+            logger.exception(
+                "Skipping news_id=%s: unexpected feature-extraction failure", news_id,
+            )
+            continue
 
     return results

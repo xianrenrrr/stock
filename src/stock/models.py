@@ -75,6 +75,8 @@ def parse_llm_json(raw: str) -> dict[str, Any]:
         if lines and lines[-1].strip() == "```":
             lines = lines[:-1]
         text = "\n".join(lines).strip()
+    if not text:
+        raise json.JSONDecodeError("LLM returned empty content", "", 0)
     return json.loads(text)  # type: ignore[no-any-return]
 
 
