@@ -1,5 +1,10 @@
 name: Build Android APK
 
+# Kill switch: set repo variable BUILD_APK_ENABLED=false to pause all builds
+# (Settings -> Secrets and variables -> Actions -> Variables tab -> New variable).
+# Set to true (or delete the variable) to resume. workflow_dispatch always runs
+# regardless of the switch so you can force a build for a one-off APK.
+
 on:
   push:
     branches: [main]
@@ -19,6 +24,7 @@ on:
 
 jobs:
   build:
+    if: github.event_name == 'workflow_dispatch' || vars.BUILD_APK_ENABLED != 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
