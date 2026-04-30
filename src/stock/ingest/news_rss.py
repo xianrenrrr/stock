@@ -15,6 +15,9 @@ logger = logging.getLogger(__name__)
 
 MAX_BODY_CHARS: int = 40_000
 
+# SEC EDGAR fair-access policy requires a declared UA with contact info, otherwise 403.
+USER_AGENT: str = "stock-research-bot research@example.com"
+
 
 def fetch_rss_news(ticker: str, feeds: list[FeedConfig]) -> list[NewsItem]:
     """Fetch news from configured RSS feeds, filter for ticker relevance."""
@@ -28,7 +31,7 @@ def fetch_rss_news(ticker: str, feeds: list[FeedConfig]) -> list[NewsItem]:
 
 def _parse_feed(url: str, source: str, ticker: str, per_ticker: bool) -> list[NewsItem]:
     """Parse a single RSS feed and return matching items."""
-    feed = feedparser.parse(url)
+    feed = feedparser.parse(url, agent=USER_AGENT)
 
     if feed.bozo and not feed.entries:
         logger.warning("Feed %s returned error: %s", url, feed.get("bozo_exception", "unknown"))

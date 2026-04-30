@@ -4,12 +4,13 @@ feeds:
   - url: "https://finance.yahoo.com/rss/headline?s={ticker}"
     source: "yahoo_rss"
     per_ticker: true
-  - url: "https://rss.marketwatch.com/rss/topstories"
+  - url: "https://feeds.content.dowjones.io/public/rss/mw_topstories"
     source: "marketwatch"
     per_ticker: false
   - url: "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114"
     source: "cnbc"
     per_ticker: false
-  - url: "https://efts.sec.gov/LATEST/search-index?q=%22{ticker}%22&forms=8-K&dateRange=custom"
+  # SEC EDGAR Atom feed: pass ticker as CIK -- EDGAR resolves ticker->CIK automatically.
+  - url: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={ticker}&type=8-K&dateb=&owner=include&count=10&output=atom"
     source: "sec_edgar"
     per_ticker: true

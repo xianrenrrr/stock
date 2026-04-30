@@ -20,7 +20,7 @@ services:
     # The local laptop pushes to /sync/* every 5 min, which doubles as a
     # keepalive so the free instance never actually sleeps.
     plan: free
-    region: oregon
+    region: singapore
     healthCheckPath: /stock/health
     autoDeploy: true
     envVars:

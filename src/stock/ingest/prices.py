@@ -13,10 +13,14 @@ def fetch_daily_prices(ticker: str, days: int = 30) -> list[PriceBar]:
     end_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     start_date = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
 
-    df = yfinance.download(ticker, start=start_date, end=end_date, progress=False)
+    df = yfinance.download(ticker, start=start_date, end=end_date, progress=False, auto_adjust=False)
 
     if df.empty:
         return []
+
+    # yfinance returns MultiIndex columns (field, ticker) even for a single ticker; flatten to scalars
+    if df.columns.nlevels > 1:
+        df.columns = df.columns.get_level_values(0)
 
     # Drop rows with any NaN
     df = df.dropna()
