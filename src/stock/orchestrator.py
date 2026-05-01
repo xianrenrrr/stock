@@ -16,7 +16,7 @@ import time
 import httpx
 import openai
 
-from stock import action_queue, anomaly, conversation, holdings, intent, prompt_rewriter, self_review
+from stock import action_queue, anomaly, conversation, grading, holdings, intent, prompt_rewriter, self_review
 from stock.cloud_sync import run_local_sync
 from stock.config import get_settings
 from stock.db import get_conn
@@ -461,6 +461,36 @@ def _job_research_push() -> None:
         conn.close()
 
 
+def _job_grade_and_reply() -> None:
+    """Refresh prices, score yesterday's predictions, generate a grading note + follow-ups.
+
+    Runs after _job_score_daily so any newly-due predictions are graded first.
+    The grading note is persisted as a research_reports row of kind='grading';
+    cloud_sync pushes it to Render and the APK polls /channel/api/notes. Follow-up
+    topics are auto-queued so the next research push references the deep-dives.
+    """
+    conn = get_conn()
+    try:
+        note = grading.generate_grading_note(conn)
+        logger.info(
+            "Grading note id=%d total=%d hits=%d hit_rate=%.2f"
+            " refreshed=%d follow_ups=%d cost=$%.4f",
+            note.research_id,
+            note.stats.total,
+            note.stats.hits,
+            note.stats.hit_rate,
+            len(note.refreshed.tickers),
+            note.follow_ups_queued,
+            note.cost_usd,
+        )
+    except CostCeilingError:
+        logger.warning("Cost ceiling reached during grading note, skipping")
+    except Exception:
+        logger.exception("Grade-and-reply job failed")
+    finally:
+        conn.close()
+
+
 def _job_daily_self_review() -> None:
     """Compile pipeline/daily_review_YYYY-MM-DD.md and route to configured backend."""
     conn = get_conn()
@@ -700,6 +730,22 @@ def create_scheduler() -> BlockingScheduler:
         CronTrigger(second="*/5", timezone="UTC"),
         id="sync_to_render",
         name="Push state to Render free tier + pull boss replies",
+    )
+
+    # Daily grade-and-reply at 21:45 UTC (Mon-Fri), 15 min after score_daily.
+    # Refreshes prices, grades yesterday's predictions, writes a research_reports
+    # row of kind='grading' so the APK shows it, and auto-queues follow-up topics
+    # that feed into the next research push (closes the F11 improvement loop).
+    scheduler.add_job(
+        _job_grade_and_reply,
+        CronTrigger(
+            hour=SCORE_HOUR,
+            minute=SCORE_MINUTE + 15,
+            day_of_week="mon-fri",
+            timezone="UTC",
+        ),
+        id="grade_and_reply",
+        name="Daily grade-and-reply note + follow-ups",
     )
 
     # Daily self-review packet at 06:00 UTC (after evening push + learn cycle complete).

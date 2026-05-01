@@ -272,6 +272,24 @@ def _section_surprises(conn: sqlite3.Connection, date: str, since: str, until: s
     return "\n".join(out) + "\n"
 
 
+def _section_latest_grading(conn: sqlite3.Connection, since: str, until: str) -> str:
+    """Surface the most recent grading note (model improvement directions) in the packet."""
+    row = conn.execute(
+        "SELECT id, body, created_at FROM research_reports"
+        " WHERE kind = 'grading' AND created_at >= ? AND created_at < ?"
+        " ORDER BY created_at DESC, id DESC LIMIT 1",
+        (since, until),
+    ).fetchone()
+    out = [_section_header("Latest grading note (model improvement directions)")]
+    if row is None:
+        out.append("- (no grading note in window)")
+        return "\n".join(out) + "\n"
+    rid, body, created_at = row
+    out.append(f"- #{rid} ({str(created_at)[:16]}):")
+    out.append(str(body).strip())
+    return "\n".join(out) + "\n"
+
+
 def _section_open_questions() -> str:
     """Static prompts to seed the reviewer's thinking."""
     out = [_section_header("Open questions for the reviewer")]
@@ -303,6 +321,7 @@ def compile_daily_packet(
     parts.append(_section_action_queue(conn))
     parts.append(_section_prompt_rewrites(conn))
     parts.append(_section_recent_failures(conn, since, until))
+    parts.append(_section_latest_grading(conn, since, until))
     parts.append(_section_surprises(conn, target_date, since, until))
     parts.append(_section_open_questions())
     body = "".join(parts)

@@ -8,7 +8,7 @@ from typing import Annotated
 
 import typer
 
-from stock import action_queue, anomaly, holdings
+from stock import action_queue, anomaly, grading, holdings
 from stock.db import get_conn
 from stock.discover import (
     get_latest_discovery,
@@ -920,6 +920,49 @@ def holding_note_cmd(
             raise typer.Exit(code=1)
     except typer.Exit:
         raise
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
+@app.command("grade")
+def grade_cmd(
+    hours: Annotated[
+        int, typer.Option("--hours", help="Lookback window for scored predictions"),
+    ] = grading.DEFAULT_LOOKBACK_HOURS,
+    no_refresh: Annotated[
+        bool, typer.Option("--no-refresh", help="Skip the yfinance price refresh step"),
+    ] = False,
+    no_score: Annotated[
+        bool, typer.Option("--no-score", help="Skip score_due before reading outcomes"),
+    ] = False,
+    language: Annotated[
+        str | None,
+        typer.Option("--lang", help="Output language ('zh' or 'en'); default from settings"),
+    ] = None,
+) -> None:
+    """Run the daily grade-and-reply: refresh prices, score, generate grading note."""
+    try:
+        conn = get_conn()
+        note = grading.generate_grading_note(
+            conn,
+            lookback_hours=hours,
+            refresh_prices=not no_refresh,
+            score_first=not no_score,
+            language=language,
+        )
+        typer.echo(
+            f"Grading id={note.research_id} total={note.stats.total}"
+            f" hits={note.stats.hits} hit_rate={note.stats.hit_rate:.1%}"
+            f" refreshed={len(note.refreshed.tickers)}"
+            f" follow_ups={note.follow_ups_queued}"
+            f" cost=${note.cost_usd:.4f}"
+        )
+        if note.refreshed.failed:
+            typer.echo(f"  refresh failed: {', '.join(note.refreshed.failed)}")
+        typer.echo("--- Body ---")
+        typer.echo(note.body)
+        typer.echo("--- End body ---")
     except Exception:
         typer.echo(traceback.format_exc(), err=True)
         raise typer.Exit(code=1)
