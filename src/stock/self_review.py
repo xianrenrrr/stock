@@ -28,7 +28,12 @@ SELF_REVIEW_MODEL: str = "MiniMax-M2.5-highspeed"
 SELF_REVIEW_MAX_TOKENS: int = 4000
 LOOKBACK_HOURS: int = 24
 PROMPT_REWRITES_LOOKBACK_DAYS: int = 7
-ALLOWED_BACKENDS: tuple[str, ...] = ("claude_code", "minimax", "both", "off")
+ALLOWED_BACKENDS: tuple[str, ...] = (
+    "claude_code", "minimax", "both", "claude_cli", "off",
+)
+CLAUDE_CLI_TIMEOUT_SECS: int = 1800
+CLAUDE_CLI_MODEL: str = "claude-sonnet-4-6"
+PYTEST_TIMEOUT_SECS: int = 600
 
 
 class ReviewProposal(BaseModel):
@@ -481,6 +486,141 @@ def mark_applied(conn: sqlite3.Connection, proposal_id: int, *, notes: str = "")
     return cursor.rowcount > 0
 
 
+def _git(*args: str, capture: bool = True) -> tuple[int, str, str]:
+    """Run a git subcommand. Returns (returncode, stdout, stderr)."""
+    import subprocess
+
+    proc = subprocess.run(
+        ["git", *args],
+        cwd=str(Path.cwd()),
+        capture_output=capture,
+        text=True,
+        encoding="utf-8",
+    )
+    return proc.returncode, proc.stdout or "", proc.stderr or ""
+
+
+def run_via_claude_cli_autopilot(packet: ReviewPacketResult) -> bool:
+    """Spawn `claude -p` to make daily improvements; auto-merge + push if tests pass.
+
+    Returns True when changes were committed to main and pushed; False otherwise.
+    """
+    import subprocess
+
+    branch = f"auto-review-{packet.date}"
+
+    # Capture starting commit so we can detect whether claude actually committed
+    rc, start_head, _ = _git("rev-parse", "HEAD")
+    if rc != 0:
+        logger.warning("auto-review: not in a git repo; skipping")
+        return False
+    start_head = start_head.strip()
+
+    # Carve out a feature branch off main so claude can't accidentally dirty main
+    rc, _, err = _git("checkout", "-B", branch)
+    if rc != 0:
+        logger.warning("auto-review: failed to create branch %s: %s", branch, err)
+        return False
+
+    instruction = (
+        f"You are doing the daily STOCK auto-review on {packet.date}.\n\n"
+        f"Read the operational packet at: {packet.path}\n\n"
+        "Identify the top 1-3 highest-impact CODE-LEVEL improvements grounded "
+        "in specific signals from the packet (errors, failures, drift, cost "
+        "spikes, recent boss feedback, prompt-rewrite mismatches).\n\n"
+        "Constraints:\n"
+        "- Surgical edits per CLAUDE.md style. No refactors.\n"
+        "- Maximum 3 changes total.\n"
+        "- Do NOT edit prompts/*.txt (F13 handles those).\n"
+        "- Do NOT modify schema (stock/db.py CREATE TABLE blocks) unless the "
+        "  packet explicitly evidences a needed column or table.\n"
+        "- Do NOT remove tests.\n\n"
+        "For each change:\n"
+        "  1. Read the file you'll edit\n"
+        "  2. Make the surgical edit\n"
+        "  3. Update or add a test if applicable\n"
+        "  4. git add the changed files\n"
+        "  5. git commit with a descriptive message; include the marker "
+        f"     'auto-review {packet.date}' in the commit body\n\n"
+        "Do NOT push, do NOT merge, do NOT switch branches. The wrapper "
+        "handles testing and pushing after you exit.\n\n"
+        "If the packet looks healthy and you have no high-confidence "
+        "improvements, exit cleanly without making any changes -- do not "
+        "invent work."
+    )
+
+    # Invoke claude headless. Inherits env (incl. login) and cwd.
+    try:
+        proc = subprocess.run(
+            [
+                "claude", "-p", instruction,
+                "--model", CLAUDE_CLI_MODEL,
+                "--dangerously-skip-permissions",
+            ],
+            cwd=str(Path.cwd()),
+            timeout=CLAUDE_CLI_TIMEOUT_SECS,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        logger.info(
+            "auto-review claude exit=%d stdout_len=%d stderr_len=%d",
+            proc.returncode, len(proc.stdout or ""), len(proc.stderr or ""),
+        )
+    except subprocess.TimeoutExpired:
+        logger.warning("auto-review: claude timed out after %ds", CLAUDE_CLI_TIMEOUT_SECS)
+        _git("checkout", "main")
+        return False
+    except FileNotFoundError:
+        logger.warning("auto-review: 'claude' CLI not on PATH; install Claude Code")
+        _git("checkout", "main")
+        return False
+
+    # Did claude actually commit anything?
+    rc, head, _ = _git("rev-parse", "HEAD")
+    head = head.strip()
+    if head == start_head:
+        logger.info("auto-review: claude made no commits (clean exit)")
+        _git("checkout", "main")
+        _git("branch", "-D", branch)
+        return False
+
+    # Run pytest before pushing so a regression doesn't ride straight to Render
+    test_proc = subprocess.run(
+        ["python", "-m", "pytest", "-q", "--tb=line"],
+        cwd=str(Path.cwd()),
+        capture_output=True,
+        text=True,
+        timeout=PYTEST_TIMEOUT_SECS,
+        encoding="utf-8",
+    )
+    if test_proc.returncode != 0:
+        logger.warning(
+            "auto-review: pytest failed (exit=%d); leaving branch %s for review",
+            test_proc.returncode, branch,
+        )
+        # Stay on branch so user can inspect
+        return False
+
+    # Tests pass: fast-forward main, push, delete the branch
+    rc, _, err = _git("checkout", "main")
+    if rc != 0:
+        logger.warning("auto-review: checkout main failed: %s", err)
+        return False
+    rc, _, err = _git("merge", "--ff-only", branch)
+    if rc != 0:
+        logger.warning("auto-review: ff-merge of %s into main failed: %s", branch, err)
+        _git("checkout", branch)
+        return False
+    rc, _, err = _git("push", "origin", "main")
+    if rc != 0:
+        logger.warning("auto-review: push failed: %s", err)
+        return False
+    _git("branch", "-D", branch)
+    logger.info("auto-review: merged + pushed; Render will auto-deploy")
+    return True
+
+
 def run_daily_review(conn: sqlite3.Connection) -> ReviewPacketResult:
     """Compile today's packet and route to the configured backend(s)."""
     settings = get_settings()
@@ -516,5 +656,12 @@ def run_daily_review(conn: sqlite3.Connection) -> ReviewPacketResult:
             )
         else:
             logger.info("self_review minimax: no proposals returned")
+
+    # Route to Claude Code CLI autopilot when requested
+    if backend == "claude_cli":
+        try:
+            run_via_claude_cli_autopilot(packet)
+        except Exception:
+            logger.exception("auto-review wrapper raised unexpectedly")
 
     return packet

@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     #   "claude_code" (default): only write pipeline/daily_review_*.md, you run /improve
     #   "minimax": auto-call MiniMax with the packet, log proposals to self_review_proposals
     #   "both": write the packet AND auto-call MiniMax
+    #   "claude_cli": full autopilot -- spawn `claude -p` to make 1-3 code changes on a
+    #     branch, run pytest, and if green auto-merge to main + git push. Render
+    #     auto-deploys. Requires `claude login` on this machine.
     #   "off": skip the daily-review job entirely
     self_review_backend: str = "claude_code"
 
