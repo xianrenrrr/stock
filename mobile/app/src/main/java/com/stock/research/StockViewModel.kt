@@ -112,7 +112,7 @@ class StockViewModel(private val client: StockClient) : ViewModel() {
     }
 
     /**
-     * Burst-poll every 10 seconds for up to 5 minutes after the boss submits a
+     * Burst-poll every 5 seconds for up to 5 minutes after the boss submits a
      * question. Exits early when a new note arrives (research_id > snapshot) --
      * the F13 reply note has landed. After exit, the normal 5-min poll continues.
      * No polling at all happens outside this window, so battery use stays low.
@@ -122,7 +122,7 @@ class StockViewModel(private val client: StockClient) : ViewModel() {
         fastPollJob = viewModelScope.launch {
             val deadlineMs = System.currentTimeMillis() + 5 * 60 * 1000L
             while (System.currentTimeMillis() < deadlineMs) {
-                delay(10 * 1000L)
+                delay(5 * 1000L)
                 try {
                     val notes = withContext(Dispatchers.IO) {
                         client.listNotes(days = 14, limit = 30)

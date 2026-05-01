@@ -678,12 +678,12 @@ def create_scheduler() -> BlockingScheduler:
         name="Evening research + WeChat push",
     )
 
-    # Sync every 10 seconds. APScheduler skips overlapping ticks if F13 is mid-call,
-    # so worst case is one tick every 10s, best case the same. Doubles as keepalive
-    # on Render free tier. No-op when render_sync_url is unset.
+    # Sync every 5 seconds to match the APK burst-poll cadence. APScheduler skips
+    # overlapping ticks while F13 is mid-call. Doubles as keepalive on Render free
+    # tier. No-op when render_sync_url is unset.
     scheduler.add_job(
         _job_sync_to_render,
-        CronTrigger(second="*/10", timezone="UTC"),
+        CronTrigger(second="*/5", timezone="UTC"),
         id="sync_to_render",
         name="Push state to Render free tier + pull boss replies",
     )
