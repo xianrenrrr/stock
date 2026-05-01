@@ -717,13 +717,49 @@ def get_schedule_info(scheduler: BlockingScheduler) -> ScheduleInfo:
     return ScheduleInfo(jobs=jobs)
 
 
+def _configure_logging() -> Path:
+    """Set up stderr + daily-rotated file logging. Return the active log file path."""
+    from logging.handlers import TimedRotatingFileHandler
+
+    # Ensure the log directory exists alongside the existing pipeline/ outputs
+    log_dir = Path("pipeline/logs")
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = log_dir / "orchestrator.log"
+
+    # Format includes ISO-style timestamp, logger name, level, message
+    fmt = "%(asctime)s %(name)s %(levelname)s %(message)s"
+    formatter = logging.Formatter(fmt, datefmt="%Y-%m-%d %H:%M:%S")
+
+    # Reset root handlers so this is idempotent across restarts in same process
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    for existing in list(root.handlers):
+        root.removeHandler(existing)
+
+    # Stderr stays so the live PowerShell window keeps showing logs
+    stderr_h = logging.StreamHandler()
+    stderr_h.setFormatter(formatter)
+    root.addHandler(stderr_h)
+
+    # File: daily rotation at midnight, keep 14 days of history; greppable
+    file_h = TimedRotatingFileHandler(
+        filename=str(log_path),
+        when="midnight",
+        interval=1,
+        backupCount=14,
+        encoding="utf-8",
+        utc=False,
+    )
+    file_h.setFormatter(formatter)
+    root.addHandler(file_h)
+    return log_path
+
+
 def run_orchestrator() -> None:
     """Start the orchestrator and block until interrupted."""
-    # Configure root logger for scheduled-service output
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(name)s %(levelname)s %(message)s",
-    )
+    # Wire stderr + rotating file logging
+    log_path = _configure_logging()
+    logger.info("Log file: %s (daily rotation, 14 days kept)", log_path)
 
     # Verify DB is reachable and log watchlist state
     conn = get_conn()
