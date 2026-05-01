@@ -932,13 +932,21 @@ def create_app() -> FastAPI:
     """Build the FastAPI app with all routes and handlers registered."""
     api = FastAPI(title="stock", version="0.1.0")
 
-    # Log only failed (>=400) requests so /stock/health probes from Render's
-    # load balancer don't spam the log. Successful 2xx/3xx are silent.
+    # Log policy: silence successful GETs (polls / health / reads), log every
+    # POST/PUT/DELETE (writes -- boss replies, syncs, mutations are interesting),
+    # and log every failure (>=400) regardless of method.
     @api.middleware("http")
-    async def _log_only_failures(request, call_next):  # type: ignore[no-untyped-def]
+    async def _log_writes_and_failures(request, call_next):  # type: ignore[no-untyped-def]
         response = await call_next(request)
-        if response.status_code >= 400:
+        is_failure = response.status_code >= 400
+        is_write = request.method in ("POST", "PUT", "DELETE", "PATCH")
+        if is_failure:
             logger.warning(
+                "%s %s -> %d",
+                request.method, request.url.path, response.status_code,
+            )
+        elif is_write:
+            logger.info(
                 "%s %s -> %d",
                 request.method, request.url.path, response.status_code,
             )
