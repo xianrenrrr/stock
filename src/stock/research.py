@@ -547,6 +547,61 @@ def generate_health_check(
     )
 
 
+REPLY_WEB_SEARCH_RESULTS: int = 4
+REPLY_WEB_FETCH_PER_RESULT_CHARS: int = 1500
+REPLY_WEB_BLOCK_MAX_CHARS: int = 6000
+
+
+def _gather_web_grounding(question: str) -> str:
+    """Run a Tavily search on the boss's question and fetch top hits as a context block.
+
+    Returns a markdown-formatted block; empty string if web search is unavailable
+    (no key configured, transient failure). Never raises -- the reply still goes
+    through with whatever context we have.
+    """
+    from stock.webfetch import fetch_many
+    from stock.websearch import WebSearchUnavailable, search
+
+    try:
+        hits = search(question.strip(), max_results=REPLY_WEB_SEARCH_RESULTS)
+    except WebSearchUnavailable as exc:
+        logger.info("generate_reply: web search unavailable (%s); proceeding ungrounded", exc)
+        return ""
+    except Exception:
+        logger.exception("generate_reply: web search raised; proceeding ungrounded")
+        return ""
+
+    if not hits:
+        return ""
+
+    # Fetch the actual page text for each top hit so MiniMax sees real content,
+    # not just snippets. Cheap (~2-3s per page, parallelism not worth the
+    # complexity for N=4).
+    urls = [h.url for h in hits if h.url]
+    fetched = fetch_many(urls, max_chars=REPLY_WEB_FETCH_PER_RESULT_CHARS)
+    fetched_by_url = {f.url: f for f in fetched}
+
+    parts: list[str] = ["Live web search context (grounding for the answer below):"]
+    total_chars = 0
+    for hit in hits:
+        snippet = (hit.snippet or "").strip()[:300]
+        body = ""
+        ftc = fetched_by_url.get(hit.url)
+        if ftc and ftc.ok:
+            body = ftc.text.strip()[:REPLY_WEB_FETCH_PER_RESULT_CHARS]
+        block = (
+            f"\n--- {hit.title or '(untitled)'} ---\n"
+            f"URL: {hit.url}\n"
+            f"Snippet: {snippet}\n"
+            f"Page text:\n{body if body else '(fetch failed; use snippet only)'}\n"
+        )
+        if total_chars + len(block) > REPLY_WEB_BLOCK_MAX_CHARS:
+            break
+        parts.append(block)
+        total_chars += len(block)
+    return "\n".join(parts)
+
+
 def generate_reply(
     conn: sqlite3.Connection,
     *,
@@ -580,6 +635,11 @@ def generate_reply(
 
     similar_turns_block = "(none)"
 
+    # Live web grounding via Tavily/Serper/Brave: search the boss's question text
+    # and fetch the top pages so the LLM sees real source material instead of
+    # making up specifics from training-data memory.
+    web_grounding_block = _gather_web_grounding(boss_reply) or "(none)"
+
     check_cost_ceiling(conn, settings)
 
     system_template, user_template = _load_reply_prompt()
@@ -592,6 +652,7 @@ def generate_reply(
         recent_research_excerpt=recent_research_excerpt,
         similar_turns_block=similar_turns_block,
         holdings_block=holdings_block,
+        web_grounding_block=web_grounding_block,
     )
 
     messages: list[ChatMessage] = [{"role": "user", "content": user_message}]
