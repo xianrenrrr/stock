@@ -150,6 +150,7 @@ def post_sync_notes(
 ) -> SyncWriteResponse:
     """Upsert research_reports rows pushed from the laptop."""
     upserted = 0
+    new_notes: list[tuple[int, str, str]] = []
     for note in body.notes:
         existing = conn.execute(
             "SELECT id FROM research_reports WHERE id = ?", (note.research_id,)
@@ -165,6 +166,7 @@ def post_sync_notes(
                 ),
             )
             upserted += 1
+            new_notes.append((note.research_id, note.kind, (note.topic or "")[:80]))
         else:
             conn.execute(
                 "UPDATE research_reports SET kind=?, topic=?, layer_focus=?,"
@@ -175,6 +177,13 @@ def post_sync_notes(
                 ),
             )
     conn.commit()
+    # Audit log: a new boss-bound note has arrived on Render. Routine repushes
+    # of existing notes (upserted=0) stay silent so the log isn't flooded.
+    for nid, kind, topic in new_notes:
+        logger.info(
+            "Boss-bound note received on Render: id=%d kind=%s topic=%r",
+            nid, kind, topic,
+        )
     return SyncWriteResponse(upserted=upserted)
 
 

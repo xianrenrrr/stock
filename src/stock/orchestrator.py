@@ -329,6 +329,11 @@ def _job_learn_from_feedback() -> None:
                     )
                     conn.commit()
                     reply_research_id = int(cursor.lastrowid or 0) or None
+                    logger.info(
+                        "Reply note generated for %s: id=%s topic=%r len=%d",
+                        entry.recipient, reply_research_id,
+                        topic_short, len(reply_body),
+                    )
                     rid = conversation.get_run_id(conn, inbound_id)
                     conversation.record_outbound(
                         entry.recipient, reply_body, conn,
