@@ -481,9 +481,15 @@ def _job_sync_to_render() -> None:
         result = run_local_sync(conn)
         if result.error:
             logger.warning("Render sync error: %s", result.error)
-        else:
+        elif (
+            result.notes_pushed
+            or result.tokens_pushed
+            or result.replies_pulled
+        ):
+            # Only surface a sync log line when something actually moved -- empty
+            # "notes=0 tokens=0 replies=0" ticks are silent to keep the log clean.
             logger.info(
-                "Render sync ok: notes=%d tokens=%d replies=%d",
+                "Render sync: notes=%d tokens=%d replies=%d",
                 result.notes_pushed, result.tokens_pushed, result.replies_pulled,
             )
     except Exception:
@@ -752,6 +758,14 @@ def _configure_logging() -> Path:
     )
     file_h.setFormatter(formatter)
     root.addHandler(file_h)
+
+    # Silence per-request httpx 200 OK noise and per-tick scheduler chatter.
+    # Both still emit warnings/errors -- only the per-tick INFO lines are dropped.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("apscheduler.executors.default").setLevel(logging.WARNING)
+    logging.getLogger("apscheduler.scheduler").setLevel(logging.WARNING)
+
     return log_path
 
 
