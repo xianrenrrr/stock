@@ -596,16 +596,29 @@ def generate_reply(
 
     messages: list[ChatMessage] = [{"role": "user", "content": user_message}]
     client = get_client("minimax")
-    response: ChatResponse = client.chat(
-        messages=messages,
-        model=MINIMAX_DEFAULT_MODEL,
-        max_tokens=REPLY_MAX_TOKENS,
-        conn=conn,
-        caller="research.generate_reply",
-        cached_system=system_prompt,
-    )
 
-    body = response.content.strip()
+    # MiniMax M2.5-highspeed is a thinking model: sometimes burns the entire
+    # max_tokens budget on <think>...</think> and emits nothing afterward.
+    # strip_thinking() then leaves us with an empty body. Retry up to 2 times
+    # before giving up and surfacing "(empty reply)" to the user.
+    body = ""
+    for attempt in range(3):
+        response: ChatResponse = client.chat(
+            messages=messages,
+            model=MINIMAX_DEFAULT_MODEL,
+            max_tokens=REPLY_MAX_TOKENS,
+            conn=conn,
+            caller="research.generate_reply",
+            cached_system=system_prompt,
+        )
+        candidate = response.content.strip()
+        if candidate:
+            body = candidate
+            break
+        logger.warning(
+            "generate_reply attempt %d returned empty content; retrying", attempt + 1,
+        )
+
     if not body:
         body = "(empty reply)"
     if len(body) > REPLY_MAX_CHARS:
