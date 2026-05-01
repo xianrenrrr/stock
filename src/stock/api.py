@@ -932,20 +932,29 @@ def create_app() -> FastAPI:
     """Build the FastAPI app with all routes and handlers registered."""
     api = FastAPI(title="stock", version="0.1.0")
 
-    # Log policy: silence successful GETs (polls / health / reads), log every
-    # POST/PUT/DELETE (writes -- boss replies, syncs, mutations are interesting),
-    # and log every failure (>=400) regardless of method.
+    # Log policy: silence successful calls to high-volume plumbing paths
+    # (health probes, /sync/*, APK note-polling). Log everything else when
+    # successful (most importantly POST /channel/api/reply when the boss
+    # sends a question). Always log >=400 regardless of path.
+    _QUIET_PATH_PREFIXES = (
+        "/stock/health",
+        "/sync/",
+        "/channel/api/me",
+        "/channel/api/notes",
+    )
+
+    def _is_quiet_path(path: str) -> bool:
+        return any(path.startswith(p) for p in _QUIET_PATH_PREFIXES)
+
     @api.middleware("http")
-    async def _log_writes_and_failures(request, call_next):  # type: ignore[no-untyped-def]
+    async def _log_only_interesting(request, call_next):  # type: ignore[no-untyped-def]
         response = await call_next(request)
-        is_failure = response.status_code >= 400
-        is_write = request.method in ("POST", "PUT", "DELETE", "PATCH")
-        if is_failure:
+        if response.status_code >= 400:
             logger.warning(
                 "%s %s -> %d",
                 request.method, request.url.path, response.status_code,
             )
-        elif is_write:
+        elif not _is_quiet_path(request.url.path):
             logger.info(
                 "%s %s -> %d",
                 request.method, request.url.path, response.status_code,
