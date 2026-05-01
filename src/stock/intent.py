@@ -100,8 +100,11 @@ def classify(
 
     try:
         payload = parse_llm_json(response.content)
-    except Exception:
-        logger.warning("Intent classify: LLM returned non-JSON output")
+    except Exception as exc:
+        logger.warning(
+            "Intent classify: LLM returned non-JSON output (%s); raw=%r",
+            exc, (response.content or "")[:200],
+        )
         return IntentResult(intent="unknown", confidence=0.0)
 
     intent = _coerce_intent(str(payload.get("intent", "unknown")))

@@ -2,6 +2,18 @@
 
 Open PowerShell on the laptop and paste any of these.
 
+## 0. Self-test: simulate the boss sending a question
+
+Posts a fake question as 杨建中. Useful for end-to-end pipeline tests.
+
+```powershell
+curl.exe -X POST -H "Authorization: Bearer ODIyu2N8baAS6qa2qJl7JriA0iUPwd8U" -H "Content-Type: application/json" -d "{\"text\":\"test from curl - is this getting through\"}" "https://stock-research-9aq3.onrender.com/channel/api/reply"
+```
+
+Expected response: `{"ok":true,"recorded_at":"...","feedback_path":"..."}`.
+Then within ~10 seconds the laptop should pull, classify, generate a reply,
+and push it back to Render. Watch your live PowerShell for the chain.
+
 ## 1. List all inbound replies on Render since yesterday
 
 ```powershell

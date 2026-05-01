@@ -313,7 +313,10 @@ def _job_learn_from_feedback() -> None:
                 logger.exception("intent.classify failed for entry %s", inbound_id)
                 continue
 
-            if result.intent == "question":
+            # Treat "unknown" the same as "question": when the cheap classifier fails
+            # (MiniMax flake, JSON parse error, etc.) the boss still gets a reply
+            # rather than silent stash. False positives just produce a polite answer.
+            if result.intent in ("question", "unknown"):
                 try:
                     reply_body = generate_reply(
                         conn, recipient=entry.recipient, boss_reply=entry.text
