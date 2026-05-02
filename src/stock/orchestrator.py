@@ -16,7 +16,7 @@ import time
 import httpx
 import openai
 
-from stock import action_queue, anomaly, conversation, grading, holdings, intent, prompt_rewriter, self_review
+from stock import action_queue, anomaly, conversation, grading, holdings, intent, prompt_rewriter, self_review, thesis
 from stock.cloud_sync import run_local_sync
 from stock.config import get_settings
 from stock.db import get_conn
@@ -461,6 +461,25 @@ def _job_research_push() -> None:
         conn.close()
 
 
+def _job_verify_theses() -> None:
+    """Grade every ungraded thesis whose underlying prediction is now scored.
+
+    Runs ~5 min after _job_score_daily so newly-graded predictions have their
+    claims verified before _job_grade_and_reply pulls thesis stats into the
+    grading note. Best-effort: cost-ceiling skip + per-thesis exception isolation.
+    """
+    conn = get_conn()
+    try:
+        graded = thesis.verify_due_theses(conn, max_items=30)
+        logger.info("Theses verified: %d graded this tick", len(graded))
+    except CostCeilingError:
+        logger.warning("Cost ceiling reached during thesis verification, skipping")
+    except Exception:
+        logger.exception("Thesis verification job failed")
+    finally:
+        conn.close()
+
+
 def _job_grade_and_reply() -> None:
     """Refresh prices, score yesterday's predictions, generate a grading note + follow-ups.
 
@@ -730,6 +749,21 @@ def create_scheduler() -> BlockingScheduler:
         CronTrigger(second="*/5", timezone="UTC"),
         id="sync_to_render",
         name="Push state to Render free tier + pull boss replies",
+    )
+
+    # F16: thesis verification at SCORE_HOUR:SCORE_MINUTE+10 (Mon-Fri). Runs
+    # after score_daily so newly-graded predictions have their claims verified
+    # before grade_and_reply pulls thesis stats into the grading note.
+    scheduler.add_job(
+        _job_verify_theses,
+        CronTrigger(
+            hour=SCORE_HOUR,
+            minute=SCORE_MINUTE + 10,
+            day_of_week="mon-fri",
+            timezone="UTC",
+        ),
+        id="thesis_verify",
+        name="Verify scored theses against post-window evidence",
     )
 
     # Daily grade-and-reply at 21:45 UTC (Mon-Fri), 15 min after score_daily.

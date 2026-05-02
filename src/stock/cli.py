@@ -8,7 +8,7 @@ from typing import Annotated
 
 import typer
 
-from stock import action_queue, anomaly, grading, holdings
+from stock import action_queue, anomaly, grading, holdings, thesis as thesis_mod
 from stock.db import get_conn
 from stock.discover import (
     get_latest_discovery,
@@ -963,6 +963,95 @@ def grade_cmd(
         typer.echo("--- Body ---")
         typer.echo(note.body)
         typer.echo("--- End body ---")
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
+thesis_app = typer.Typer(help="Thesis tracking + post-hoc claim verification (F16).")
+app.add_typer(thesis_app, name="thesis")
+
+
+@thesis_app.command("extract")
+def thesis_extract_cmd(
+    prediction_id: Annotated[int, typer.Argument(help="Prediction id to decompose")],
+) -> None:
+    """Extract atomic claims from a prediction's rationale (best-effort, idempotent)."""
+    try:
+        conn = get_conn()
+        rows = thesis_mod.extract_theses(prediction_id, conn)
+        typer.echo(f"Extracted {len(rows)} thesis row(s) for prediction {prediction_id}")
+        for r in rows:
+            typer.echo(f"  - [{r.claim_type}] {r.claim_text[:160]}")
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
+@thesis_app.command("verify")
+def thesis_verify_cmd(
+    max_items: Annotated[
+        int, typer.Option("--max", help="Max ungraded theses to verify"),
+    ] = 30,
+) -> None:
+    """Verify every ungraded thesis whose underlying prediction is now scored."""
+    try:
+        conn = get_conn()
+        graded = thesis_mod.verify_due_theses(conn, max_items=max_items)
+        typer.echo(f"Graded: {len(graded)}")
+        for r in graded:
+            typer.echo(
+                f"  - thesis #{r.id} pred #{r.prediction_id} verdict={r.verdict}"
+                f" conf={r.confidence:.2f}" if r.confidence is not None
+                else f"  - thesis #{r.id} pred #{r.prediction_id} verdict={r.verdict}"
+            )
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
+@thesis_app.command("stats")
+def thesis_stats_cmd(
+    hours: Annotated[int, typer.Option("--hours", help="Lookback window")] = 36,
+) -> None:
+    """Print aggregated thesis-verdict stats for the recent window."""
+    try:
+        conn = get_conn()
+        stats = thesis_mod.compute_thesis_stats(conn, hours=hours)
+        typer.echo(thesis_mod.format_thesis_block(stats))
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
+@thesis_app.command("show")
+def thesis_show_cmd(
+    prediction_id: Annotated[int, typer.Argument(help="Prediction id")],
+) -> None:
+    """List all theses tied to a prediction with their verdicts and evidence."""
+    try:
+        conn = get_conn()
+        rows = thesis_mod.list_for_prediction(conn, prediction_id)
+        if not rows:
+            typer.echo("(no theses)")
+            return
+        for r in rows:
+            verdict = r.verdict or "pending"
+            typer.echo(
+                f"#{r.id} [{r.claim_type}] verdict={verdict}"
+                f" conf={r.confidence:.2f}" if r.confidence is not None
+                else f"#{r.id} [{r.claim_type}] verdict={verdict}"
+            )
+            typer.echo(f"  claim: {r.claim_text}")
+            if r.verifiable_by:
+                typer.echo(f"  verifiable_by: {r.verifiable_by}")
+            if r.evidence_text:
+                typer.echo(f"  evidence ({r.evidence_source}): {r.evidence_text}")
+            if r.chain_consistency:
+                typer.echo(
+                    f"  chain_consistency: {r.chain_consistency}"
+                    f" -- {r.chain_consistency_reason or ''}"
+                )
     except Exception:
         typer.echo(traceback.format_exc(), err=True)
         raise typer.Exit(code=1)

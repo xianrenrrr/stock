@@ -10,7 +10,7 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel
 
-from stock import action_queue, holdings
+from stock import action_queue, holdings, thesis
 from stock.config import get_settings
 from stock.ingest import fetch_prices
 from stock.models import (
@@ -395,6 +395,10 @@ def generate_grading_note(
 
     system_template, user_template = _load_grading_prompt()
     system_prompt = system_template.format(language=lang)
+    # F16: pull thesis-grading stats so the LLM can name "right direction wrong reason"
+    thesis_stats = thesis.compute_thesis_stats(conn, hours=lookback_hours)
+    thesis_block = thesis.format_thesis_block(thesis_stats)
+
     user_message = user_template.format(
         language=lang,
         now_utc=datetime.now(timezone.utc).isoformat(timespec="minutes"),
@@ -402,6 +406,7 @@ def generate_grading_note(
         refresh_block=_format_refresh_block(refreshed),
         stats_block=_format_stats_block(stats),
         outcomes_block=_format_outcomes_block(rows),
+        thesis_block=thesis_block,
         current_rules=_load_current_rules(),
         max_chars=GRADING_MAX_CHARS,
     )

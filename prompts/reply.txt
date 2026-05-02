@@ -18,6 +18,9 @@ Most recent boss reply:
 Live web search context (PRIMARY grounding -- prefer these facts):
 {web_grounding_block}
 
+Fresh per-ticker prediction (auto-generated when boss mentions a specific ticker):
+{ticker_prediction_block}
+
 Conversation context (last few turns with this recipient):
 {conversation_context_block}
 

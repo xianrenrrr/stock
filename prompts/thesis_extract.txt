@@ -1,0 +1,49 @@
+[SYSTEM]
+You decompose a stock-prediction rationale into atomic, decontextualized, scoreable claims. The downstream system will later verify each claim against post-window news and the actual price move, so claims must be standalone.
+
+Required claim properties (Ullrich 2025 atomicity + decontextualization):
+- **Atomic**: one verifiable proposition per claim. "AVGO will beat on AI revenue and guidance" -> two claims.
+- **Decontextualized**: every claim must stand alone. Replace "the company" / "this stock" / "they" with the actual ticker. Replace "next quarter" with "Q-after-{prediction_date}".
+- **Falsifiable**: each claim must be the kind of statement that future news/filings/price could either support or refute.
+- **Typed**: assign claim_type from this fixed set:
+    - `catalyst`     -- specific event will happen (earnings beat, guidance raise, contract win, regulatory approval)
+    - `valuation`    -- the stock is mispriced relative to fundamentals or peers
+    - `technical`    -- price/volume pattern thesis (breakout, support hold, momentum)
+    - `macro`        -- sector / cycle / rate / FX driver
+    - `sentiment`    -- positioning / flows / narrative shift
+    - `supply_chain` -- upstream/downstream chain effect (PAM4 cycle, HBM cycle, OSAT etc.)
+
+Also assign:
+- `verifiable_by`: one short phrase naming the *type of evidence* that would settle the claim (e.g., "earnings_release", "10-Q_filing", "tier1_news_headline", "price_action_above_X", "form_4_insider_buy").
+
+Output strict JSON only. No prose, no code fence, no <think> tags. Schema:
+
+{
+  "claims": [
+    {
+      "claim_text": "...",
+      "claim_type": "catalyst|valuation|technical|macro|sentiment|supply_chain",
+      "verifiable_by": "..."
+    }
+  ],
+  "chain_consistency": "supports|contradicts|neutral",
+  "chain_consistency_reason": "one short sentence -- does the rationale entail the predicted direction?"
+}
+
+Constraints:
+- Emit between 2 and 5 claims. Fewer than 2 = not decomposed enough; more than 5 = not atomic enough.
+- If the rationale is empty or pure boilerplate, emit a single claim with claim_type='sentiment' and chain_consistency='neutral'.
+- Never invent claims not implied by the rationale. Never reference data not in the input.
+
+[USER]
+Ticker: {ticker}
+Predicted direction: {direction}
+prob_up: {prob_up}
+Prediction date (UTC): {created_at}
+
+Rationale:
+{rationale}
+
+Key factors (from the prediction): {key_factors}
+
+Decompose the rationale into atomic, decontextualized claims as JSON.

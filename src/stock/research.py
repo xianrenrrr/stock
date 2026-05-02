@@ -30,6 +30,7 @@ from stock.models import (
     get_client,
 )
 from stock.score import build_report, format_report
+from stock.thesis import compute_thesis_stats, format_thesis_block
 from stock.supply_chain import (
     Layer,
     SupplyChain,
@@ -302,6 +303,9 @@ def generate_daily_research(
     web_discovery_block = format_extractions_for_research(
         get_recent_extractions(conn, hours=12)
     )
+    # F16: thesis verification stats so the morning note self-flags
+    # "right direction wrong reason" patterns.
+    thesis_block = format_thesis_block(compute_thesis_stats(conn, hours=48))
     feedback_block = recent_feedback_block()
     anomaly_block = format_anomaly_block(recent_anomalies(conn, days=2))
     previous_followups_block = action_queue.format_previous_followups(
@@ -335,6 +339,7 @@ def generate_daily_research(
         previous_followups_block=previous_followups_block,
         holdings_block=holdings_block,
         conversation_context_block=conversation_context_block,
+        thesis_block=thesis_block,
         max_chars=max_chars,
     )
 
@@ -551,6 +556,88 @@ REPLY_WEB_SEARCH_RESULTS: int = 4
 REPLY_WEB_FETCH_PER_RESULT_CHARS: int = 1500
 REPLY_WEB_BLOCK_MAX_CHARS: int = 6000
 
+# F16: ticker detection in boss replies. Matches both US-style (NVDA, AVGO) and
+# A-share/HK suffix forms (600584.SS, 0700.HK) used across the supply chain map.
+import re as _re_thesis  # alias to avoid shadowing module-level imports above
+
+_REPLY_TICKER_RE = _re_thesis.compile(
+    r"(?<![A-Za-z0-9])([A-Z]{2,5}|[0-9]{4,6}\.(?:SS|SZ|HK|TW))(?![A-Za-z0-9])"
+)
+_REPLY_TICKER_STOPWORDS: frozenset[str] = frozenset({
+    "AI", "API", "AM", "PM", "USD", "CNY", "EPS", "GDP", "CEO", "CFO",
+    "AND", "FOR", "THE", "PER", "ETC", "OK", "FYI", "TBD", "USA", "EU",
+    "NDA", "IPO", "ETF", "OEM", "BOM", "ASP", "QOQ", "YOY",
+})
+_REPLY_TICKER_MAX: int = 2  # cap how many fresh predictions we generate per reply
+
+
+def _detect_tickers_in_text(text: str) -> list[str]:
+    """Extract ticker-shaped tokens from a boss reply, deduped + stopword-filtered.
+
+    Returns up to _REPLY_TICKER_MAX tickers in first-seen order. Used by
+    generate_reply to attach a fresh per-ticker prediction (and its theses) so
+    every outbound reply has a verifiable thesis tied to it.
+    """
+    if not text:
+        return []
+    seen: list[str] = []
+    for match in _REPLY_TICKER_RE.finditer(text):
+        tok = match.group(1).upper()
+        if tok in _REPLY_TICKER_STOPWORDS:
+            continue
+        if tok in seen:
+            continue
+        seen.append(tok)
+        if len(seen) >= _REPLY_TICKER_MAX:
+            break
+    return seen
+
+
+def _build_ticker_prediction_block(
+    conn: sqlite3.Connection, *, boss_reply: str
+) -> str:
+    """For each ticker mentioned in the boss reply, emit a fresh prediction + theses.
+
+    Best-effort: any per-ticker failure (no news, yfinance error, cost ceiling)
+    gets logged and skipped so the reply still goes through. The prediction call
+    persists to the predictions table and triggers thesis extraction via the
+    predict_ticker hook -- so the reply is *traceable* and gradeable later.
+    """
+    tickers = _detect_tickers_in_text(boss_reply)
+    if not tickers:
+        return "(no tickers in boss reply)"
+
+    # Lazy import to avoid cycles: research imports predict, predict imports thesis,
+    # thesis imports models. All resolved at call-time.
+    from stock.predict import predict_ticker
+    from stock.thesis import format_theses_inline, list_for_prediction
+
+    blocks: list[str] = []
+    for ticker in tickers:
+        try:
+            pred = predict_ticker(ticker, conn)
+        except Exception as exc:  # noqa: BLE001 -- surface and continue
+            blocks.append(
+                f"### {ticker}\n  (fresh prediction skipped: {type(exc).__name__})"
+            )
+            continue
+
+        theses = list_for_prediction(conn, pred.prediction_id)
+        cal = (
+            f" (cal={pred.prob_up_calibrated:.2f})"
+            if pred.prob_up_calibrated is not None else ""
+        )
+        blocks.append(
+            f"### {ticker}\n"
+            f"  direction={pred.direction} prob_up={pred.prob_up:.2f}{cal}"
+            f" confidence={pred.confidence:.2f}\n"
+            f"  rationale: {pred.rationale[:300]}\n"
+            f"  due_at: {pred.due_at}\n"
+            f"  Theses (will be graded vs post-window news):\n"
+            f"{format_theses_inline(theses)}"
+        )
+    return "\n\n".join(blocks)
+
 
 def _gather_web_grounding(question: str) -> str:
     """Run a Tavily search on the boss's question and fetch top hits as a context block.
@@ -640,6 +727,16 @@ def generate_reply(
     # making up specifics from training-data memory.
     web_grounding_block = _gather_web_grounding(boss_reply) or "(none)"
 
+    # F16: if the boss mentioned a ticker, run a fresh prediction (which also
+    # triggers thesis extraction) so the reply has a verifiable thesis attached.
+    try:
+        ticker_prediction_block = _build_ticker_prediction_block(
+            conn, boss_reply=boss_reply
+        )
+    except Exception:
+        logger.exception("generate_reply: ticker prediction block failed; using stub")
+        ticker_prediction_block = "(ticker prediction unavailable)"
+
     check_cost_ceiling(conn, settings)
 
     system_template, user_template = _load_reply_prompt()
@@ -653,6 +750,7 @@ def generate_reply(
         similar_turns_block=similar_turns_block,
         holdings_block=holdings_block,
         web_grounding_block=web_grounding_block,
+        ticker_prediction_block=ticker_prediction_block,
     )
 
     messages: list[ChatMessage] = [{"role": "user", "content": user_message}]

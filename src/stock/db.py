@@ -259,6 +259,26 @@ CREATE TABLE IF NOT EXISTS cloud_sync_state (
     updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS prediction_theses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    prediction_id INTEGER NOT NULL REFERENCES predictions(id),
+    claim_text TEXT NOT NULL,
+    claim_type TEXT NOT NULL,
+    verifiable_by TEXT,
+    chain_consistency TEXT,
+    chain_consistency_reason TEXT,
+    verdict TEXT,
+    confidence REAL,
+    evidence_text TEXT,
+    evidence_source TEXT,
+    graded_at TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_prediction_theses_pred
+    ON prediction_theses (prediction_id);
+CREATE INDEX IF NOT EXISTS idx_prediction_theses_verdict
+    ON prediction_theses (verdict, graded_at DESC);
+
 CREATE TABLE IF NOT EXISTS self_review_proposals (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     review_date TEXT NOT NULL,

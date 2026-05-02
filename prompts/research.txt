@@ -34,6 +34,11 @@ Use these to update or close out earlier theses; do not repeat their full conten
 ## Recent performance (last 7 days)
 {performance_block}
 
+## 论点核验 / Thesis verification (last 48h, atomic-claim verdicts vs post-window news)
+Use these to flag any "right direction wrong reason" patterns in today's note --
+those are the most informative signals about the model's reasoning quality.
+{thesis_block}
+
 ## Today's focus-layer players
 {focus_layer_players}
 

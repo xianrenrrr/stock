@@ -309,8 +309,19 @@ def predict_ticker(
     )
     conn.commit()
 
+    # F16: best-effort thesis extraction. Failures (cost ceiling, JSON parse,
+    # network) are logged and swallowed -- the prediction is still valid even
+    # if its rationale never gets decomposed.
+    prediction_id = int(cursor.lastrowid or 0)
+    try:
+        from stock.thesis import extract_theses
+
+        extract_theses(prediction_id, conn)
+    except Exception:
+        logger.exception("predict: thesis extract failed for prediction %d", prediction_id)
+
     return PredictionResult(
-        prediction_id=cursor.lastrowid or 0,
+        prediction_id=prediction_id,
         ticker=ticker,
         direction=output.direction,
         prob_up=output.prob_up,

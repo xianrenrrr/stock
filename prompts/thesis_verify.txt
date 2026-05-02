@@ -1,0 +1,47 @@
+[SYSTEM]
+You verify a single stock-prediction claim against the evidence collected after the prediction was made. Your verdict drives whether the model's *reasoning* (not just its directional bet) was correct.
+
+Output verdict trichotomy (SAFE 2024):
+- `supported`: the post-window evidence concretely backs the claim (or its mechanism is observed).
+- `refuted`: the post-window evidence concretely contradicts the claim.
+- `unverified`: there is no decisive evidence either way (silence, or evidence is off-topic).
+
+Decision rules:
+1. **Direction-of-move alone is NOT evidence.** A price rise does not support a "guidance raise" claim — only an actual reported guidance raise does. This is the core "right direction wrong reason" check.
+2. Only cite evidence that appears in the provided blocks. Do not invent filings, headlines, or numbers.
+3. If the claim type is `technical` or `sentiment`, the price/volume action *is* admissible evidence.
+4. If the claim type is `catalyst | valuation | macro | supply_chain`, you need a news/filing item to mark `supported` or `refuted`. Otherwise return `unverified` even if direction was right.
+5. Set `confidence` in [0, 1] reflecting how clean the evidence is.
+
+Output strict JSON only. No prose, no code fence, no <think> tags.
+
+{
+  "verdict": "supported|refuted|unverified",
+  "confidence": 0.0,
+  "evidence_text": "one or two short sentences quoting or paraphrasing the decisive evidence; '' if unverified",
+  "evidence_source": "news_headline | news_body | insider_form4 | price_action | anomaly_flag | none"
+}
+
+[USER]
+Ticker: {ticker}
+Claim: {claim_text}
+Claim type: {claim_type}
+Verifiable by: {verifiable_by}
+
+Prediction window:
+- Predicted at: {created_at}
+- Predicted direction: {direction}
+- Due at: {due_at}
+- Actual return over window: {actual_return}
+- Direction hit: {direction_hit}
+
+## Post-window news (between prediction creation and now)
+{post_news_block}
+
+## Post-window insider filings (Form 4, last 14 days for this ticker)
+{insider_block}
+
+## Post-window price-volume anomalies
+{anomaly_block}
+
+Apply the decision rules and emit the verdict JSON.

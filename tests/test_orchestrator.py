@@ -350,11 +350,11 @@ def test_job_reflect_weekly_cost_ceiling(
 
 
 def test_create_scheduler_has_expected_jobs() -> None:
-    """Scheduler registers all F00-F15 pipeline jobs + cloud sync + self-review."""
+    """Scheduler registers all F00-F16 pipeline jobs + cloud sync + self-review + thesis."""
     scheduler = create_scheduler()
 
-    # 15 pre-cloud_sync + sync_to_render + daily_self_review + grade_and_reply = 18
-    assert len(scheduler.get_jobs()) == 18
+    # 18 pre-F16 + thesis_verify = 19
+    assert len(scheduler.get_jobs()) == 19
 
 
 def test_create_scheduler_job_ids() -> None:
@@ -381,6 +381,7 @@ def test_create_scheduler_job_ids() -> None:
         "sync_to_render",
         "daily_self_review",
         "grade_and_reply",
+        "thesis_verify",
     }
     assert job_ids == expected
 
@@ -410,7 +411,7 @@ def test_get_schedule_info_format() -> None:
     info = get_schedule_info(scheduler)
 
     assert isinstance(info, ScheduleInfo)
-    assert len(info.jobs) == 18
+    assert len(info.jobs) == 19
 
     # Each entry has name and next_run keys
     for entry in info.jobs:
