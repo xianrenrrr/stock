@@ -284,15 +284,16 @@ def test_generate_grading_note_with_outcomes_persists_and_queues(
         patch("stock.grading.refresh_prices_for_all") as mock_refresh,
         patch("stock.grading.score_due") as mock_score,
         patch("stock.grading.check_cost_ceiling"),
-        patch("stock.grading.get_client") as mock_client_factory,
+        patch("stock.grading.get_core_client") as mock_core_factory,
+        patch("stock.grading.get_core_model", return_value="MiniMax-M2.5-highspeed"),
     ):
         mock_refresh.return_value = PriceRefreshResult(
             tickers=["NVDA"], inserted_total=1, failed=[],
         )
         mock_score.return_value = MagicMock(scored=0, skipped=0, already_scored=1)
-        mock_client = MagicMock()
-        mock_client.chat.return_value = fake_response
-        mock_client_factory.return_value = mock_client
+        mock_core_client = MagicMock()
+        mock_core_client.chat.return_value = fake_response
+        mock_core_factory.return_value = mock_core_client
 
         note = generate_grading_note(mem_db, lookback_hours=36)
 
@@ -331,14 +332,15 @@ def test_generate_grading_note_appends_disclaimer(mem_db: sqlite3.Connection) ->
         patch("stock.grading.refresh_prices_for_all") as mock_refresh,
         patch("stock.grading.score_due"),
         patch("stock.grading.check_cost_ceiling"),
-        patch("stock.grading.get_client") as mock_client_factory,
+        patch("stock.grading.get_core_client") as mock_core_factory,
+        patch("stock.grading.get_core_model", return_value="MiniMax-M2.5-highspeed"),
     ):
         mock_refresh.return_value = PriceRefreshResult(
             tickers=[], inserted_total=0, failed=[],
         )
-        mock_client = MagicMock()
-        mock_client.chat.return_value = fake_response
-        mock_client_factory.return_value = mock_client
+        mock_core_client = MagicMock()
+        mock_core_client.chat.return_value = fake_response
+        mock_core_factory.return_value = mock_core_client
 
         note = generate_grading_note(mem_db, lookback_hours=36, refresh_prices=False)
 
@@ -358,16 +360,17 @@ def test_generate_grading_note_score_failure_is_non_fatal(
         patch("stock.grading.refresh_prices_for_all") as mock_refresh,
         patch("stock.grading.score_due", side_effect=RuntimeError("boom")),
         patch("stock.grading.check_cost_ceiling"),
-        patch("stock.grading.get_client") as mock_client_factory,
+        patch("stock.grading.get_core_client") as mock_core_factory,
+        patch("stock.grading.get_core_model", return_value="MiniMax-M2.5-highspeed"),
     ):
         mock_refresh.return_value = PriceRefreshResult(
             tickers=[], inserted_total=0, failed=[],
         )
-        mock_client = MagicMock()
-        mock_client.chat.return_value = MagicMock(
+        mock_core_client = MagicMock()
+        mock_core_client.chat.return_value = MagicMock(
             content="Body.\nNot financial advice.", cost_usd=0.0001,
         )
-        mock_client_factory.return_value = mock_client
+        mock_core_factory.return_value = mock_core_client
 
         note = generate_grading_note(mem_db, lookback_hours=36, refresh_prices=False)
 

@@ -17,8 +17,11 @@ from stock.models import (
     MINIMAX_DEFAULT_MODEL,
     ChatMessage,
     ChatResponse,
+    ClaudeCliUnavailable,
     check_cost_ceiling,
     get_client,
+    get_core_client,
+    get_core_model,
 )
 from stock.score import score_due
 
@@ -411,16 +414,33 @@ def generate_grading_note(
         max_chars=GRADING_MAX_CHARS,
     )
 
+    # F17: route through the swappable core backend so the grading note can run
+    # under either MiniMax (cheap) or `claude -p` (Opus + built-in WebSearch).
+    # Falls back to MiniMax if claude_cli backend is selected but unreachable.
     messages: list[ChatMessage] = [{"role": "user", "content": user_message}]
-    client = get_client("minimax")
-    response: ChatResponse = client.chat(
-        messages=messages,
-        model=MINIMAX_DEFAULT_MODEL,
-        max_tokens=GRADING_MAX_TOKENS,
-        conn=conn,
-        caller="grading.generate_note",
-        cached_system=system_prompt,
-    )
+    try:
+        primary = get_core_client()
+        response: ChatResponse = primary.chat(
+            messages=messages,
+            model=get_core_model(),
+            max_tokens=GRADING_MAX_TOKENS,
+            conn=conn,
+            caller="grading.generate_note",
+            cached_system=system_prompt,
+        )
+    except ClaudeCliUnavailable as exc:
+        logger.warning(
+            "grading: claude_cli unavailable (%s); falling back to MiniMax", exc,
+        )
+        fallback = get_client("minimax")
+        response = fallback.chat(
+            messages=messages,
+            model=MINIMAX_DEFAULT_MODEL,
+            max_tokens=GRADING_MAX_TOKENS,
+            conn=conn,
+            caller="grading.generate_note+fallback",
+            cached_system=system_prompt,
+        )
 
     body = response.content.strip()
     if not body:

@@ -64,6 +64,18 @@ class Settings(BaseSettings):
     #   "off": skip the daily-review job entirely
     self_review_backend: str = "claude_code"
 
+    # F17: core "thinking" backend for the user-facing flows (research, reply,
+    # grading, deep-dive, health-check). Toggle to swap between MiniMax (cheap,
+    # metered) and a local `claude -p` subprocess (Opus-class, has built-in
+    # WebSearch, billed via the user's Claude Code subscription so $0 against
+    # our daily ceiling). Utility classifiers (intent, prompt_rewriter, thesis,
+    # discover, features) keep talking to MiniMax regardless -- they're high-
+    # frequency and don't need the upgrade.
+    #   "minimax"    (default): every core call goes to MiniMax-M2.5-highspeed
+    #   "claude_cli"          : every core call spawns `claude -p` locally
+    core_llm_backend: str = "minimax"
+    core_claude_model: str = "claude-opus-4-7"
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

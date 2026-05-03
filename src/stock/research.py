@@ -26,8 +26,11 @@ from stock.models import (
     MINIMAX_DEFAULT_MODEL,
     ChatMessage,
     ChatResponse,
+    ClaudeCliUnavailable,
     check_cost_ceiling,
     get_client,
+    get_core_client,
+    get_core_model,
 )
 from stock.score import build_report, format_report
 from stock.thesis import compute_thesis_stats, format_thesis_block
@@ -56,6 +59,48 @@ WATCHLIST_PREDICTION_LOOKBACK_HOURS: int = 36
 NEWS_FEATURE_LOOKBACK_HOURS: int = 24
 NEWS_FEATURE_LIMIT: int = 25
 DEFAULT_MAX_CHARS: int = 3500
+
+
+def _core_chat(
+    *,
+    messages: list[ChatMessage],
+    max_tokens: int,
+    conn: sqlite3.Connection,
+    caller: str,
+    cached_system: str | None = None,
+) -> ChatResponse:
+    """Send a chat request via the active core backend, falling back to MiniMax on outage.
+
+    Honors STOCK_CORE_BACKEND. When `claude_cli` is selected but the binary is
+    missing or the subprocess fails, transparently falls back to MiniMax so a
+    misconfigured Render deployment doesn't break the daily push. Logs the
+    fallback so the operator can see it in `pipeline/logs/orchestrator.log`.
+    """
+    primary = get_core_client()
+    primary_model = get_core_model()
+    try:
+        return primary.chat(
+            messages=messages,
+            model=primary_model,
+            max_tokens=max_tokens,
+            conn=conn,
+            caller=caller,
+            cached_system=cached_system,
+        )
+    except ClaudeCliUnavailable as exc:
+        logger.warning(
+            "core backend claude_cli unavailable for %s (%s); falling back to MiniMax",
+            caller, exc,
+        )
+        fallback = get_client("minimax")
+        return fallback.chat(
+            messages=messages,
+            model=MINIMAX_DEFAULT_MODEL,
+            max_tokens=max_tokens,
+            conn=conn,
+            caller=f"{caller}+fallback",
+            cached_system=cached_system,
+        )
 
 
 class ResearchReport(BaseModel):
@@ -343,12 +388,10 @@ def generate_daily_research(
         max_chars=max_chars,
     )
 
-    # Always use the cheap model — a daily report is high-volume
+    # Core backend is swappable via STOCK_CORE_BACKEND (minimax|claude_cli)
     messages: list[ChatMessage] = [{"role": "user", "content": user_message}]
-    client = get_client("minimax")
-    response: ChatResponse = client.chat(
+    response: ChatResponse = _core_chat(
         messages=messages,
-        model=MINIMAX_DEFAULT_MODEL,
         max_tokens=DAILY_RESEARCH_MAX_TOKENS,
         conn=conn,
         caller="research.generate_daily",
@@ -434,10 +477,8 @@ def generate_deep_dive(
     )
 
     messages: list[ChatMessage] = [{"role": "user", "content": user_message}]
-    client = get_client("minimax")
-    response: ChatResponse = client.chat(
+    response: ChatResponse = _core_chat(
         messages=messages,
-        model=MINIMAX_DEFAULT_MODEL,
         max_tokens=DEEP_DIVE_MAX_TOKENS,
         conn=conn,
         caller="research.generate_deep_dive",
@@ -517,10 +558,8 @@ def generate_health_check(
     )
 
     messages: list[ChatMessage] = [{"role": "user", "content": user_message}]
-    client = get_client("minimax")
-    response: ChatResponse = client.chat(
+    response: ChatResponse = _core_chat(
         messages=messages,
-        model=MINIMAX_DEFAULT_MODEL,
         max_tokens=HEALTH_CHECK_MAX_TOKENS,
         conn=conn,
         caller="research.generate_health_check",
@@ -754,17 +793,17 @@ def generate_reply(
     )
 
     messages: list[ChatMessage] = [{"role": "user", "content": user_message}]
-    client = get_client("minimax")
 
     # MiniMax M2.5-highspeed is a thinking model: sometimes burns the entire
     # max_tokens budget on <think>...</think> and emits nothing afterward.
     # strip_thinking() then leaves us with an empty body. Retry up to 2 times
     # before giving up and surfacing "(empty reply)" to the user.
+    # The claude_cli backend doesn't have this failure mode, but the retry loop
+    # is harmless when it runs against it (subsequent calls just succeed once).
     body = ""
     for attempt in range(3):
-        response: ChatResponse = client.chat(
+        response: ChatResponse = _core_chat(
             messages=messages,
-            model=MINIMAX_DEFAULT_MODEL,
             max_tokens=REPLY_MAX_TOKENS,
             conn=conn,
             caller="research.generate_reply",

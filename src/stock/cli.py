@@ -971,6 +971,135 @@ def grade_cmd(
 thesis_app = typer.Typer(help="Thesis tracking + post-hoc claim verification (F16).")
 app.add_typer(thesis_app, name="thesis")
 
+backend_app = typer.Typer(help="Inspect / switch the core LLM backend (F17).")
+app.add_typer(backend_app, name="backend")
+
+
+@backend_app.command("show")
+def backend_show_cmd() -> None:
+    """Print the active core backend + model + smoke-test that it's reachable."""
+    try:
+        from stock.config import get_settings as _get_settings
+        from stock.models import (
+            CLAUDE_CLI_CORE_BIN,
+            ClaudeCliClient,
+            ClaudeCliUnavailable,
+            get_core_client,
+            get_core_model,
+        )
+
+        settings = _get_settings()
+        typer.echo(f"core_llm_backend = {settings.core_llm_backend}")
+        typer.echo(f"core model       = {get_core_model()}")
+        client = get_core_client()
+        typer.echo(f"client provider  = {client.provider}")
+        typer.echo(f"minimax key set  = {bool(settings.minimax_api_key)}")
+        typer.echo(f"claude_cli bin   = {CLAUDE_CLI_CORE_BIN}")
+
+        # Probe the binary if claude_cli is selected
+        if isinstance(client, ClaudeCliClient):
+            import shutil
+
+            found = shutil.which(CLAUDE_CLI_CORE_BIN)
+            if found:
+                typer.echo(f"claude found at  = {found}")
+            else:
+                typer.echo(
+                    f"WARNING: `{CLAUDE_CLI_CORE_BIN}` not on PATH;"
+                    f" core calls will fall back to MiniMax."
+                )
+                raise typer.Exit(code=2)
+        _ = ClaudeCliUnavailable  # silence unused-import linter
+    except typer.Exit:
+        raise
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
+@backend_app.command("set")
+def backend_set_cmd(
+    backend: Annotated[
+        str, typer.Argument(help="Backend name: minimax | claude_cli"),
+    ],
+) -> None:
+    """Update CORE_LLM_BACKEND in .env (creates the file if missing).
+
+    The change takes effect for *new* processes. Restart the orchestrator
+    (`stock serve` / the gateway) to pick it up. Existing in-flight calls keep
+    using the previous backend.
+    """
+    backend = backend.strip().lower()
+    if backend not in ("minimax", "claude_cli"):
+        typer.echo(
+            f"Backend must be 'minimax' or 'claude_cli', got '{backend}'.", err=True,
+        )
+        raise typer.Exit(code=1)
+
+    env_path = Path(".env")
+    lines: list[str] = []
+    if env_path.exists():
+        lines = env_path.read_text(encoding="utf-8").splitlines()
+
+    new_lines: list[str] = []
+    seen = False
+    for line in lines:
+        if line.strip().startswith("CORE_LLM_BACKEND="):
+            new_lines.append(f"CORE_LLM_BACKEND={backend}")
+            seen = True
+        else:
+            new_lines.append(line)
+    if not seen:
+        new_lines.append(f"CORE_LLM_BACKEND={backend}")
+
+    env_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+    typer.echo(f"Wrote CORE_LLM_BACKEND={backend} to {env_path.resolve()}")
+    typer.echo("Restart the orchestrator + gateway to pick up the change.")
+
+
+@backend_app.command("test")
+def backend_test_cmd(
+    prompt: Annotated[
+        str,
+        typer.Option("--prompt", help="Test prompt to send"),
+    ] = "Reply with the single word OK and nothing else.",
+) -> None:
+    """Send one tiny chat call to the active backend and print the response."""
+    try:
+        from stock.models import (
+            ChatMessage,
+            ClaudeCliUnavailable,
+            get_core_client,
+            get_core_model,
+        )
+
+        conn = get_conn()
+        client = get_core_client()
+        msgs: list[ChatMessage] = [{"role": "user", "content": prompt}]
+        try:
+            response = client.chat(
+                messages=msgs,
+                model=get_core_model(),
+                max_tokens=128,
+                conn=conn,
+                caller="cli.backend_test",
+            )
+        except ClaudeCliUnavailable as exc:
+            typer.echo(f"claude_cli unavailable: {exc}", err=True)
+            raise typer.Exit(code=2)
+        typer.echo(
+            f"provider={client.provider} model={response.model}"
+            f" cost=${response.cost_usd:.4f}"
+            f" tokens={response.input_tokens}+{response.output_tokens}"
+        )
+        typer.echo("--- response ---")
+        typer.echo(response.content)
+    except typer.Exit:
+        raise
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
 
 @thesis_app.command("extract")
 def thesis_extract_cmd(

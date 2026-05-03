@@ -42,7 +42,21 @@ PRICING: dict[str, dict[str, float]] = {
     "MiniMax-M2.5-highspeed": {"input": 0.20, "output": 0.80},
     "claude-opus-4-6": {"input": 15.0, "output": 75.0},
     "claude-opus-4-7": {"input": 15.0, "output": 75.0},
+    # claude_cli backend = locally-spawned `claude -p` subprocess; cost is paid via
+    # the user's Claude Code subscription, not metered through our API key. We log
+    # cost_usd=0 so the daily ceiling doesn't block, but token counts (estimated)
+    # still flow into llm_calls for visibility.
+    "claude-code-session": {"input": 0.0, "output": 0.0},
 }
+
+# F17: subprocess Claude Code session as a swappable core backend. Has built-in
+# WebSearch so the prompt can ground itself; our existing Tavily/Serper layer
+# (stock.websearch) stays available as an explicit backup for the MiniMax path
+# and as a fallback when subprocess search whiffs.
+CLAUDE_CLI_CORE_BIN: str = "claude"
+CLAUDE_CLI_CORE_DEFAULT_MODEL: str = "claude-opus-4-7"
+CLAUDE_CLI_CORE_TIMEOUT_SECS: int = 600
+CLAUDE_CLI_CORE_MODEL_NAME: str = "claude-code-session"  # the key in PRICING
 
 
 class ChatMessage(TypedDict):
@@ -270,3 +284,171 @@ def get_client(provider: str) -> LLMClient:
     if provider == "claude":
         return LLMClient("claude", settings.anthropic_api_key)
     raise ValueError(f"Unknown provider: {provider}")
+
+
+class ClaudeCliUnavailable(RuntimeError):
+    """Raised when the `claude` binary isn't installed or the subprocess fails non-recoverably."""
+
+
+class ClaudeCliClient:
+    """Subprocess-backed Claude Code session. Implements the same chat() interface as LLMClient.
+
+    Each chat() call spawns `claude -p <prompt> --model <model> --output-format text
+    --dangerously-skip-permissions` and reads stdout. The subprocess inherits the
+    user's existing `claude login`, so authentication and billing happen via the
+    Claude Code subscription -- cost is logged as $0 against our daily ceiling.
+
+    Critically, `claude -p` has access to its own WebSearch tool, so prompts can
+    self-ground without going through our Tavily/Serper layer. The Tavily layer
+    stays available as the backup path and is still used by the MiniMax backend.
+    """
+
+    def __init__(
+        self,
+        *,
+        bin_path: str = CLAUDE_CLI_CORE_BIN,
+        timeout_secs: int = CLAUDE_CLI_CORE_TIMEOUT_SECS,
+    ) -> None:
+        self._bin = bin_path
+        self._timeout = timeout_secs
+
+    @property
+    def provider(self) -> str:
+        """Return the provider name (matches LLMClient API)."""
+        return "claude_cli"
+
+    def chat(
+        self,
+        messages: list[ChatMessage],
+        model: str,
+        max_tokens: int,
+        conn: sqlite3.Connection,
+        caller: str,
+        cached_system: str | None = None,
+    ) -> ChatResponse:
+        """Send a chat request to a `claude -p` subprocess; log usage; return response."""
+        import subprocess
+
+        # Cost ceiling check is a no-op for this backend (cost is $0 here), but
+        # we still call it so a MiniMax-spike day blocks subprocess calls too --
+        # we don't want a runaway subscription drain hidden behind "free."
+        settings = get_settings()
+        check_cost_ceiling(conn, settings)
+
+        # Compose the single-turn prompt: system block + each user/assistant turn.
+        # claude -p is one-shot per invocation, so we flatten the conversation.
+        parts: list[str] = []
+        if cached_system:
+            parts.append(cached_system.strip())
+            parts.append("---")
+        for m in messages:
+            role = m.get("role", "user")
+            content = m.get("content", "")
+            if not content:
+                continue
+            if role == "user":
+                parts.append(content)
+            else:
+                parts.append(f"[{role}]\n{content}")
+        prompt = "\n\n".join(parts).strip()
+
+        # Token estimate before the call so we can log even on timeout.
+        # ~4 chars/token is the canonical Anthropic rule of thumb.
+        input_tokens_estimate = max(1, len(prompt) // 4)
+
+        start = time.perf_counter()
+        try:
+            proc = subprocess.run(
+                [
+                    self._bin, "-p", prompt,
+                    "--model", model or CLAUDE_CLI_CORE_DEFAULT_MODEL,
+                    "--output-format", "text",
+                    "--dangerously-skip-permissions",
+                ],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=self._timeout,
+            )
+        except FileNotFoundError as exc:
+            raise ClaudeCliUnavailable(
+                f"`{self._bin}` not on PATH; run `claude login` and ensure Claude Code is installed"
+            ) from exc
+        except subprocess.TimeoutExpired as exc:
+            raise ClaudeCliUnavailable(
+                f"`claude -p` exceeded {self._timeout}s timeout for caller={caller}"
+            ) from exc
+
+        duration_ms = int((time.perf_counter() - start) * 1000)
+
+        if proc.returncode != 0:
+            raise ClaudeCliUnavailable(
+                f"`claude -p` exit={proc.returncode}: {(proc.stderr or '').strip()[:500]}"
+            )
+
+        content = (proc.stdout or "").strip()
+        # Defensive: hybrid-thinking models can still emit <think> blocks
+        if "<think>" in content:
+            content = strip_thinking(content)
+
+        output_tokens_estimate = max(1, len(content) // 4)
+
+        # Log to llm_calls table with cost=0 (subscription, not metered).
+        conn.execute(
+            "INSERT INTO llm_calls"
+            " (model, provider, input_tokens, output_tokens,"
+            " cost_usd, duration_ms, caller, created_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                CLAUDE_CLI_CORE_MODEL_NAME,
+                "claude_cli",
+                input_tokens_estimate,
+                output_tokens_estimate,
+                0.0,
+                duration_ms,
+                caller,
+                datetime.now(timezone.utc).isoformat(),
+            ),
+        )
+        conn.commit()
+
+        return ChatResponse(
+            content=content,
+            input_tokens=input_tokens_estimate,
+            output_tokens=output_tokens_estimate,
+            model=CLAUDE_CLI_CORE_MODEL_NAME,
+            cost_usd=0.0,
+        )
+
+
+def get_core_client() -> LLMClient | ClaudeCliClient:
+    """Return the active 'core thinking' backend selected by Settings.core_llm_backend.
+
+    Used by the user-facing flows (research, reply, grading, deep-dive, health-check)
+    so the operator can swap between MiniMax (fast, cheap, metered) and a local
+    Claude Code subprocess (Opus-class, free under the user's subscription, has
+    built-in WebSearch) with one env var. Utility callers (intent, prompt_rewriter,
+    thesis extract/verify, discover, features) keep talking to MiniMax directly --
+    they're high-frequency and don't benefit from the Opus-class jump.
+
+    Env: CORE_LLM_BACKEND=minimax|claude_cli (default minimax).
+    Falls back to MiniMax if claude_cli is configured but the binary is missing.
+    """
+    settings = get_settings()
+    backend = (settings.core_llm_backend or "minimax").strip().lower()
+    if backend == "claude_cli":
+        return ClaudeCliClient()
+    return get_client("minimax")
+
+
+def get_core_model() -> str:
+    """Return the model name appropriate for the active core backend.
+
+    Lets a single caller write `client = get_core_client(); model = get_core_model();`
+    without knowing which backend is live.
+    """
+    settings = get_settings()
+    backend = (settings.core_llm_backend or "minimax").strip().lower()
+    if backend == "claude_cli":
+        return (settings.core_claude_model or CLAUDE_CLI_CORE_DEFAULT_MODEL).strip()
+    return MINIMAX_DEFAULT_MODEL
