@@ -8,7 +8,7 @@ from typing import Annotated
 
 import typer
 
-from stock import action_queue, anomaly, grading, holdings, thesis as thesis_mod
+from stock import action_queue, anomaly, discovery_engine, grading, holdings, thesis as thesis_mod
 from stock.db import get_conn
 from stock.discover import (
     get_latest_discovery,
@@ -973,6 +973,120 @@ app.add_typer(thesis_app, name="thesis")
 
 backend_app = typer.Typer(help="Inspect / switch the core LLM backend (F17).")
 app.add_typer(backend_app, name="backend")
+
+discover_app = typer.Typer(help="Forward-looking discovery engine (F19) -- find before it explodes.")
+app.add_typer(discover_app, name="forward-discover")
+
+
+@discover_app.command("run")
+def forward_discover_run_cmd(
+    no_promote: Annotated[
+        bool, typer.Option("--no-promote", help="Score only; don't auto-add to watchlist"),
+    ] = False,
+) -> None:
+    """Run one full forward-discovery pass (score universe, persist, optionally promote)."""
+    try:
+        conn = get_conn()
+        result = discovery_engine.run_discovery_engine(
+            conn, auto_promote=not no_promote,
+        )
+        typer.echo(
+            f"Universe={result.universe_size} scored={result.scored}"
+            f" new={result.new_candidates} updated={result.updated_candidates}"
+            f" promoted={result.promoted_tickers or 'none'}"
+            f" apewisdom_ok={result.apewisdom_hit}"
+        )
+        typer.echo("--- Top candidates ---")
+        for cs in result.top_candidates:
+            gate = "GATE" if cs.qap_gate else "no-gate"
+            typer.echo(
+                f"  {cs.ticker}  FWP={cs.fwp:.3f}  [{gate}]"
+                f"  ocis={cs.components.get('ocis_raw', 0):.1f}"
+                f"  cluster={int(cs.components.get('ocis_cluster_max', 0))}"
+                f"  novelty={cs.components.get('novelty_raw', 0):.2f}"
+                f"  reddit_accel={cs.components.get('reddit_accel', 0):+.2f}"
+            )
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
+@discover_app.command("list")
+def forward_discover_list_cmd(
+    status: Annotated[
+        str | None, typer.Option("--status", help="Filter: candidate|promoted|dismissed"),
+    ] = None,
+    limit: Annotated[int, typer.Option("--limit", help="Max rows")] = 50,
+) -> None:
+    """Show stored discovery candidates ordered by FWP score."""
+    try:
+        conn = get_conn()
+        rows = discovery_engine.list_candidates(conn, status=status, limit=limit)
+        if not rows:
+            typer.echo("(no candidates)")
+            return
+        for cs in rows:
+            gate = "GATE" if cs.qap_gate else "no-gate"
+            typer.echo(
+                f"  {cs.ticker:<10} FWP={cs.fwp:.3f}  [{gate}]"
+                f"  scored_at={cs.score_at[:16]}"
+            )
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
+@discover_app.command("dismiss")
+def forward_discover_dismiss_cmd(
+    ticker: Annotated[str, typer.Argument(help="Ticker to dismiss (won't be re-promoted for 30d)")],
+    reason: Annotated[str, typer.Option("--reason", help="Free-text reason")] = "",
+) -> None:
+    """Dismiss a candidate (operator decided it's noise / wrong / illiquid)."""
+    try:
+        conn = get_conn()
+        ok = discovery_engine.dismiss_candidate(conn, ticker, reason=reason)
+        typer.echo(f"Dismissed {ticker.upper()}" if ok else "No matching row.")
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
+@discover_app.command("backtest-winners")
+def forward_discover_backtest_cmd(
+    out_dir: Annotated[
+        str, typer.Option("--out-dir", help="Where to write the markdown report"),
+    ] = "pipeline",
+) -> None:
+    """F20 diagnostic: would F19's signals have fired before known winners broke out?"""
+    try:
+        from stock import backtest_winners as _bt
+
+        conn = get_conn()
+        path = _bt.write_diagnostic_report(conn, out_dir=out_dir)
+        typer.echo(f"Wrote {path}")
+        # Echo the table to stdout for quick inspection
+        typer.echo("---")
+        typer.echo(Path(path).read_text(encoding="utf-8"))
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
+@discover_app.command("promote")
+def forward_discover_promote_cmd(
+    ticker: Annotated[str, typer.Argument(help="Ticker to promote to active watchlist")],
+) -> None:
+    """Manually promote a candidate (override the gates)."""
+    try:
+        conn = get_conn()
+        rows = discovery_engine.list_candidates(conn, limit=200)
+        match = next((c for c in rows if c.ticker == ticker.upper()), None)
+        score = match.fwp if match else 0.0
+        discovery_engine.promote_candidate(conn, ticker, score=score)
+        typer.echo(f"Promoted {ticker.upper()} (FWP={score:.3f})")
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
 
 
 @backend_app.command("show")

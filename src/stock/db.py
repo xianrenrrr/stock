@@ -259,6 +259,26 @@ CREATE TABLE IF NOT EXISTS cloud_sync_state (
     updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS discovery_candidates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticker TEXT NOT NULL,
+    score REAL NOT NULL,
+    components_json TEXT NOT NULL,
+    qap_gate INTEGER NOT NULL DEFAULT 0,
+    first_flagged_at TEXT NOT NULL,
+    last_score_at TEXT NOT NULL,
+    last_score REAL NOT NULL,
+    status TEXT NOT NULL DEFAULT 'candidate',
+    promoted_at TEXT,
+    dismissed_at TEXT,
+    notes TEXT,
+    UNIQUE(ticker)
+);
+CREATE INDEX IF NOT EXISTS idx_discovery_candidates_score
+    ON discovery_candidates (status, score DESC);
+CREATE INDEX IF NOT EXISTS idx_discovery_candidates_last_score
+    ON discovery_candidates (last_score_at DESC);
+
 CREATE TABLE IF NOT EXISTS prediction_theses (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     prediction_id INTEGER NOT NULL REFERENCES predictions(id),

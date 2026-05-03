@@ -16,7 +16,7 @@ import time
 import httpx
 import openai
 
-from stock import action_queue, anomaly, conversation, grading, holdings, intent, prompt_rewriter, self_review, thesis
+from stock import action_queue, anomaly, conversation, discovery_engine, grading, holdings, intent, prompt_rewriter, self_review, thesis
 from stock.cloud_sync import run_local_sync
 from stock.config import get_settings
 from stock.db import get_conn
@@ -461,6 +461,35 @@ def _job_research_push() -> None:
         conn.close()
 
 
+def _job_run_discovery_engine() -> None:
+    """F19: forward-looking candidate scoring + auto-promote.
+
+    Runs daily at 23:00 UTC (07:00 Beijing) -- after the close-scoring + grading
+    cycle so insider/news tables are fresh, before the next morning's research
+    push so promoted candidates are included in the watchlist block.
+    """
+    conn = get_conn()
+    try:
+        result = discovery_engine.run_discovery_engine(conn, auto_promote=True)
+        logger.info(
+            "Discovery engine: universe=%d scored=%d new=%d updated=%d"
+            " promoted=%s apewisdom_ok=%s",
+            result.universe_size, result.scored,
+            result.new_candidates, result.updated_candidates,
+            ",".join(result.promoted_tickers) if result.promoted_tickers else "none",
+            result.apewisdom_hit,
+        )
+        for cs in result.top_candidates[:5]:
+            logger.info(
+                "  candidate %s FWP=%.3f gate=%s",
+                cs.ticker, cs.fwp, cs.qap_gate,
+            )
+    except Exception:
+        logger.exception("Discovery engine job failed")
+    finally:
+        conn.close()
+
+
 def _job_verify_theses() -> None:
     """Grade every ungraded thesis whose underlying prediction is now scored.
 
@@ -749,6 +778,22 @@ def create_scheduler() -> BlockingScheduler:
         CronTrigger(second="*/5", timezone="UTC"),
         id="sync_to_render",
         name="Push state to Render free tier + pull boss replies",
+    )
+
+    # F19: forward-discovery engine daily at 23:00 UTC (07:00 Beijing). Runs
+    # after the close-scoring + grading cycle so insider/news tables are fresh,
+    # before the next morning's research push so promoted candidates appear in
+    # the watchlist block.
+    scheduler.add_job(
+        _job_run_discovery_engine,
+        CronTrigger(
+            hour=23,
+            minute=0,
+            day_of_week="mon-fri",
+            timezone="UTC",
+        ),
+        id="discovery_engine",
+        name="F19 forward-looking candidate scoring + auto-promote",
     )
 
     # F16: thesis verification at SCORE_HOUR:SCORE_MINUTE+10 (Mon-Fri). Runs

@@ -33,6 +33,7 @@ from stock.models import (
     get_core_model,
 )
 from stock.score import build_report, format_report
+from stock.discovery_engine import format_candidates_block, list_candidates
 from stock.thesis import compute_thesis_stats, format_thesis_block
 from stock.supply_chain import (
     Layer,
@@ -351,6 +352,15 @@ def generate_daily_research(
     # F16: thesis verification stats so the morning note self-flags
     # "right direction wrong reason" patterns.
     thesis_block = format_thesis_block(compute_thesis_stats(conn, hours=48))
+
+    # F19: forward-looking candidates -- the boss complained that everything is
+    # backward-looking ("by the time you tell me it's up 20x the move is over").
+    # The discovery engine flags tickers with leading-indicator signals (insider
+    # cluster buys, 8-K novelty, quiet accumulation, reddit acceleration) BEFORE
+    # they break out. Top 5 candidates injected into the prompt.
+    discovery_block = format_candidates_block(
+        list_candidates(conn, status="candidate", limit=5)
+    )
     feedback_block = recent_feedback_block()
     anomaly_block = format_anomaly_block(recent_anomalies(conn, days=2))
     previous_followups_block = action_queue.format_previous_followups(
@@ -385,6 +395,7 @@ def generate_daily_research(
         holdings_block=holdings_block,
         conversation_context_block=conversation_context_block,
         thesis_block=thesis_block,
+        discovery_block=discovery_block,
         max_chars=max_chars,
     )
 
