@@ -51,6 +51,8 @@ RESEARCH_PROMPT_PATH: str = "prompts/research.txt"
 DEEP_DIVE_PROMPT_PATH: str = "prompts/deep_dive.txt"
 HEALTH_CHECK_PROMPT_PATH: str = "prompts/health_check.txt"
 REPLY_PROMPT_PATH: str = "prompts/reply.txt"
+DISCOVERY_THESIS_PROMPT_PATH: str = "prompts/discovery_thesis.txt"
+DISCOVERY_THESIS_MAX_TOKENS: int = 4500
 DAILY_RESEARCH_MAX_TOKENS: int = 4500
 DEEP_DIVE_MAX_TOKENS: int = 5500
 HEALTH_CHECK_MAX_TOKENS: int = 4500
@@ -605,6 +607,155 @@ def generate_health_check(
 REPLY_WEB_SEARCH_RESULTS: int = 4
 REPLY_WEB_FETCH_PER_RESULT_CHARS: int = 1500
 REPLY_WEB_BLOCK_MAX_CHARS: int = 6000
+
+
+@lru_cache(maxsize=1)
+def _load_discovery_thesis_prompt() -> tuple[str, str]:
+    """Load + split the F22 discovery-thesis prompt."""
+    path = Path(DISCOVERY_THESIS_PROMPT_PATH)
+    if not path.exists():
+        raise FileNotFoundError(f"Discovery-thesis prompt not found at {path}")
+    text = path.read_text(encoding="utf-8")
+    parts = text.split("[USER]")
+    return parts[0].replace("[SYSTEM]", "").strip(), parts[1].strip() if len(parts) > 1 else ""
+
+
+def _format_leading_signals_block(components: dict[str, float]) -> str:
+    """Render the F19/F21 component dict as a readable block for the thesis prompt."""
+    lines: list[str] = []
+    lines.append(f"- Insider OCIS (raw): {components.get('ocis_raw', 0):.2f}")
+    lines.append(f"  - distinct filers (30d): {int(components.get('ocis_distinct_filers', 0))}")
+    lines.append(f"  - max cluster size (10d window): {int(components.get('ocis_cluster_max', 0))}")
+    lines.append(f"  - opportunistic $ value: ${components.get('ocis_opportunistic_usd', 0):,.0f}")
+    lines.append(f"- 8-K novelty score: {components.get('novelty_raw', 0):.2f} (0=identical, 1=totally new)")
+    lines.append(f"- QAP gate (Wyckoff-lite quiet accumulation): {'PRESENT' if components.get('qap_gate', 0) > 0 else 'NOT PRESENT'}")
+    lines.append(f"  - range/ATR: {components.get('qap_range_over_atr', -1):.2f}")
+    lines.append(f"  - 60d/180d volume ratio: {components.get('qap_volume_ratio', -1):.2f}")
+    lines.append(f"- Reddit (ApeWisdom) mentions now/prior 24h: {int(components.get('reddit_now', 0))}/{int(components.get('reddit_prior', 0))} (accel {components.get('reddit_accel', 0):+.2f})")
+    if components.get('theme_hn_30d', 0) > 0 or components.get('theme_arxiv_30d', 0) > 0:
+        lines.append(f"- HN mentions 30d / prior 30d: {int(components.get('theme_hn_30d', 0))} / accel {components.get('theme_hn_accel', 0):+.2f}")
+        lines.append(f"- arXiv mentions 30d / prior 30d: {int(components.get('theme_arxiv_30d', 0))} / accel {components.get('theme_arxiv_accel', 0):+.2f}")
+    return "\n".join(lines)
+
+
+def _format_recent_insider_block_for_ticker(
+    conn: sqlite3.Connection, ticker: str, *, days: int = 90,
+) -> str:
+    """Pull the last 90 days of Form 4 filings for one ticker as a readable block."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    rows = conn.execute(
+        "SELECT filed_at, filer_name, COALESCE(filer_role, ''), transaction_type,"
+        " COALESCE(shares, 0), COALESCE(price, 0)"
+        " FROM insider_filings WHERE ticker = ? AND filed_at >= ?"
+        " ORDER BY filed_at DESC LIMIT 20",
+        (ticker, cutoff),
+    ).fetchall()
+    if not rows:
+        return "(no insider filings in window)"
+    lines = []
+    for filed_at, filer_name, filer_role, txn_type, shares, price in rows:
+        value = float(shares) * float(price) if shares and price else 0.0
+        lines.append(
+            f"- [{str(filed_at)[:10]}] {filer_name} ({filer_role or 'n/a'})"
+            f" {txn_type or '?'} {int(shares)} @ ${price:.2f} = ${value:,.0f}"
+        )
+    return "\n".join(lines)
+
+
+def generate_discovery_thesis(
+    conn: sqlite3.Connection,
+    *,
+    ticker: str,
+    components: dict[str, float],
+    company_name: str = "",
+    sublayer: str = "",
+    layer: str = "",
+    language: str | None = None,
+    max_chars: int = DEFAULT_MAX_CHARS,
+) -> ResearchReport:
+    """F22: write a forward-looking discovery thesis on a candidate the engine just flagged.
+
+    Caller (typically the discovery_engine job) supplies the ticker + the
+    leading-indicator components dict already computed during the scoring pass,
+    so this function does NOT re-run the indicators -- it just composes the
+    LLM prompt + persists the resulting note as kind='discovery_thesis' in
+    research_reports. Cloud_sync pushes to Render, APK shows it.
+    """
+    settings = get_settings()
+    chain = load_chain()
+    lang = (language or settings.research_language or "zh").strip() or "zh"
+
+    leading_block = _format_leading_signals_block(components)
+    chain_context = gather_chain_context(chain, topic=ticker)
+    news_block = _build_news_block_for_topic(conn, ticker, limit=10)
+    insider_block = _format_recent_insider_block_for_ticker(conn, ticker)
+    anomalies = recent_anomalies(conn, days=14)
+    anomalies = [a for a in anomalies if a.ticker == ticker]
+    anomaly_block = format_anomaly_block(anomalies)
+    predictions_block = _build_predictions_block_for_topic(conn, ticker)
+
+    check_cost_ceiling(conn, settings)
+
+    system_template, user_template = _load_discovery_thesis_prompt()
+    system_prompt = system_template
+    user_message = user_template.format(
+        ticker=ticker,
+        company=company_name or ticker,
+        sublayer=sublayer or "(unmapped)",
+        layer=layer or "(unmapped)",
+        language=lang,
+        leading_signals_block=leading_block,
+        news_block=news_block,
+        insider_block=insider_block,
+        anomaly_block=anomaly_block,
+        chain_context=chain_context,
+        predictions_block=predictions_block,
+        max_chars=max_chars,
+    )
+
+    messages: list[ChatMessage] = [{"role": "user", "content": user_message}]
+    response: ChatResponse = _core_chat(
+        messages=messages,
+        max_tokens=DISCOVERY_THESIS_MAX_TOKENS,
+        conn=conn,
+        caller="research.discovery_thesis",
+        cached_system=system_prompt,
+    )
+
+    body = response.content.strip()
+    if not body:
+        raise RuntimeError(f"Discovery thesis generated empty body for {ticker}")
+    if "Not financial advice" not in body:
+        body = body.rstrip() + "\n\nNot financial advice."
+
+    research_id = _persist_research(
+        conn,
+        kind="discovery_thesis",
+        topic=ticker,
+        layer_focus=layer or None,
+        body=body,
+        cost_usd=response.cost_usd,
+    )
+
+    # Auto-queue follow-ups for the next research cycle (closes the loop)
+    try:
+        raw_items = action_queue.extract_action_items(body)
+        if raw_items:
+            action_queue.enqueue_actions(
+                conn, source_research_id=research_id, raw_items=raw_items
+            )
+    except Exception:
+        logger.exception("discovery_thesis: action_queue enqueue failed (non-fatal)")
+
+    return ResearchReport(
+        research_id=research_id,
+        kind="discovery_thesis",
+        topic=ticker,
+        layer_focus=layer or None,
+        body=body,
+        cost_usd=response.cost_usd,
+        created_at=datetime.now(timezone.utc).isoformat(),
+    )
 
 # F16: ticker detection in boss replies. Matches both US-style (NVDA, AVGO) and
 # A-share/HK suffix forms (600584.SS, 0700.HK) used across the supply chain map.

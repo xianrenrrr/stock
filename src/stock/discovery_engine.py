@@ -84,6 +84,44 @@ def _load_supply_chain_tickers() -> set[str]:
     return out
 
 
+def _load_supply_chain_metadata() -> dict[str, dict[str, str | list[str]]]:
+    """Map ticker -> {name, sublayer, layer, themes} from the supply-chain map.
+
+    Used by F21 theme velocity so we can search for "Vertiv" instead of "VRT"
+    on HN, and pass the sublayer name (e.g. "liquid_cooling") as a theme keyword
+    into arXiv. Tickers not in the chain just get the bare ticker as company name.
+    """
+    path = Path(SUPPLY_CHAIN_PATH)
+    if not path.exists():
+        return {}
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, dict[str, str | list[str]]] = {}
+    for layer in raw.get("layers", []) or []:
+        layer_name = str((layer or {}).get("layer", ""))
+        for sublayer in (layer or {}).get("sublayers", []) or []:
+            sublayer_name = str((sublayer or {}).get("sublayer", ""))
+            themes_list = sublayer.get("themes") or []
+            theme_kws: list[str] = [
+                str(t) for t in themes_list if isinstance(t, str) and t.strip()
+            ]
+            if sublayer_name and sublayer_name not in theme_kws:
+                theme_kws.append(sublayer_name.replace("_", " "))
+            for player in (sublayer or {}).get("players", []) or []:
+                t = str((player or {}).get("ticker", "")).upper()
+                if not t:
+                    continue
+                name = str((player or {}).get("name", "")).strip()
+                out[t] = {
+                    "name": name or t,
+                    "sublayer": sublayer_name,
+                    "layer": layer_name,
+                    "themes": theme_kws,
+                }
+    return out
+
+
 def _load_yaml_watchlist() -> set[str]:
     """Read tickers off data/watchlist.yaml as a fallback."""
     path = Path(WATCHLIST_PATH)
@@ -210,9 +248,17 @@ def _is_on_watchlist(conn: sqlite3.Connection, ticker: str) -> bool:
 
 
 def promote_candidate(
-    conn: sqlite3.Connection, ticker: str, *, score: float
+    conn: sqlite3.Connection, ticker: str, *, score: float,
+    components: dict[str, float] | None = None,
+    auto_thesis: bool = True,
 ) -> bool:
     """Promote a candidate onto the watchlist + flip its discovery row.
+
+    F22: when `auto_thesis=True` (default) AND `components` are provided, this
+    also triggers a forward-looking discovery-thesis LLM call so the operator
+    sees the full bull-case + invalidation criteria the moment the name lands
+    on the watchlist. Lazy import keeps the discovery engine usable in tests
+    that don't have the full research stack loaded.
 
     Idempotent on the watchlist (INSERT OR IGNORE); always stamps the discovery
     candidate's promoted_at + status='promoted' so the operator can audit.
@@ -233,6 +279,31 @@ def promote_candidate(
     logger.info(
         "discovery: promoted %s to watchlist (FWP=%.3f)", ticker, score,
     )
+
+    if auto_thesis and components:
+        chain_metadata = _load_supply_chain_metadata()
+        meta = chain_metadata.get(ticker.upper(), {})
+        try:
+            from stock.research import generate_discovery_thesis
+
+            company_name_raw = meta.get("name", "") if isinstance(meta, dict) else ""
+            sublayer_raw = meta.get("sublayer", "") if isinstance(meta, dict) else ""
+            layer_raw = meta.get("layer", "") if isinstance(meta, dict) else ""
+            report = generate_discovery_thesis(
+                conn, ticker=ticker, components=components,
+                company_name=str(company_name_raw),
+                sublayer=str(sublayer_raw),
+                layer=str(layer_raw),
+            )
+            logger.info(
+                "discovery: auto-thesis written for %s (research_id=%d, cost=$%.4f)",
+                ticker, report.research_id, report.cost_usd,
+            )
+        except Exception:
+            logger.exception(
+                "discovery: auto-thesis failed for %s (promotion succeeded)", ticker,
+            )
+
     return True
 
 
@@ -310,30 +381,72 @@ def run_discovery_engine(
     conn: sqlite3.Connection,
     *,
     auto_promote: bool = True,
+    enable_theme_velocity: bool = True,
+    theme_velocity_top_n: int = 25,
 ) -> DiscoveryRunResult:
     """End-to-end pass: score the universe, persist, optionally auto-promote.
 
     Pulls one ApeWisdom snapshot up front so we don't hammer the API once per
     ticker. Best-effort: a snapshot failure means reddit signals are zero for
     this run but everything else still scores.
+
+    F21: theme_velocity (HN + arXiv mention counts) is expensive (~3-6 HTTP
+    calls per ticker). To stay within reasonable runtime, we only compute it
+    for the top-N tickers by quick-score (insider + novelty pass without theme).
+    The cheap signals are always computed for the full universe.
     """
     universe = build_discovery_universe(conn)
     snapshot = fetch_apewisdom_snapshot()
     snapshot_ok = bool(snapshot)
+    chain_metadata = _load_supply_chain_metadata()
 
     scored: list[CandidateScore] = []
     new_count = 0
     updated_count = 0
 
+    # First pass: cheap signals only (no theme_velocity / patent_activity HTTP)
+    quick_scored: list[CandidateScore] = []
     for ticker in universe:
         try:
             cs = compute_future_winner_probability(
                 ticker, conn, apewisdom_snapshot=snapshot,
+                skip_theme_velocity=True, skip_patent_activity=True,
             )
         except Exception:
             logger.exception("discovery: scoring failed for %s", ticker)
             continue
-        scored.append(cs)
+        quick_scored.append(cs)
+
+    # Second pass: re-score top-N with full theme velocity, replace in-place
+    if enable_theme_velocity and quick_scored:
+        quick_scored.sort(key=lambda x: x.fwp, reverse=True)
+        top_n = quick_scored[:theme_velocity_top_n]
+        scored_full_by_ticker: dict[str, CandidateScore] = {}
+        for cs in top_n:
+            meta = chain_metadata.get(cs.ticker, {})
+            company_name = str(meta.get("name", "")) if meta else None
+            themes_raw = meta.get("themes", [])
+            themes = themes_raw if isinstance(themes_raw, list) else []
+            try:
+                full = compute_future_winner_probability(
+                    cs.ticker, conn,
+                    apewisdom_snapshot=snapshot,
+                    company_name=company_name,
+                    extra_keywords=[str(t) for t in themes],
+                )
+                scored_full_by_ticker[cs.ticker] = full
+            except Exception:
+                logger.exception(
+                    "discovery: theme-velocity rescore failed for %s", cs.ticker,
+                )
+
+        # Merge: full score for the top-N tickers, quick score for the rest
+        for cs in quick_scored:
+            scored.append(scored_full_by_ticker.get(cs.ticker, cs))
+    else:
+        scored = quick_scored
+
+    for cs in scored:
         is_new = _upsert_candidate(conn, cs)
         if is_new:
             new_count += 1
@@ -357,7 +470,10 @@ def run_discovery_engine(
             if _is_recently_dismissed(conn, cs.ticker):
                 continue
             try:
-                promote_candidate(conn, cs.ticker, score=cs.fwp)
+                promote_candidate(
+                    conn, cs.ticker, score=cs.fwp,
+                    components=cs.components, auto_thesis=True,
+                )
                 promoted_tickers.append(cs.ticker)
             except Exception:
                 logger.exception(

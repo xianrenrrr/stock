@@ -462,14 +462,9 @@ def test_job_learn_from_feedback_routes_intents(
         lambda text, recipient, conn: intent_results[text],
     )
 
-    reply_calls: list[str] = []
     monkeypatch.setattr(
         "stock.orchestrator.generate_reply",
         lambda conn, recipient, boss_reply, language=None: f"reply: {boss_reply}",
-    )
-    monkeypatch.setattr(
-        "stock.orchestrator.send_message",
-        lambda recipient, body, conn, **kw: reply_calls.append(body) or MagicMock(),
     )
     monkeypatch.setattr(
         "stock.orchestrator.prompt_rewriter.propose_rewrite",
@@ -480,8 +475,13 @@ def test_job_learn_from_feedback_routes_intents(
 
     _job_learn_from_feedback()
 
-    # Question routed to reply path
-    assert any("TER" in body for body in reply_calls)
+    # Question routed to reply path -- the orchestrator now persists the reply
+    # body as a research_reports row of kind='reply' (used to be a send_message
+    # call). The APK polls /channel/api/notes for these rows.
+    reply_rows = mock_conn.execute(
+        "SELECT body FROM research_reports WHERE kind = 'reply'"
+    ).fetchall()
+    assert any("TER" in row[0] for row in reply_rows)
 
     # Instruction routed to action_queue
     rows = mock_conn.execute(

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import sqlite3
 from datetime import datetime, timedelta, timezone
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -87,7 +87,7 @@ def test_run_discovery_engine_persists_candidates(mem_db: sqlite3.Connection) ->
     _seed_watchlist(mem_db, "NVDA", "AMD")
 
     def _fake_score(ticker, conn, *, apewisdom_snapshot=None,
-                    population_means=None, population_stdevs=None):
+                    population_means=None, population_stdevs=None, **kw):
         return CandidateScore(
             ticker=ticker, fwp=0.20, fwp_pre_gate=0.20, qap_gate=False,
             components={"ocis_raw": 0.0, "ocis_cluster_max": 0,
@@ -226,7 +226,7 @@ def test_run_discovery_engine_caps_promotions(mem_db: sqlite3.Connection) -> Non
     }
 
     def _fake(ticker, conn, *, apewisdom_snapshot=None,
-              population_means=None, population_stdevs=None):
+              population_means=None, population_stdevs=None, **kw):
         return fake_scores[ticker]
 
     with (
@@ -262,6 +262,77 @@ def test_dismiss_marks_status(mem_db: sqlite3.Connection) -> None:
     ).fetchone()
     assert row[0] == "dismissed"
     assert "too illiquid" in row[1]
+
+
+def test_promote_candidate_auto_thesis_called_when_components_provided(
+    mem_db: sqlite3.Connection,
+) -> None:
+    """F22: promote_candidate(auto_thesis=True, components=...) calls generate_discovery_thesis."""
+    mem_db.execute(
+        "INSERT INTO discovery_candidates ("
+        "  ticker, score, components_json, qap_gate, first_flagged_at,"
+        "  last_score_at, last_score, status)"
+        " VALUES ('FOOBAR', 0.7, '{}', 1, ?, ?, 0.7, 'candidate')",
+        (datetime.now(timezone.utc).isoformat(),
+         datetime.now(timezone.utc).isoformat()),
+    )
+    mem_db.commit()
+
+    fake_report = MagicMock(research_id=42, cost_usd=0.005)
+    with patch("stock.research.generate_discovery_thesis",
+               return_value=fake_report) as mock_thesis:
+        promote_candidate(
+            mem_db, "FOOBAR", score=0.7,
+            components={"ocis_raw": 5.0, "ocis_cluster_max": 3},
+            auto_thesis=True,
+        )
+    mock_thesis.assert_called_once()
+
+
+def test_promote_candidate_auto_thesis_skipped_when_no_components(
+    mem_db: sqlite3.Connection,
+) -> None:
+    """No components -> no thesis call (caller forgot, don't fabricate one)."""
+    mem_db.execute(
+        "INSERT INTO discovery_candidates ("
+        "  ticker, score, components_json, qap_gate, first_flagged_at,"
+        "  last_score_at, last_score, status)"
+        " VALUES ('FOOBAR2', 0.7, '{}', 1, ?, ?, 0.7, 'candidate')",
+        (datetime.now(timezone.utc).isoformat(),
+         datetime.now(timezone.utc).isoformat()),
+    )
+    mem_db.commit()
+
+    with patch("stock.research.generate_discovery_thesis") as mock_thesis:
+        promote_candidate(mem_db, "FOOBAR2", score=0.7,
+                          components=None, auto_thesis=True)
+    mock_thesis.assert_not_called()
+
+
+def test_promote_candidate_auto_thesis_failure_is_non_fatal(
+    mem_db: sqlite3.Connection,
+) -> None:
+    """If generate_discovery_thesis raises, promotion still succeeds."""
+    mem_db.execute(
+        "INSERT INTO discovery_candidates ("
+        "  ticker, score, components_json, qap_gate, first_flagged_at,"
+        "  last_score_at, last_score, status)"
+        " VALUES ('FOOBAR3', 0.7, '{}', 1, ?, ?, 0.7, 'candidate')",
+        (datetime.now(timezone.utc).isoformat(),
+         datetime.now(timezone.utc).isoformat()),
+    )
+    mem_db.commit()
+    with patch("stock.research.generate_discovery_thesis",
+               side_effect=RuntimeError("LLM exploded")):
+        ok = promote_candidate(
+            mem_db, "FOOBAR3", score=0.7,
+            components={"ocis_raw": 5.0}, auto_thesis=True,
+        )
+    assert ok is True
+    on_wl = mem_db.execute(
+        "SELECT 1 FROM watchlist WHERE ticker = 'FOOBAR3' AND active = 1"
+    ).fetchone()
+    assert on_wl is not None
 
 
 def test_list_candidates_orders_by_score(mem_db: sqlite3.Connection) -> None:

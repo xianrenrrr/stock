@@ -8,11 +8,13 @@ from unittest.mock import patch
 import pytest
 
 from stock.leading import (
+    ThemeVelocitySignal,
     compute_8k_novelty,
     compute_future_winner_probability,
     compute_insider_acceleration,
     compute_quiet_accumulation,
     compute_reddit_acceleration,
+    compute_theme_velocity,
     fetch_apewisdom_snapshot,
 )
 
@@ -293,13 +295,198 @@ def test_apewisdom_snapshot_returns_empty_on_failure(
     assert snap == {}
 
 
+# -- compute_theme_velocity (HN + arXiv) ------------------------------------
+
+
+def test_theme_velocity_acceleration_math(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Accel formulas correct + composite is 0.35*hn + 0.65*arxiv."""
+    # The function calls _hn / _arxiv twice per query: once for the current
+    # 30d window and once for the prior 30d window. They alternate by until_*
+    # value -- current's `until` = now; prior's `until` = now - 30d.
+    # Distinguish by checking whether `until` is within ~1 day of "now".
+    now_unix = int(datetime.now(timezone.utc).timestamp())
+
+    def _fake_hn(query, *, since_unix, until_unix):
+        # Current window iff until is within 1 day of now
+        is_current = (now_unix - until_unix) < 86400
+        return 30 if is_current else 10
+
+    monkeypatch.setattr("stock.leading._hn_count_for_window", _fake_hn)
+
+    def _fake_arxiv(query, *, since_iso, until_iso):
+        from datetime import datetime as _dt
+        u = _dt.fromisoformat(until_iso.replace("Z", "+00:00"))
+        is_current = (datetime.now(timezone.utc) - u).total_seconds() < 86400
+        return 6 if is_current else 2
+
+    monkeypatch.setattr("stock.leading._arxiv_count_for_window", _fake_arxiv)
+
+    sig = compute_theme_velocity("NVDA", company_name="Nvidia")
+    # Two queries (Nvidia + NVDA), each window summed across queries
+    assert sig.hn_30d == 60   # 30 * 2 queries
+    assert sig.hn_30d_prior == 20   # 10 * 2 queries
+    assert sig.hn_acceleration == pytest.approx(2.0)  # (60-20)/20
+    assert sig.arxiv_acceleration == pytest.approx(2.0)  # (12-4)/4
+    assert sig.composite == pytest.approx(2.0)
+
+
+def test_theme_velocity_handles_zero_prior(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Prior=0 -> denominator clamped to 1, no DivisionByZero."""
+    now_unix = int(datetime.now(timezone.utc).timestamp())
+
+    def _fake_hn(query, *, since_unix, until_unix):
+        is_current = (now_unix - until_unix) < 86400
+        return 5 if is_current else 0
+
+    monkeypatch.setattr("stock.leading._hn_count_for_window", _fake_hn)
+    monkeypatch.setattr(
+        "stock.leading._arxiv_count_for_window",
+        lambda q, *, since_iso, until_iso: 0,
+    )
+    sig = compute_theme_velocity("XYZ")
+    assert sig.hn_30d_prior == 0
+    assert sig.hn_acceleration == 5.0  # (5 - 0) / max(1, 0) = 5
+
+
+def test_theme_velocity_uses_extra_keywords(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Each extra keyword is queried in addition to ticker / company."""
+    queries_seen: list[str] = []
+    monkeypatch.setattr(
+        "stock.leading._hn_count_for_window",
+        lambda q, *, since_unix, until_unix: queries_seen.append(q) or 1,
+    )
+    monkeypatch.setattr(
+        "stock.leading._arxiv_count_for_window",
+        lambda q, *, since_iso, until_iso: 0,
+    )
+    compute_theme_velocity(
+        "VRT", company_name="Vertiv",
+        extra_keywords=["liquid cooling", "data center thermal"],
+    )
+    # 4 queries: Vertiv, VRT, liquid cooling, data center thermal
+    # Each called twice (one for current window, one for prior window)
+    unique = set(queries_seen)
+    assert "Vertiv" in unique
+    assert "VRT" in unique
+    assert "liquid cooling" in unique
+    assert "data center thermal" in unique
+
+
+def test_fwp_includes_theme_velocity_when_provided(
+    mem_db: sqlite3.Connection,
+) -> None:
+    """Pre-computed theme_velocity is fed into the composite without making HTTP calls."""
+    theme = ThemeVelocitySignal(
+        ticker="NVDA", hn_30d=80, hn_30d_prior=20, arxiv_30d=10, arxiv_30d_prior=2,
+        hn_acceleration=3.0, arxiv_acceleration=4.0, composite=3.65,
+    )
+    score = compute_future_winner_probability(
+        "NVDA", mem_db, apewisdom_snapshot={}, theme_velocity=theme,
+    )
+    assert score.components["theme_composite"] == pytest.approx(3.65)
+    assert score.components["theme_z"] != 0.0
+
+
+def test_fwp_skip_theme_velocity_skips_network(mem_db: sqlite3.Connection) -> None:
+    """skip_theme_velocity=True -> no compute_theme_velocity call, theme_z is 0."""
+    with (
+        patch("stock.leading.compute_theme_velocity") as mock_tv,
+        patch("stock.leading.compute_patent_activity") as mock_pa,
+    ):
+        score = compute_future_winner_probability(
+            "NVDA", mem_db, apewisdom_snapshot={},
+            skip_theme_velocity=True, skip_patent_activity=True,
+        )
+    mock_tv.assert_not_called()
+    mock_pa.assert_not_called()
+    assert score.components["theme_z"] == 0.0
+    assert score.components["patent_z"] == 0.0
+
+
+# -- compute_patent_activity (USPTO PatentsView) ----------------------------
+
+
+def test_patent_activity_acceleration_math(monkeypatch: pytest.MonkeyPatch) -> None:
+    """patents_12m=20 vs prior=4 -> acceleration=4.0."""
+    from stock.leading import compute_patent_activity
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    def _fake(query, *, since_iso, until_iso):
+        from datetime import datetime as _dt
+        u = _dt.fromisoformat(until_iso.replace("Z", "+00:00"))
+        is_current = (datetime.now(timezone.utc) - u).total_seconds() < 86400 * 2
+        return 20 if is_current else 4
+
+    monkeypatch.setattr("stock.leading._patentsview_count_for_window", _fake)
+
+    sig = compute_patent_activity("NVDA", company_name="Nvidia Corp")
+    assert sig.patents_12m == 20
+    assert sig.patents_prior_12m == 4
+    assert sig.acceleration == pytest.approx(4.0)
+
+
+def test_patent_activity_handles_zero_prior(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Prior=0 -> denominator clamped, no DivisionByZero."""
+    from stock.leading import compute_patent_activity
+
+    now_unix = int(datetime.now(timezone.utc).timestamp())
+
+    def _fake(query, *, since_iso, until_iso):
+        from datetime import datetime as _dt
+        u = _dt.fromisoformat(until_iso.replace("Z", "+00:00"))
+        is_current = (datetime.now(timezone.utc) - u).total_seconds() < 86400 * 2
+        return 5 if is_current else 0
+
+    monkeypatch.setattr("stock.leading._patentsview_count_for_window", _fake)
+    sig = compute_patent_activity("NEWCO", company_name="Newco Ltd")
+    assert sig.patents_prior_12m == 0
+    assert sig.acceleration == 5.0  # (5-0)/max(1,0) = 5
+
+
+def test_patent_activity_http_failure_returns_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """PatentsView HTTP failure -> count=0, no exception."""
+    import httpx
+
+    def _boom(*a, **kw):
+        raise httpx.ConnectError("dns fail")
+
+    monkeypatch.setattr("stock.leading.httpx.post", _boom)
+    from stock.leading import _patentsview_count_for_window
+
+    n = _patentsview_count_for_window(
+        "Nvidia", since_iso="2025-01-01", until_iso="2026-01-01",
+    )
+    assert n == 0
+
+
+def test_fwp_includes_patent_when_provided(mem_db: sqlite3.Connection) -> None:
+    """Pre-computed patent_activity flows into the FWP composite."""
+    from stock.leading import PatentActivitySignal
+
+    pat = PatentActivitySignal(
+        ticker="NVDA", patents_12m=120, patents_prior_12m=30,
+        acceleration=3.0,
+    )
+    score = compute_future_winner_probability(
+        "NVDA", mem_db, apewisdom_snapshot={},
+        patent_activity=pat, skip_theme_velocity=True,
+    )
+    assert score.components["patent_12m"] == 120
+    assert score.components["patent_z"] != 0.0
+
+
 # -- compute_future_winner_probability --------------------------------------
 
 
 def test_fwp_returns_value_in_0_1(mem_db: sqlite3.Connection) -> None:
     """Sigmoid output is bounded; with no data FWP < 0.5 (gate not on, weak signals)."""
     score = compute_future_winner_probability(
-        "NVDA", mem_db, apewisdom_snapshot={},
+        "NVDA", mem_db, apewisdom_snapshot={}, skip_theme_velocity=True,
     )
     assert 0.0 <= score.fwp <= 1.0
     assert score.qap_gate is False  # no price data
@@ -310,7 +497,7 @@ def test_fwp_amplifies_with_strong_insider_cluster(
 ) -> None:
     """Heavy opportunistic insider cluster -> higher FWP than baseline."""
     baseline = compute_future_winner_probability(
-        "NVDA", mem_db, apewisdom_snapshot={},
+        "NVDA", mem_db, apewisdom_snapshot={}, skip_theme_velocity=True,
     )
     base = datetime.now(timezone.utc) - timedelta(days=5)
     for i, name in enumerate(["A", "B", "C", "D"]):
@@ -319,7 +506,7 @@ def test_fwp_amplifies_with_strong_insider_cluster(
             filed_at=(base + timedelta(days=i)).isoformat(),
         )
     boosted = compute_future_winner_probability(
-        "NVDA", mem_db, apewisdom_snapshot={},
+        "NVDA", mem_db, apewisdom_snapshot={}, skip_theme_velocity=True,
     )
     assert boosted.fwp > baseline.fwp
     assert boosted.components["ocis_cluster_max"] >= 4
