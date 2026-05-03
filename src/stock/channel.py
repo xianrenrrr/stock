@@ -20,17 +20,27 @@ then stored in the browser's localStorage by the dashboard JS.
 from __future__ import annotations
 
 import logging
+import re
 import secrets
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterator
 
-from fastapi import APIRouter, Depends, Header, Query
+from fastapi import APIRouter, Depends, File, Form, Header, Query, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from stock.db import get_conn
+
+# F18: image upload feature -- the boss is lazy, snaps a screenshot, and the
+# system extracts content via a vision LLM and routes it to the same intent
+# pipeline as a typed reply.
+UPLOAD_DIR: str = "data/wechat_inbox/uploads"
+UPLOAD_MAX_BYTES: int = 8 * 1024 * 1024  # mirrors stock.vision.MAX_IMAGE_BYTES
+UPLOAD_ALLOWED_EXTENSIONS: frozenset[str] = frozenset(
+    {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+)
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +109,19 @@ class ReplyResponse(BaseModel):
     ok: bool
     recorded_at: str
     feedback_path: str
+
+
+class ImageUploadResponse(BaseModel):
+    """POST /channel/api/upload_image response."""
+
+    ok: bool
+    recorded_at: str
+    filename: str
+    backend: str
+    description: str
+    suspected_topic: str
+    ticker_mentions: list[str]
+    user_intent: str
 
 
 # ---- DB connection dependency ---------------------------------------------
@@ -333,6 +356,116 @@ def post_reply(
     )
 
 
+async def post_upload_image(
+    image: UploadFile = File(..., description="The image file (.png/.jpg/.jpeg/.gif/.webp)"),
+    caption: str = Form(default="", description="Optional caption from the user"),
+    note_id: int | None = Form(default=None),
+    auth: tuple[str, str | None, sqlite3.Connection] = Depends(_require_recipient),
+) -> ImageUploadResponse:
+    """Accept an image upload from the dashboard, run vision extraction, route as feedback.
+
+    1. Validate the upload (size, extension).
+    2. Save the file to data/wechat_inbox/uploads/<timestamp>_<recipient>.<ext>.
+    3. Call stock.vision.extract_image_info to get a structured extraction.
+    4. Render the extraction as a typed-feedback string and append to
+       wechat_feedback.md AND insert into the conversations table.
+    5. The orchestrator's _job_learn_from_feedback picks it up on the next tick
+       and either replies (intent=question) or queues a follow-up
+       (intent=instruction). Existing F18 vision tests cover the happy path.
+    """
+    # Lazy import: vision pulls anthropic + openai SDKs which are heavy
+    from stock.vision import extract_image_info, format_extraction_as_feedback
+
+    recipient, _last_seen, conn = auth
+
+    if image.filename is None:
+        raise ChannelHTTPError(400, "missing_filename", "uploaded file has no filename")
+    suffix = Path(image.filename).suffix.lower()
+    if suffix not in UPLOAD_ALLOWED_EXTENSIONS:
+        raise ChannelHTTPError(
+            400,
+            "unsupported_extension",
+            f"got {suffix!r}; allowed: {sorted(UPLOAD_ALLOWED_EXTENSIONS)}",
+        )
+
+    raw = await image.read()
+    if len(raw) == 0:
+        raise ChannelHTTPError(400, "empty_image", "uploaded file is empty")
+    if len(raw) > UPLOAD_MAX_BYTES:
+        raise ChannelHTTPError(
+            413,
+            "image_too_large",
+            f"got {len(raw):,} bytes; cap is {UPLOAD_MAX_BYTES:,}",
+        )
+
+    # Persist to disk under a deterministic name so the orchestrator + auditor
+    # can find it later. Strip dangerous chars from the recipient to keep it a
+    # safe path component.
+    safe_recipient = re.sub(r"[^A-Za-z0-9_\-]", "_", recipient) or "anon"
+    upload_dir = Path(UPLOAD_DIR)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    safe_filename = f"{stamp}_{safe_recipient}{suffix}"
+    image_path = upload_dir / safe_filename
+    image_path.write_bytes(raw)
+    logger.info(
+        "channel: stored upload %s (%d bytes) from %s",
+        image_path, len(raw), recipient,
+    )
+
+    # Extract structured info via the vision pipeline (best-effort, never raises)
+    extraction = extract_image_info(image_path, conn, caption=caption or "")
+
+    # Render as a typed-feedback string and append to wechat_feedback.md so the
+    # F13 pipeline finds it on its next sweep.
+    feedback_body = format_extraction_as_feedback(
+        extraction, image_filename=safe_filename, caption=caption or "",
+    )
+    feedback_path = Path(FEEDBACK_PATH)
+    feedback_path.parent.mkdir(parents=True, exist_ok=True)
+    now_min = datetime.now(timezone.utc).isoformat(timespec="minutes")
+    quoted = "\n".join(f"> {line}" for line in feedback_body.splitlines())
+    entry = (
+        f"\n## {now_min} -- {recipient}\n"
+        f"**source**: channel_image\n"
+        f"**image**: {image_path}\n"
+        f"**vision_backend**: {extraction.backend}\n\n"
+        f"{quoted}\n"
+    )
+    with feedback_path.open("a", encoding="utf-8") as fp:
+        if feedback_path.stat().st_size == 0:
+            fp.write(
+                "# WeChat reader feedback\n\n"
+                "Append-only log of replies. Used by the research generator to adapt.\n"
+            )
+        fp.write(entry)
+
+    # Mirror into conversations table so F13 sees it via the same path as
+    # /channel/api/reply text messages.
+    try:
+        from stock import conversation as _conv
+
+        _conv.record_inbound(
+            recipient=recipient,
+            body=feedback_body,
+            conn=conn,
+            related_research_id=note_id,
+        )
+    except Exception as exc:  # noqa: BLE001 -- conversation module is optional for this path
+        logger.warning("Could not record image inbound to conversations table: %s", exc)
+
+    return ImageUploadResponse(
+        ok=True,
+        recorded_at=datetime.now(timezone.utc).isoformat(),
+        filename=safe_filename,
+        backend=extraction.backend,
+        description=extraction.description,
+        suspected_topic=extraction.suspected_topic,
+        ticker_mentions=extraction.ticker_mentions,
+        user_intent=extraction.user_intent,
+    )
+
+
 # ---- Router factory --------------------------------------------------------
 
 
@@ -372,6 +505,12 @@ def create_router() -> APIRouter:
         post_reply,
         methods=["POST"],
         response_model=ReplyResponse,
+    )
+    router.add_api_route(
+        "/api/upload_image",
+        post_upload_image,
+        methods=["POST"],
+        response_model=ImageUploadResponse,
     )
     return router
 

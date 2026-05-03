@@ -270,6 +270,26 @@
       <textarea id="replyText" placeholder="例如：再写短一些 / 多看 A 股 / 帮我深挖 PAM4 DSP"></textarea>
       <button id="replyBtn">发送</button>
       <div class="status" id="replyStatus">系统会在下一次研报中根据你的反馈调整。</div>
+
+      <!-- F18: image upload -- snap a screenshot, drop it here, AI reads it -->
+      <div class="upload" id="uploadArea">
+        <h3 style="margin-top:18px;">上传图片 (图表 / 截图 / 公告)</h3>
+        <p style="color:var(--text-dim); font-size:13px; margin:0 0 8px;">
+          拖图到这里，或点击选择。AI 会自动识别内容（含 OCR 中文/英文），
+          并按问题/指令路由到下一份研报。
+        </p>
+        <input type="file" id="uploadInput" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none;">
+        <div id="uploadDrop"
+             style="border:2px dashed var(--border); border-radius:10px; padding:24px;
+                    text-align:center; color:var(--text-dim); cursor:pointer;
+                    background:var(--panel-2);">
+          点击 / 拖入图片 (PNG / JPG / WEBP, ≤8MB)
+        </div>
+        <div id="uploadPreview" style="margin-top:10px;"></div>
+        <button id="uploadBtn" disabled
+                style="margin-top:10px; opacity:0.5;">发送图片</button>
+        <div class="status" id="uploadStatus" style="margin-top:8px; color:var(--text-dim); font-size:13px;"></div>
+      </div>
     </div>
 
     <div class="history">
@@ -431,6 +451,139 @@ function refreshAll() {
   loadHistory().catch(() => {});
 }
 
+// F18: image upload pipeline.
+// State: the last-selected File object lives here until the user clicks "send".
+let pendingUploadFile = null;
+
+function setUploadStatus(msg, kind) {
+  const el = document.getElementById("uploadStatus");
+  el.textContent = msg || "";
+  el.style.color = kind === "err" ? "var(--bad)"
+                 : kind === "ok" ? "var(--good)"
+                 : "var(--text-dim)";
+}
+
+function setUploadPreview(file) {
+  const wrap = document.getElementById("uploadPreview");
+  if (!file) { wrap.innerHTML = ""; return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    wrap.innerHTML = `
+      <div style="display:flex; gap:10px; align-items:center;">
+        <img src="${e.target.result}" alt="preview"
+             style="max-width:120px; max-height:120px; border-radius:8px;
+                    border:1px solid var(--border);">
+        <div style="font-size:13px; color:var(--text-dim);">
+          ${escapeHtml(file.name)}<br>${(file.size/1024).toFixed(1)} KB
+        </div>
+      </div>`;
+  };
+  reader.readAsDataURL(file);
+}
+
+function selectUploadFile(file) {
+  if (!file) return;
+  if (!file.type.startsWith("image/")) {
+    setUploadStatus("只支持图片文件 (PNG/JPG/WEBP)。", "err");
+    return;
+  }
+  if (file.size > 8 * 1024 * 1024) {
+    setUploadStatus("图片超过 8MB 限制。请压缩后再试。", "err");
+    return;
+  }
+  pendingUploadFile = file;
+  setUploadPreview(file);
+  setUploadStatus("已选择，点击 \"发送图片\" 上传。", "");
+  const btn = document.getElementById("uploadBtn");
+  btn.disabled = false;
+  btn.style.opacity = "1";
+}
+
+async function sendUpload() {
+  if (!pendingUploadFile) return;
+  const btn = document.getElementById("uploadBtn");
+  btn.disabled = true;
+  setUploadStatus("上传中…AI 正在识别图片内容…", "");
+
+  const fd = new FormData();
+  fd.append("image", pendingUploadFile, pendingUploadFile.name);
+  // The optional caption field reuses the reply textarea so the boss can add
+  // context like "look at this chart" without a second input.
+  const caption = (document.getElementById("replyText").value || "").trim();
+  if (caption) fd.append("caption", caption);
+
+  try {
+    const resp = await fetch(API_BASE + "/upload_image", {
+      method: "POST",
+      headers: { "Authorization": "Bearer " + TOKEN },
+      body: fd,
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      throw new Error(data.error || ("HTTP " + resp.status));
+    }
+    const tickers = (data.ticker_mentions || []).join(", ") || "无";
+    setUploadStatus(
+      `已识别 (${data.backend})。话题: ${data.suspected_topic || "—"} | 提及: ${tickers} | 路由意图: ${data.user_intent}`,
+      "ok",
+    );
+    pendingUploadFile = null;
+    document.getElementById("uploadInput").value = "";
+    document.getElementById("uploadPreview").innerHTML = "";
+    document.getElementById("replyText").value = "";
+    btn.style.opacity = "0.5";
+  } catch (e) {
+    setUploadStatus("上传失败：" + e.message, "err");
+    btn.disabled = false;
+  }
+}
+
+function initUpload() {
+  const input = document.getElementById("uploadInput");
+  const drop = document.getElementById("uploadDrop");
+  const btn = document.getElementById("uploadBtn");
+
+  drop.addEventListener("click", () => input.click());
+  input.addEventListener("change", e => {
+    const f = e.target.files && e.target.files[0];
+    if (f) selectUploadFile(f);
+  });
+
+  ["dragenter", "dragover"].forEach(ev =>
+    drop.addEventListener(ev, e => {
+      e.preventDefault();
+      drop.style.borderColor = "var(--accent-2)";
+    })
+  );
+  ["dragleave", "drop"].forEach(ev =>
+    drop.addEventListener(ev, e => {
+      e.preventDefault();
+      drop.style.borderColor = "var(--border)";
+    })
+  );
+  drop.addEventListener("drop", e => {
+    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) selectUploadFile(f);
+  });
+
+  // Paste-from-clipboard works too -- screenshot then Ctrl-V on the page.
+  document.addEventListener("paste", e => {
+    if (!TOKEN) return;
+    const items = (e.clipboardData || {}).items || [];
+    for (const it of items) {
+      if (it.kind === "file" && it.type.startsWith("image/")) {
+        const f = it.getAsFile();
+        if (f) {
+          selectUploadFile(f);
+          break;
+        }
+      }
+    }
+  });
+
+  btn.addEventListener("click", sendUpload);
+}
+
 function pickupTokenFromUrl() {
   const url = new URL(window.location.href);
   const t = url.searchParams.get("token");
@@ -456,6 +609,7 @@ function init() {
     if (e.key === "Enter") el("loginBtn").click();
   });
   el("replyBtn").addEventListener("click", sendReply);
+  initUpload();
 
   if (TOKEN) {
     loadDashboard();

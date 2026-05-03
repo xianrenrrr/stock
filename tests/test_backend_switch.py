@@ -21,11 +21,24 @@ from stock.models import (
 
 
 def _seed_settings(monkeypatch: pytest.MonkeyPatch, **kw: str) -> None:
-    """Set env + clear the settings cache so the next get_settings() picks it up."""
+    """Set env + force-reload Settings ignoring the on-disk .env file.
+
+    Pydantic-settings reads .env BEFORE env vars; on a real laptop .env may
+    contain CORE_LLM_BACKEND=claude_cli already (we shipped that). To make
+    tests reproducible, build a fresh Settings via constructor with _env_file=None
+    so on-disk .env is bypassed entirely.
+    """
     monkeypatch.setenv("MINIMAX_API_KEY", "test")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test")
     for k, v in kw.items():
         monkeypatch.setenv(k, v)
+    from stock.config import Settings
+
+    def _fake_get_settings():
+        return Settings(_env_file=None)
+
+    monkeypatch.setattr("stock.config.get_settings", _fake_get_settings)
+    monkeypatch.setattr("stock.models.get_settings", _fake_get_settings)
     get_settings.cache_clear()
 
 
