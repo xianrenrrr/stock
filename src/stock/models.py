@@ -364,15 +364,22 @@ class ClaudeCliClient:
         # ~4 chars/token is the canonical Anthropic rule of thumb.
         input_tokens_estimate = max(1, len(prompt) // 4)
 
+        # Pipe the prompt via stdin instead of argv. Windows CreateProcess has
+        # a 32 KB total command-line limit; the daily research prompt with all
+        # its context blocks (watchlist + news + supply chain + thesis +
+        # discovery + holdings) easily exceeds that and the call would silently
+        # fail then fall back to MiniMax. `claude -p` reads from stdin when
+        # the positional prompt arg is omitted.
         start = time.perf_counter()
         try:
             proc = subprocess.run(
                 [
-                    self._bin, "-p", prompt,
+                    self._bin, "-p",
                     "--model", model or CLAUDE_CLI_CORE_DEFAULT_MODEL,
                     "--output-format", "text",
                     "--dangerously-skip-permissions",
                 ],
+                input=prompt,
                 capture_output=True,
                 text=True,
                 encoding="utf-8",

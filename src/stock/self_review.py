@@ -580,14 +580,20 @@ def run_via_claude_cli_autopilot(packet: ReviewPacketResult) -> bool:
         "The wrapper detects 'no commits made' and cleans up the branch silently."
     )
 
-    # Invoke claude headless. Inherits env (incl. login) and cwd.
+    # Invoke claude headless. Inherits env (incl. login) and cwd. Pass the
+    # instruction via stdin (NOT argv) because Windows CreateProcess has a
+    # 32 KB command-line limit and the autopilot instruction is bumping that
+    # ceiling -- argv-truncation would silently break the run.
+    import shutil as _shutil_cli
+    _claude_bin = _shutil_cli.which("claude") or "claude"
     try:
         proc = subprocess.run(
             [
-                "claude", "-p", instruction,
+                _claude_bin, "-p",
                 "--model", CLAUDE_CLI_MODEL,
                 "--dangerously-skip-permissions",
             ],
+            input=instruction,
             cwd=str(Path.cwd()),
             timeout=CLAUDE_CLI_TIMEOUT_SECS,
             capture_output=True,

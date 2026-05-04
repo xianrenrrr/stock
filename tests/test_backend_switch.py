@@ -101,12 +101,17 @@ def test_claude_cli_client_chat_happy_path(
             cached_system="System block",
         )
 
-    args, _ = mock_run.call_args
+    args, kwargs = mock_run.call_args
     cmd = args[0]
-    # subprocess invoked with the right shape
-    assert cmd[0] == "claude" and cmd[1] == "-p"
-    # Composed prompt embeds the system block
-    assert "System block" in cmd[2] and "Say OK" in cmd[2]
+    # subprocess invoked with the right shape -- bin can be 'claude' or
+    # the resolved absolute path returned by shutil.which (Windows resolves
+    # to .CMD); the trailing "-p" is the headless-mode flag.
+    assert cmd[0].lower().endswith("claude") or cmd[0].lower().endswith("claude.cmd")
+    assert cmd[1] == "-p"
+    # Prompt now goes via stdin (`input=`), NOT argv -- avoids the 32 KB
+    # Windows command-line cap that broke the daily-research push.
+    stdin_text = kwargs.get("input", "")
+    assert "System block" in stdin_text and "Say OK" in stdin_text
     # Response well-formed
     assert response.content == "OK"
     assert response.cost_usd == 0.0
