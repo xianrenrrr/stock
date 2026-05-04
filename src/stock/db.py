@@ -331,6 +331,16 @@ def get_conn(db_path: str | None = None) -> sqlite3.Connection:
     """Return a SQLite connection with WAL mode and foreign keys enabled.
 
     If db_path is None, reads from Settings. Pass ":memory:" for tests.
+
+    check_same_thread=False is REQUIRED for FastAPI's async endpoints: when an
+    `async def` handler awaits a non-async I/O call (e.g. `await image.read()`
+    on a multipart upload), the coroutine may resume on a different worker
+    thread than the one that called the dependency that opened this conn.
+    Without this flag, every post-await DB access on the original conn raises
+    'SQLite objects created in a thread can only be used in that same thread.'
+    Each request still gets its own conn (FastAPI dependency lifecycle), so
+    we don't expose ourselves to the usual concurrency hazard this flag warns
+    about; the request handler is the only writer.
     """
     if db_path is None:
         db_path = get_settings().db_path
@@ -339,7 +349,7 @@ def get_conn(db_path: str | None = None) -> sqlite3.Connection:
     if db_path != ":memory:":
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
 
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, check_same_thread=False)
     conn.execute("PRAGMA foreign_keys = ON")
 
     # Load sqlite-vec extension for vector search
