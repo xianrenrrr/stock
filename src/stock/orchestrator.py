@@ -236,7 +236,7 @@ def _job_pull_insiders() -> None:
 
 
 def _job_health_check() -> None:
-    """Run a per-holding health-check deep-dive and broadcast as one message."""
+    """Run a per-holding health-check deep-dive; persist to research_reports."""
     conn = get_conn()
     try:
         active = holdings.list_holdings(conn, active_only=True)
@@ -674,27 +674,12 @@ def create_scheduler() -> BlockingScheduler:
         name="Evening web discovery",
     )
 
-    # Pull WeChat reply screenshots ~10 min before each push so feedback is fresh
-    scheduler.add_job(
-        _job_pull_feedback,
-        CronTrigger(
-            hour=RESEARCH_MORNING_HOUR,
-            minute=max(0, RESEARCH_MORNING_MINUTE - 10),
-            timezone="UTC",
-        ),
-        id="pull_feedback_morning",
-        name="Morning WeChat feedback pull",
-    )
-    scheduler.add_job(
-        _job_pull_feedback,
-        CronTrigger(
-            hour=RESEARCH_EVENING_HOUR,
-            minute=max(0, RESEARCH_EVENING_MINUTE - 10),
-            timezone="UTC",
-        ),
-        id="pull_feedback_evening",
-        name="Evening WeChat feedback pull",
-    )
+    # WeChat feedback-pull crons removed 2026-05-04: the boss now talks to the
+    # system via the dashboard / APK (POST /channel/api/reply). The old crons
+    # used pyautogui to open WeChat -> click each recipient -> screenshot, and
+    # the user reported it as "Claude controlling my laptop trying to message
+    # 杨建中". The wechat_inbox module is kept on disk (CLI `stock pull-feedback`
+    # still works for manual one-off captures) but nothing fires on a schedule.
 
     # Daily anomaly recompute right after close-scoring
     scheduler.add_job(

@@ -350,10 +350,13 @@ def test_job_reflect_weekly_cost_ceiling(
 
 
 def test_create_scheduler_has_expected_jobs() -> None:
-    """Scheduler registers all F00-F19 pipeline jobs."""
+    """Scheduler registers all F00-F19 pipeline jobs.
+
+    Updated 2026-05-04: pull_feedback_morning + pull_feedback_evening removed
+    (boss now uses dashboard / APK, not WeChat). 20 - 2 = 18.
+    """
     scheduler = create_scheduler()
-    # 19 pre-F19 + discovery_engine = 20
-    assert len(scheduler.get_jobs()) == 20
+    assert len(scheduler.get_jobs()) == 18
 
 
 def test_create_scheduler_job_ids() -> None:
@@ -368,8 +371,6 @@ def test_create_scheduler_job_ids() -> None:
         "reflect_weekly",
         "web_discovery_morning",
         "web_discovery_evening",
-        "pull_feedback_morning",
-        "pull_feedback_evening",
         "research_push_morning",
         "research_push_evening",
         "action_queue_runner",
@@ -411,7 +412,7 @@ def test_get_schedule_info_format() -> None:
     info = get_schedule_info(scheduler)
 
     assert isinstance(info, ScheduleInfo)
-    assert len(info.jobs) == 20
+    assert len(info.jobs) == 18
 
     # Each entry has name and next_run keys
     for entry in info.jobs:
