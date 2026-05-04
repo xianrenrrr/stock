@@ -309,7 +309,15 @@ class ClaudeCliClient:
         bin_path: str = CLAUDE_CLI_CORE_BIN,
         timeout_secs: int = CLAUDE_CLI_CORE_TIMEOUT_SECS,
     ) -> None:
-        self._bin = bin_path
+        # Resolve the binary to an absolute path so subprocess.run finds it
+        # without shell=True. On Windows, the npm-installed `claude` is
+        # actually `claude.CMD`; subprocess.run([self._bin, ...]) with
+        # self._bin='claude' and shell=False does NOT auto-resolve the .CMD
+        # extension and raises FileNotFoundError. Resolving via shutil.which
+        # at construction time picks up the .CMD form transparently.
+        import shutil
+        resolved = shutil.which(bin_path)
+        self._bin = resolved or bin_path
         self._timeout = timeout_secs
 
     @property
