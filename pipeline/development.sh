@@ -11,9 +11,9 @@ set -e
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_DIR"
 
-# Subagent invocation: Opus 4.6 + max effort for every claude -p call.
-# Override via env if needed (e.g. STOCK_CLAUDE_MODEL=claude-opus-4-6[1m]).
-CLAUDE_MODEL="${STOCK_CLAUDE_MODEL:-claude-opus-4-6}"
+# Subagent invocation: Opus 4.7 + max effort for every claude -p call.
+# Override via env if needed (e.g. STOCK_CLAUDE_MODEL=claude-opus-4-7[1m]).
+CLAUDE_MODEL="${STOCK_CLAUDE_MODEL:-claude-opus-4-7}"
 CLAUDE_EFFORT="${STOCK_CLAUDE_EFFORT:-max}"
 BACKLOG_FILE="$PROJECT_DIR/docs/feature_backlog.md"
 

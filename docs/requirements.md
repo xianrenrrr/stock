@@ -14,7 +14,7 @@ Full architecture in `design.md` at the project root.
 - **Language**: Python 3.12 (installed at `C:\Users\claw\AppData\Local\Programs\Python\Python312\`).
 - **LLMs**:
   - MiniMax M2.5-highspeed (cheap workhorse) via OpenAI-compatible endpoint `https://api.minimaxi.com/v1` — key in `~/.openclaw/secrets.json` as `MINIMAX_API_KEY`.
-  - Claude Opus 4.6 (`claude-opus-4-6`) for weekly reflection only, via `anthropic` SDK — key in `STOCK/.env` as `ANTHROPIC_API_KEY`.
+  - Claude Opus 4.7 (`claude-opus-4-7`) for weekly reflection, daily auto-review autopilot, and core thinking calls (research/reply/grading via `claude_cli` backend) — key in `STOCK/.env` as `ANTHROPIC_API_KEY`. Spawned via the local `claude` CLI subprocess; billed against the user's Claude Code subscription, not the API key budget.
 - **Embeddings**: `sentence-transformers` `all-MiniLM-L6-v2` (local, ~80 MB, CPU only).
 - **Storage**: SQLite + `sqlite-vec` extension for vector search. One file: `data/stock.db`.
 - **Data**: `yfinance` (prices), `feedparser` (RSS), `httpx` (HTTP), `beautifulsoup4` (scraping).

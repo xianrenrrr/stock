@@ -32,7 +32,7 @@ ALLOWED_BACKENDS: tuple[str, ...] = (
     "claude_code", "minimax", "both", "claude_cli", "off",
 )
 CLAUDE_CLI_TIMEOUT_SECS: int = 1800
-CLAUDE_CLI_MODEL: str = "claude-sonnet-4-6"
+CLAUDE_CLI_MODEL: str = "claude-opus-4-7"
 PYTEST_TIMEOUT_SECS: int = 600
 
 

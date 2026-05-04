@@ -254,7 +254,7 @@ def test_choose_reflect_provider_claude(
 
     provider, model = _choose_reflect_provider(mem_db)
     assert provider == "claude"
-    assert model == "claude-opus-4-6"
+    assert model == "claude-opus-4-7"
 
 
 def test_choose_reflect_provider_minimax_no_key(

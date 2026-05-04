@@ -67,7 +67,7 @@ def refit_calibration(conn: sqlite3.Connection) -> int | None:
 RULES_DIR: str = "data/rules"
 REFLECT_PROMPT_PATH: str = "prompts/reflect.txt"
 OPUS_BUDGET_THRESHOLD: float = 1.0
-OPUS_MODEL: str = "claude-opus-4-6"
+OPUS_MODEL: str = "claude-opus-4-7"
 REFLECT_MAX_TOKENS: int = 2000
 
 
