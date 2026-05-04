@@ -43,9 +43,12 @@ ENV PORT=18790
 EXPOSE 18790
 
 # Persistent disk in Render mounts to /var/data; symlink so existing
-# code paths (data/stock.db) keep working.
-RUN mkdir -p /var/data \
-    && rm -rf /app/data/stock.db /app/data/wechat_outbox /app/data/wechat_inbox \
+# code paths (data/stock.db) keep working. Pre-create every symlink target as
+# an empty directory at build time -- the free tier has no persistent disk so
+# these need to exist or pathlib.mkdir() hits a dangling symlink. If a
+# persistent disk is later mounted at /var/data, the mount shadows them.
+RUN mkdir -p /var/data /var/data/wechat_inbox /var/data/wechat_outbox /var/data/rules \
+    && rm -rf /app/data/stock.db /app/data/wechat_outbox /app/data/wechat_inbox /app/data/rules \
     && ln -sf /var/data/stock.db /app/data/stock.db \
     && ln -sf /var/data/wechat_outbox /app/data/wechat_outbox \
     && ln -sf /var/data/wechat_inbox /app/data/wechat_inbox \
