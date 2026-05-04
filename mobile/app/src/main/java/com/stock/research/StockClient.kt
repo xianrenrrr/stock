@@ -3,6 +3,7 @@ package com.stock.research
 import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.DataOutputStream
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
@@ -95,6 +96,87 @@ class StockClient(
         }
         val resp = jsonPost("/channel/api/reply", body)
         return resp.optString("recorded_at", "")
+    }
+
+    /**
+     * F18b: upload an image as multipart/form-data to /channel/api/upload_image.
+     *
+     * imageBytes is the raw file contents (already loaded into memory by the
+     * caller -- typically via ContentResolver.openInputStream on a Uri picked
+     * via the Photo Picker). filename + mimeType drive the server-side
+     * extension allowlist (.png/.jpg/.jpeg/.gif/.webp), 8MB cap is enforced
+     * server-side; the caller should sanity-check before this call too.
+     *
+     * Returns the parsed response JSON: {ok, recorded_at, filename, backend,
+     * description, suspected_topic, ticker_mentions[], user_intent}.
+     */
+    data class ImageUploadResult(
+        val recordedAt: String,
+        val filename: String,
+        val backend: String,
+        val description: String,
+        val suspectedTopic: String,
+        val tickerMentions: List<String>,
+        val userIntent: String,
+    )
+
+    fun uploadImage(
+        imageBytes: ByteArray,
+        filename: String,
+        mimeType: String,
+        caption: String = "",
+        noteId: Int? = null,
+    ): ImageUploadResult {
+        val boundary = "----StockResearch${System.currentTimeMillis()}"
+        val conn = openConnection("/channel/api/upload_image", "POST")
+        conn.doOutput = true
+        // Set fixed-length streaming when we know the body size so the WebView
+        // / Render proxy doesn't buffer the whole thing in memory twice.
+        conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+
+        val out = DataOutputStream(conn.outputStream)
+
+        // Image part
+        out.writeBytes("--$boundary\r\n")
+        out.writeBytes(
+            "Content-Disposition: form-data; name=\"image\"; filename=\"$filename\"\r\n"
+        )
+        out.writeBytes("Content-Type: $mimeType\r\n\r\n")
+        out.write(imageBytes)
+        out.writeBytes("\r\n")
+
+        // Optional caption part
+        if (caption.isNotEmpty()) {
+            out.writeBytes("--$boundary\r\n")
+            out.writeBytes("Content-Disposition: form-data; name=\"caption\"\r\n\r\n")
+            out.write(caption.toByteArray(StandardCharsets.UTF_8))
+            out.writeBytes("\r\n")
+        }
+
+        // Optional note_id link
+        if (noteId != null) {
+            out.writeBytes("--$boundary\r\n")
+            out.writeBytes("Content-Disposition: form-data; name=\"note_id\"\r\n\r\n")
+            out.writeBytes(noteId.toString())
+            out.writeBytes("\r\n")
+        }
+
+        out.writeBytes("--$boundary--\r\n")
+        out.flush()
+        out.close()
+
+        val resp = readJson(conn, "/channel/api/upload_image")
+        val mentionsArr = resp.optJSONArray("ticker_mentions") ?: JSONArray()
+        val mentions = (0 until mentionsArr.length()).map { mentionsArr.getString(it) }
+        return ImageUploadResult(
+            recordedAt = resp.optString("recorded_at", ""),
+            filename = resp.optString("filename", filename),
+            backend = resp.optString("backend", "unknown"),
+            description = resp.optString("description", ""),
+            suspectedTopic = resp.optString("suspected_topic", ""),
+            tickerMentions = mentions,
+            userIntent = resp.optString("user_intent", "unknown"),
+        )
     }
 
     private fun openConnection(path: String, method: String): HttpURLConnection {

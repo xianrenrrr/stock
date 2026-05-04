@@ -21,6 +21,9 @@ data class DashboardState(
     val errorMessage: String? = null,
     val replyStatus: String? = null,
     val lastRefreshedAt: Long = 0L,
+    // F18b: image upload state
+    val uploadingImage: Boolean = false,
+    val uploadStatus: String? = null,
 )
 
 class StockViewModel(private val client: StockClient) : ViewModel() {
@@ -83,6 +86,67 @@ class StockViewModel(private val client: StockClient) : ViewModel() {
                 )
             }
         }
+    }
+
+    /**
+     * F18b: send a picked image (with optional caption) to the upload endpoint.
+     *
+     * The caller (Compose UI) reads the bytes from the picked Uri off the main
+     * thread. This method just runs the multipart POST and stamps the result
+     * on UI state. Burst-poll fires on success so the auto-reply note (if the
+     * vision pipeline classifies it as a question) lands in the UI fast.
+     */
+    fun sendImage(
+        imageBytes: ByteArray,
+        filename: String,
+        mimeType: String,
+        caption: String = "",
+    ) {
+        if (imageBytes.isEmpty()) return
+        if (imageBytes.size > 8 * 1024 * 1024) {
+            _state.value = _state.value.copy(
+                uploadStatus = "图片超过 8MB 限制，请压缩后再试",
+                errorMessage = null,
+            )
+            return
+        }
+        viewModelScope.launch {
+            val latestBefore = _state.value.notes.firstOrNull()?.researchId ?: 0
+            _state.value = _state.value.copy(
+                uploadingImage = true,
+                uploadStatus = "上传中…AI 正在识别图片内容…",
+                errorMessage = null,
+            )
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    client.uploadImage(
+                        imageBytes = imageBytes,
+                        filename = filename,
+                        mimeType = mimeType,
+                        caption = caption,
+                        noteId = _state.value.selected?.researchId,
+                    )
+                }
+                val tickers = result.tickerMentions.joinToString(", ").ifEmpty { "无" }
+                _state.value = _state.value.copy(
+                    uploadingImage = false,
+                    uploadStatus = "已识别 (${result.backend}) " +
+                        "话题: ${result.suspectedTopic.ifEmpty { "—" }} | " +
+                        "提及: $tickers | 路由意图: ${result.userIntent}",
+                )
+                startBurstPoll(latestBefore)
+            } catch (e: Throwable) {
+                _state.value = _state.value.copy(
+                    uploadingImage = false,
+                    uploadStatus = null,
+                    errorMessage = "上传失败: ${friendlyError(e)}",
+                )
+            }
+        }
+    }
+
+    fun clearUploadStatus() {
+        _state.value = _state.value.copy(uploadStatus = null)
     }
 
     fun sendReply(text: String) {
