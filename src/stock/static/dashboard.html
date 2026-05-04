@@ -266,30 +266,30 @@
     </div>
 
     <div class="reply">
-      <h3>回复 / 给系统的指令</h3>
-      <textarea id="replyText" placeholder="例如：再写短一些 / 多看 A 股 / 帮我深挖 PAM4 DSP"></textarea>
-      <button id="replyBtn">发送</button>
-      <div class="status" id="replyStatus">系统会在下一次研报中根据你的反馈调整。</div>
+      <h3>回复 / 给系统的指令 (可附图)</h3>
 
-      <!-- F18: image upload -- snap a screenshot, drop it here, AI reads it -->
-      <div class="upload" id="uploadArea">
-        <h3 style="margin-top:18px;">上传图片 (图表 / 截图 / 公告)</h3>
-        <p style="color:var(--text-dim); font-size:13px; margin:0 0 8px;">
-          拖图到这里，或点击选择。AI 会自动识别内容（含 OCR 中文/英文），
-          并按问题/指令路由到下一份研报。
-        </p>
-        <input type="file" id="uploadInput" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none;">
-        <div id="uploadDrop"
-             style="border:2px dashed var(--border); border-radius:10px; padding:24px;
-                    text-align:center; color:var(--text-dim); cursor:pointer;
-                    background:var(--panel-2);">
-          点击 / 拖入图片 (PNG / JPG / WEBP, ≤8MB)
-        </div>
-        <div id="uploadPreview" style="margin-top:10px;"></div>
-        <button id="uploadBtn" disabled
-                style="margin-top:10px; opacity:0.5;">发送图片</button>
-        <div class="status" id="uploadStatus" style="margin-top:8px; color:var(--text-dim); font-size:13px;"></div>
+      <!-- F18b v2: ChatGPT-style attached image preview, sits ABOVE the textarea -->
+      <div id="attachedImage" style="display:none; margin-bottom:8px; padding:8px;
+           background:var(--panel-2); border-radius:8px; display:flex;
+           align-items:center; gap:10px;"></div>
+
+      <textarea id="replyText" placeholder="例如：再写短一些 / 多看 A 股 / 帮我深挖 PAM4 DSP / 附图后写说明"></textarea>
+
+      <!-- Hidden file input + visible attach button + Send button on one row -->
+      <input type="file" id="uploadInput"
+             accept="image/png,image/jpeg,image/gif,image/webp"
+             style="display:none;">
+      <div style="display:flex; gap:8px; align-items:center; margin-top:8px;">
+        <button id="attachBtn" type="button"
+                style="flex:0 0 auto; background:var(--panel-2); color:var(--text);
+                       border:1px solid var(--border); padding:10px 14px;
+                       border-radius:8px; cursor:pointer; font-size:14px;">
+          📎 附图
+        </button>
+        <button id="replyBtn" style="flex:1;">发送</button>
       </div>
+
+      <div class="status" id="replyStatus">系统会在下一次研报中根据你的反馈调整。</div>
     </div>
 
     <div class="history">
@@ -427,161 +427,148 @@ function escapeHtml(s) {
   return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-async function sendReply() {
-  const text = el("replyText").value.trim();
-  if (!text) return;
-  el("replyBtn").disabled = true;
-  el("replyStatus").className = "status";
-  el("replyStatus").textContent = "发送中…";
-  try {
-    const r = await api("/reply", { method: "POST", body: JSON.stringify({ text }) });
-    el("replyStatus").className = "status ok";
-    el("replyStatus").textContent = "已记录 (" + formatTime(r.recorded_at) + ")。系统会在下一份研报中调整。";
-    el("replyText").value = "";
-  } catch (e) {
-    el("replyStatus").className = "status err";
-    el("replyStatus").textContent = "发送失败：" + e.message;
-  } finally {
-    el("replyBtn").disabled = false;
-  }
-}
-
 function refreshAll() {
   loadLatest().catch(() => {});
   loadHistory().catch(() => {});
 }
 
-// F18: image upload pipeline.
-// State: the last-selected File object lives here until the user clicks "send".
-let pendingUploadFile = null;
+// F18b v2: ChatGPT-style chat composer.
+// Single "Send" button handles text-only, image-only, or text+image together.
+let attachedImageFile = null;
 
-function setUploadStatus(msg, kind) {
-  const el = document.getElementById("uploadStatus");
+function setReplyStatusKind(msg, kind) {
+  const el = document.getElementById("replyStatus");
   el.textContent = msg || "";
-  el.style.color = kind === "err" ? "var(--bad)"
-                 : kind === "ok" ? "var(--good)"
-                 : "var(--text-dim)";
+  el.className = kind === "err" ? "status err"
+               : kind === "ok"  ? "status ok"
+               : "status";
 }
 
-function setUploadPreview(file) {
-  const wrap = document.getElementById("uploadPreview");
-  if (!file) { wrap.innerHTML = ""; return; }
+function showAttachedImage(file) {
+  const wrap = document.getElementById("attachedImage");
+  if (!file) {
+    wrap.style.display = "none";
+    wrap.innerHTML = "";
+    return;
+  }
   const reader = new FileReader();
   reader.onload = e => {
+    wrap.style.display = "flex";
     wrap.innerHTML = `
-      <div style="display:flex; gap:10px; align-items:center;">
-        <img src="${e.target.result}" alt="preview"
-             style="max-width:120px; max-height:120px; border-radius:8px;
-                    border:1px solid var(--border);">
-        <div style="font-size:13px; color:var(--text-dim);">
-          ${escapeHtml(file.name)}<br>${(file.size/1024).toFixed(1)} KB
+      <img src="${e.target.result}" alt="preview"
+           style="width:48px; height:48px; object-fit:cover; border-radius:6px;
+                  border:1px solid var(--border); flex:0 0 auto;">
+      <div style="flex:1; min-width:0;">
+        <div style="font-size:13px; color:var(--text);
+                    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+          ${escapeHtml(file.name)}
         </div>
-      </div>`;
+        <div style="font-size:11px; color:var(--text-dim);">
+          ${(file.size/1024).toFixed(1)} KB · 将与文字一起发送
+        </div>
+      </div>
+      <button id="removeAttachBtn" type="button"
+              style="background:transparent; border:none; color:var(--text-dim);
+                     cursor:pointer; font-size:18px; padding:4px 8px;">×</button>
+    `;
+    document.getElementById("removeAttachBtn").addEventListener("click", () => {
+      attachedImageFile = null;
+      document.getElementById("uploadInput").value = "";
+      showAttachedImage(null);
+    });
   };
   reader.readAsDataURL(file);
 }
 
-function selectUploadFile(file) {
+function attachImage(file) {
   if (!file) return;
   if (!file.type.startsWith("image/")) {
-    setUploadStatus("只支持图片文件 (PNG/JPG/WEBP)。", "err");
+    setReplyStatusKind("只支持图片文件 (PNG/JPG/WEBP)", "err");
     return;
   }
   if (file.size > 8 * 1024 * 1024) {
-    setUploadStatus("图片超过 8MB 限制。请压缩后再试。", "err");
+    setReplyStatusKind("图片超过 8MB 限制，请压缩后再试", "err");
     return;
   }
-  pendingUploadFile = file;
-  setUploadPreview(file);
-  setUploadStatus("已选择，点击 \"发送图片\" 上传。", "");
-  const btn = document.getElementById("uploadBtn");
-  btn.disabled = false;
-  btn.style.opacity = "1";
+  attachedImageFile = file;
+  showAttachedImage(file);
+  setReplyStatusKind("已附图。可继续输入文字，然后点 \"发送\"。", "");
+  // Update placeholder to hint at caption mode
+  const ta = document.getElementById("replyText");
+  ta.placeholder = "(可选) 给图片加一句说明: 例如 '这个走势怎么看' / '深挖一下'";
 }
 
-async function sendUpload() {
-  if (!pendingUploadFile) return;
-  const btn = document.getElementById("uploadBtn");
-  btn.disabled = true;
-  setUploadStatus("上传中…AI 正在识别图片内容…", "");
+// One unified send: text-only goes to /reply; with image goes to /upload_image
+// with the text as caption. Either way, single Send button.
+async function sendChatMessage() {
+  const text = (document.getElementById("replyText").value || "").trim();
+  if (!text && !attachedImageFile) return;
 
-  const fd = new FormData();
-  fd.append("image", pendingUploadFile, pendingUploadFile.name);
-  // The optional caption field reuses the reply textarea so the boss can add
-  // context like "look at this chart" without a second input.
-  const caption = (document.getElementById("replyText").value || "").trim();
-  if (caption) fd.append("caption", caption);
+  const btn = document.getElementById("replyBtn");
+  btn.disabled = true;
+  setReplyStatusKind("发送中…", "");
 
   try {
-    const resp = await fetch(API_BASE + "/upload_image", {
-      method: "POST",
-      headers: { "Authorization": "Bearer " + TOKEN },
-      body: fd,
-    });
-    const data = await resp.json();
-    if (!resp.ok) {
-      throw new Error(data.error || ("HTTP " + resp.status));
+    if (attachedImageFile) {
+      const fd = new FormData();
+      fd.append("image", attachedImageFile, attachedImageFile.name);
+      if (text) fd.append("caption", text);
+
+      const resp = await fetch(API_BASE + "/upload_image", {
+        method: "POST",
+        headers: { "Authorization": "Bearer " + TOKEN },
+        body: fd,
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || ("HTTP " + resp.status));
+      const tickers = (data.ticker_mentions || []).join(", ") || "无";
+      setReplyStatusKind(
+        `已识别 (${data.backend}) 话题: ${data.suspected_topic || "—"} | 提及: ${tickers} | 意图: ${data.user_intent}`,
+        "ok",
+      );
+    } else {
+      const r = await api("/reply", {
+        method: "POST",
+        body: JSON.stringify({ text }),
+      });
+      setReplyStatusKind("已记录 (" + formatTime(r.recorded_at) + ")，等待回复…", "ok");
     }
-    const tickers = (data.ticker_mentions || []).join(", ") || "无";
-    setUploadStatus(
-      `已识别 (${data.backend})。话题: ${data.suspected_topic || "—"} | 提及: ${tickers} | 路由意图: ${data.user_intent}`,
-      "ok",
-    );
-    pendingUploadFile = null;
-    document.getElementById("uploadInput").value = "";
-    document.getElementById("uploadPreview").innerHTML = "";
+
+    // Reset composer either way
     document.getElementById("replyText").value = "";
-    btn.style.opacity = "0.5";
+    attachedImageFile = null;
+    document.getElementById("uploadInput").value = "";
+    showAttachedImage(null);
+    document.getElementById("replyText").placeholder =
+      "例如：再写短一些 / 多看 A 股 / 帮我深挖 PAM4 DSP / 附图后写说明";
   } catch (e) {
-    setUploadStatus("上传失败：" + e.message, "err");
+    setReplyStatusKind("发送失败：" + e.message, "err");
+  } finally {
     btn.disabled = false;
   }
 }
 
-function initUpload() {
+function initChatComposer() {
   const input = document.getElementById("uploadInput");
-  const drop = document.getElementById("uploadDrop");
-  const btn = document.getElementById("uploadBtn");
+  const attachBtn = document.getElementById("attachBtn");
 
-  drop.addEventListener("click", () => input.click());
+  attachBtn.addEventListener("click", () => input.click());
   input.addEventListener("change", e => {
     const f = e.target.files && e.target.files[0];
-    if (f) selectUploadFile(f);
+    if (f) attachImage(f);
   });
 
-  ["dragenter", "dragover"].forEach(ev =>
-    drop.addEventListener(ev, e => {
-      e.preventDefault();
-      drop.style.borderColor = "var(--accent-2)";
-    })
-  );
-  ["dragleave", "drop"].forEach(ev =>
-    drop.addEventListener(ev, e => {
-      e.preventDefault();
-      drop.style.borderColor = "var(--border)";
-    })
-  );
-  drop.addEventListener("drop", e => {
-    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-    if (f) selectUploadFile(f);
-  });
-
-  // Paste-from-clipboard works too -- screenshot then Ctrl-V on the page.
+  // Paste-from-clipboard: screenshot then Ctrl-V on the page attaches the image
   document.addEventListener("paste", e => {
     if (!TOKEN) return;
     const items = (e.clipboardData || {}).items || [];
     for (const it of items) {
       if (it.kind === "file" && it.type.startsWith("image/")) {
         const f = it.getAsFile();
-        if (f) {
-          selectUploadFile(f);
-          break;
-        }
+        if (f) { attachImage(f); break; }
       }
     }
   });
-
-  btn.addEventListener("click", sendUpload);
 }
 
 function pickupTokenFromUrl() {
@@ -608,8 +595,8 @@ function init() {
   el("tokenInput").addEventListener("keydown", e => {
     if (e.key === "Enter") el("loginBtn").click();
   });
-  el("replyBtn").addEventListener("click", sendReply);
-  initUpload();
+  el("replyBtn").addEventListener("click", sendChatMessage);
+  initChatComposer();
 
   if (TOKEN) {
     loadDashboard();

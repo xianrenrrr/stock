@@ -88,92 +88,96 @@ class StockViewModel(private val client: StockClient) : ViewModel() {
         }
     }
 
+    fun clearUploadStatus() {
+        _state.value = _state.value.copy(uploadStatus = null, replyStatus = null)
+    }
+
     /**
-     * F18b: send a picked image (with optional caption) to the upload endpoint.
+     * F18b v2 -- unified ChatGPT-style send: optional text + optional image,
+     * sent together as ONE action. If image is provided, the text becomes its
+     * caption and the call goes to /channel/api/upload_image. If only text,
+     * goes to /channel/api/reply. If neither, no-op.
      *
-     * The caller (Compose UI) reads the bytes from the picked Uri off the main
-     * thread. This method just runs the multipart POST and stamps the result
-     * on UI state. Burst-poll fires on success so the auto-reply note (if the
-     * vision pipeline classifies it as a question) lands in the UI fast.
+     * The boss explicitly asked for this UX: "why can't it be like regular
+     * ChatGPT chat way -- attach an image and send with message together."
+     * Previously we had a separate ImageUploadCard with its own caption +
+     * Send button; now there's one textarea + a paperclip + one Send.
      */
-    fun sendImage(
-        imageBytes: ByteArray,
-        filename: String,
-        mimeType: String,
-        caption: String = "",
+    fun sendMessage(
+        text: String,
+        imageBytes: ByteArray? = null,
+        imageFilename: String = "image.jpg",
+        imageMime: String = "image/jpeg",
     ) {
-        if (imageBytes.isEmpty()) return
-        if (imageBytes.size > 8 * 1024 * 1024) {
+        val trimmed = text.trim()
+        val hasImage = imageBytes != null && imageBytes.isNotEmpty()
+        if (trimmed.isEmpty() && !hasImage) return
+
+        if (hasImage && imageBytes!!.size > 8 * 1024 * 1024) {
             _state.value = _state.value.copy(
                 uploadStatus = "图片超过 8MB 限制，请压缩后再试",
                 errorMessage = null,
             )
             return
         }
+
         viewModelScope.launch {
             val latestBefore = _state.value.notes.firstOrNull()?.researchId ?: 0
             _state.value = _state.value.copy(
-                uploadingImage = true,
-                uploadStatus = "上传中…AI 正在识别图片内容…",
+                sending = !hasImage,
+                uploadingImage = hasImage,
+                replyStatus = if (hasImage) null else "发送中…",
+                uploadStatus = if (hasImage) "上传中…AI 正在识别图片内容…" else null,
                 errorMessage = null,
             )
             try {
-                val result = withContext(Dispatchers.IO) {
-                    client.uploadImage(
-                        imageBytes = imageBytes,
-                        filename = filename,
-                        mimeType = mimeType,
-                        caption = caption,
-                        noteId = _state.value.selected?.researchId,
+                if (hasImage) {
+                    val result = withContext(Dispatchers.IO) {
+                        client.uploadImage(
+                            imageBytes = imageBytes!!,
+                            filename = imageFilename,
+                            mimeType = imageMime,
+                            caption = trimmed,
+                            noteId = _state.value.selected?.researchId,
+                        )
+                    }
+                    val tickers = result.tickerMentions.joinToString(", ").ifEmpty { "无" }
+                    val captionTag = if (trimmed.isEmpty()) "" else " | 含说明"
+                    _state.value = _state.value.copy(
+                        sending = false,
+                        uploadingImage = false,
+                        uploadStatus = "已识别 (${result.backend})$captionTag " +
+                            "话题: ${result.suspectedTopic.ifEmpty { "—" }} | " +
+                            "提及: $tickers | 路由意图: ${result.userIntent}",
+                        replyStatus = "已发送，等待回复…",
+                    )
+                } else {
+                    val recordedAt = withContext(Dispatchers.IO) {
+                        client.postReply(trimmed, _state.value.selected?.researchId)
+                    }
+                    _state.value = _state.value.copy(
+                        sending = false,
+                        replyStatus = "已发送 ($recordedAt)，等待回复…",
                     )
                 }
-                val tickers = result.tickerMentions.joinToString(", ").ifEmpty { "无" }
-                _state.value = _state.value.copy(
-                    uploadingImage = false,
-                    uploadStatus = "已识别 (${result.backend}) " +
-                        "话题: ${result.suspectedTopic.ifEmpty { "—" }} | " +
-                        "提及: $tickers | 路由意图: ${result.userIntent}",
-                )
-                startBurstPoll(latestBefore)
-            } catch (e: Throwable) {
-                _state.value = _state.value.copy(
-                    uploadingImage = false,
-                    uploadStatus = null,
-                    errorMessage = "上传失败: ${friendlyError(e)}",
-                )
-            }
-        }
-    }
-
-    fun clearUploadStatus() {
-        _state.value = _state.value.copy(uploadStatus = null)
-    }
-
-    fun sendReply(text: String) {
-        if (text.isBlank()) return
-        viewModelScope.launch {
-            // Snapshot the latest research_id BEFORE submit so the burst-poller
-            // can detect the new reply note when it lands.
-            val latestBefore = _state.value.notes.firstOrNull()?.researchId ?: 0
-            _state.value = _state.value.copy(sending = true, replyStatus = "发送中…", errorMessage = null)
-            try {
-                val recordedAt = withContext(Dispatchers.IO) {
-                    client.postReply(text, _state.value.selected?.researchId)
-                }
-                _state.value = _state.value.copy(
-                    sending = false,
-                    replyStatus = "已发送 ($recordedAt)，等待回复…",
-                )
                 startBurstPoll(latestBefore)
             } catch (e: Throwable) {
                 _state.value = _state.value.copy(
                     sending = false,
+                    uploadingImage = false,
                     replyStatus = null,
+                    uploadStatus = null,
                     errorMessage = "发送失败: ${friendlyError(e)}",
                 )
             }
         }
     }
+
+    /** Backward-compat shim so older callers keep compiling. */
+    fun sendReply(text: String) = sendMessage(text)
+    fun sendImage(
+        imageBytes: ByteArray, filename: String, mimeType: String, caption: String = "",
+    ) = sendMessage(caption, imageBytes, filename, mimeType)
 
     /**
      * Burst-poll every 5 seconds for up to 5 minutes after the boss submits a

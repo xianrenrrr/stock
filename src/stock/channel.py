@@ -36,7 +36,16 @@ from stock.db import get_conn
 # F18: image upload feature -- the boss is lazy, snaps a screenshot, and the
 # system extracts content via a vision LLM and routes it to the same intent
 # pipeline as a typed reply.
-UPLOAD_DIR: str = "data/wechat_inbox/uploads"
+#
+# Default UPLOAD_DIR moved out from under data/wechat_inbox/ to data/uploads/
+# because the Render cloud_proxy deploy had a non-directory artifact at
+# data/wechat_inbox that broke pathlib.mkdir(parents=True) -- exist_ok=True
+# only swallows FileExistsError when the existing path is a directory.
+# Operator can override via STOCK_UPLOAD_DIR env if a tmpfs mount is preferred.
+import os as _os_upload
+
+UPLOAD_DIR: str = _os_upload.environ.get("STOCK_UPLOAD_DIR", "data/uploads").strip() or "data/uploads"
+UPLOAD_DIR_FALLBACK: str = "/tmp/stock_uploads"  # if primary path is blocked
 UPLOAD_MAX_BYTES: int = 8 * 1024 * 1024  # mirrors stock.vision.MAX_IMAGE_BYTES
 UPLOAD_ALLOWED_EXTENSIONS: frozenset[str] = frozenset(
     {".png", ".jpg", ".jpeg", ".gif", ".webp"}
@@ -356,6 +365,45 @@ def post_reply(
     )
 
 
+def _resolve_writable_upload_dir() -> Path:
+    """Pick a writable upload directory, preferring UPLOAD_DIR but falling back to tmpfs.
+
+    pathlib's mkdir(parents=True, exist_ok=True) re-raises FileExistsError when
+    an *intermediate* path component exists as a non-directory. We hit this on
+    Render where data/wechat_inbox somehow existed as a non-directory and broke
+    every upload. If the primary path's mkdir fails, we fall back to a tmpfs
+    path so the upload still completes -- the OCR'd extraction is what feeds
+    the conversation pipeline, not the file itself, so storage location is
+    forgiving.
+    """
+    primary = Path(UPLOAD_DIR)
+    try:
+        primary.mkdir(parents=True, exist_ok=True)
+        # Sanity: the path must end up as an actual directory we can write to.
+        if primary.is_dir():
+            return primary
+        logger.warning(
+            "channel: primary upload path %s exists but is not a directory;"
+            " falling back to %s", primary, UPLOAD_DIR_FALLBACK,
+        )
+    except (FileExistsError, OSError, PermissionError) as exc:
+        logger.warning(
+            "channel: primary upload path %s unusable (%s);"
+            " falling back to %s", primary, exc, UPLOAD_DIR_FALLBACK,
+        )
+
+    fallback = Path(UPLOAD_DIR_FALLBACK)
+    try:
+        fallback.mkdir(parents=True, exist_ok=True)
+        return fallback
+    except Exception as exc:
+        logger.exception("channel: BOTH primary AND fallback upload dirs unusable")
+        raise ChannelHTTPError(
+            500, "upload_dir_unavailable",
+            f"Could not create {primary} or {fallback}: {exc}",
+        ) from exc
+
+
 async def post_upload_image(
     image: UploadFile = File(..., description="The image file (.png/.jpg/.jpeg/.gif/.webp)"),
     caption: str = Form(default="", description="Optional caption from the user"),
@@ -401,9 +449,14 @@ async def post_upload_image(
     # Persist to disk under a deterministic name so the orchestrator + auditor
     # can find it later. Strip dangerous chars from the recipient to keep it a
     # safe path component.
+    #
+    # Defensive: pathlib's mkdir(parents=True, exist_ok=True) re-raises
+    # FileExistsError when an *intermediate* path component exists as a
+    # non-directory (e.g. a stray file at data/wechat_inbox on Render
+    # blocked uploads with a 500 on 2026-05-04). If the primary path is
+    # blocked, fall back to a tmpfs path so the boss's upload still works.
     safe_recipient = re.sub(r"[^A-Za-z0-9_\-]", "_", recipient) or "anon"
-    upload_dir = Path(UPLOAD_DIR)
-    upload_dir.mkdir(parents=True, exist_ok=True)
+    upload_dir = _resolve_writable_upload_dir()
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     safe_filename = f"{stamp}_{safe_recipient}{suffix}"
     image_path = upload_dir / safe_filename

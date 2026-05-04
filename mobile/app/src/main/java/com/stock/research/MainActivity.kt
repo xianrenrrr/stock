@@ -31,6 +31,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddPhotoAlternate
+import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.Button
@@ -125,8 +127,7 @@ private fun DashboardApp(client: StockClient) {
                 state = state,
                 onRefresh = vm::refresh,
                 onPick = vm::pickNote,
-                onReply = vm::sendReply,
-                onSendImage = vm::sendImage,
+                onSendMessage = vm::sendMessage,
                 onClearUpload = vm::clearUploadStatus,
             )
         }
@@ -139,8 +140,7 @@ private fun DashboardScreen(
     state: DashboardState,
     onRefresh: () -> Unit,
     onPick: (Int) -> Unit,
-    onReply: (String) -> Unit,
-    onSendImage: (ByteArray, String, String, String) -> Unit,
+    onSendMessage: (String, ByteArray?, String, String) -> Unit,
     onClearUpload: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize().background(Bg)) {
@@ -167,191 +167,13 @@ private fun DashboardScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             LatestNoteCard(detail = state.selected)
-            ReplyCard(state = state, onReply = onReply)
-            ImageUploadCard(
+            ChatComposerCard(
                 state = state,
-                onSendImage = onSendImage,
+                onSendMessage = onSendMessage,
                 onClearUpload = onClearUpload,
             )
             HistorySection(notes = state.notes, onPick = onPick)
             FooterDisclaimer()
-        }
-    }
-}
-
-
-/**
- * F18b: pick an image from the gallery and upload it to /channel/api/upload_image.
- *
- * Uses the modern Photo Picker (PickVisualMedia) which is sandboxed and needs
- * NO runtime permission. Reads bytes off the main thread on click. Server
- * caps image at 8MB; we re-check client-side too for a friendlier error.
- */
-@Composable
-private fun ImageUploadCard(
-    state: DashboardState,
-    onSendImage: (ByteArray, String, String, String) -> Unit,
-    onClearUpload: () -> Unit,
-) {
-    val context = LocalContext.current
-    var pickedUri by remember { mutableStateOf<Uri?>(null) }
-    var pickedFilename by remember { mutableStateOf("image.jpg") }
-    var pickedMime by remember { mutableStateOf("image/jpeg") }
-    var pickedBytes by remember { mutableStateOf<ByteArray?>(null) }
-    var thumbnailBitmap by remember { mutableStateOf<Bitmap?>(null) }
-    var caption by remember { mutableStateOf("") }
-
-    val pickMedia = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia(),
-    ) { uri: Uri? ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        pickedUri = uri
-        // Resolve mime + filename from ContentResolver
-        val resolver = context.contentResolver
-        pickedMime = resolver.getType(uri) ?: "image/jpeg"
-        pickedFilename = guessFilename(context, uri, pickedMime)
-        // Read bytes synchronously here -- Photo Picker payloads are typically
-        // small (<5MB phone screenshots) and we want them available before
-        // the user taps Send. If this ever becomes a UI hang we can move it
-        // off-thread, but the simpler version ships first.
-        try {
-            val bytes = resolver.openInputStream(uri)?.use { it.readBytes() }
-            pickedBytes = bytes
-            // Decode a thumbnail for preview (small inSampleSize keeps memory low)
-            thumbnailBitmap = bytes?.let { decodeThumbnail(it) }
-            onClearUpload()
-        } catch (_: Throwable) {
-            pickedBytes = null
-            thumbnailBitmap = null
-        }
-    }
-
-    Card(
-        colors = CardDefaults.cardColors(containerColor = Panel),
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "上传图片 (图表 / 截图 / 公告)",
-                color = AccentBlue,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = "选一张图，AI 会自动识别内容并按问题/指令路由到下一份研报。",
-                color = TextDim,
-                fontSize = 11.sp,
-            )
-            Spacer(Modifier.height(10.dp))
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedButton(
-                    onClick = {
-                        pickMedia.launch(
-                            PickVisualMediaRequest(
-                                ActivityResultContracts.PickVisualMedia.ImageOnly
-                            )
-                        )
-                    },
-                    shape = RoundedCornerShape(8.dp),
-                ) {
-                    Icon(
-                        Icons.Filled.AddPhotoAlternate,
-                        contentDescription = null,
-                        tint = AccentBlue,
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text("选择图片", color = AccentBlue)
-                }
-                Spacer(Modifier.width(10.dp))
-                if (thumbnailBitmap != null) {
-                    Image(
-                        bitmap = thumbnailBitmap!!.asImageBitmap(),
-                        contentDescription = "preview",
-                        modifier = Modifier
-                            .size(56.dp)
-                            .background(Panel2, RoundedCornerShape(6.dp)),
-                        contentScale = ContentScale.Crop,
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Column {
-                        Text(
-                            text = pickedFilename,
-                            color = TextMain, fontSize = 12.sp,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = "${(pickedBytes?.size ?: 0) / 1024} KB",
-                            color = TextDim, fontSize = 11.sp,
-                        )
-                    }
-                }
-            }
-
-            if (pickedBytes != null) {
-                Spacer(Modifier.height(10.dp))
-                OutlinedTextField(
-                    value = caption,
-                    onValueChange = { caption = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = {
-                        Text("可选: 给图片加一句说明 (例如 '看一下这个走势')",
-                             color = TextDim, fontSize = 12.sp)
-                    },
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Panel2,
-                        unfocusedContainerColor = Panel2,
-                        focusedTextColor = TextMain,
-                        unfocusedTextColor = TextMain,
-                        cursorColor = AccentOrange,
-                        focusedIndicatorColor = AccentBlue,
-                        unfocusedIndicatorColor = Border,
-                    ),
-                )
-                Spacer(Modifier.height(8.dp))
-                Button(
-                    onClick = {
-                        val bytes = pickedBytes ?: return@Button
-                        onSendImage(bytes, pickedFilename, pickedMime, caption)
-                        // clear local state on send so the card resets
-                        pickedUri = null
-                        pickedBytes = null
-                        thumbnailBitmap = null
-                        caption = ""
-                    },
-                    enabled = !state.uploadingImage,
-                    colors = ButtonDefaults.buttonColors(containerColor = AccentOrange),
-                    shape = RoundedCornerShape(8.dp),
-                ) {
-                    Icon(Icons.Filled.Send, contentDescription = null,
-                         tint = Color(0xFF1A1107))
-                    Spacer(Modifier.width(6.dp))
-                    Text("发送图片",
-                         color = Color(0xFF1A1107),
-                         fontWeight = FontWeight.SemiBold)
-                }
-            }
-
-            if (state.uploadingImage) {
-                Spacer(Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(
-                        color = AccentOrange,
-                        modifier = Modifier.size(16.dp),
-                        strokeWidth = 2.dp,
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text("上传中…AI 正在识别图片内容…",
-                         color = TextDim, fontSize = 12.sp)
-                }
-            }
-
-            state.uploadStatus?.let {
-                Spacer(Modifier.height(6.dp))
-                Text(it, color = Good, fontSize = 11.sp)
-            }
         }
     }
 }
@@ -471,9 +293,49 @@ private fun LatestNoteCard(detail: StockClient.NoteDetail?) {
 }
 
 
+/**
+ * F18b v2 -- ChatGPT-style composer.
+ *
+ * One textarea + paperclip-attach + Send button. Either text alone, image alone,
+ * or text+image together. Picked image shows as a thumbnail chip above the
+ * textarea with an X to remove it before sending. Send is disabled until at
+ * least one of (text, image) is present.
+ */
 @Composable
-private fun ReplyCard(state: DashboardState, onReply: (String) -> Unit) {
+private fun ChatComposerCard(
+    state: DashboardState,
+    onSendMessage: (String, ByteArray?, String, String) -> Unit,
+    onClearUpload: () -> Unit,
+) {
+    val context = LocalContext.current
     var text by remember { mutableStateOf("") }
+    var pickedBytes by remember { mutableStateOf<ByteArray?>(null) }
+    var pickedFilename by remember { mutableStateOf("image.jpg") }
+    var pickedMime by remember { mutableStateOf("image/jpeg") }
+    var thumbnail by remember { mutableStateOf<Bitmap?>(null) }
+
+    val pickMedia = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+    ) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val resolver = context.contentResolver
+        pickedMime = resolver.getType(uri) ?: "image/jpeg"
+        pickedFilename = guessFilename(context, uri, pickedMime)
+        try {
+            val bytes = resolver.openInputStream(uri)?.use { it.readBytes() }
+            pickedBytes = bytes
+            thumbnail = bytes?.let { decodeThumbnail(it) }
+            onClearUpload()
+        } catch (_: Throwable) {
+            pickedBytes = null
+            thumbnail = null
+        }
+    }
+
+    val canSend = !state.sending && !state.uploadingImage &&
+                  (text.isNotBlank() || pickedBytes != null)
+    val isBusy = state.sending || state.uploadingImage
+
     Card(
         colors = CardDefaults.cardColors(containerColor = Panel),
         shape = RoundedCornerShape(12.dp),
@@ -481,19 +343,65 @@ private fun ReplyCard(state: DashboardState, onReply: (String) -> Unit) {
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                text = "回复 / 给系统的指令",
+                text = "回复 / 给系统的指令 (可附图)",
                 color = AccentBlue,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
             )
             Spacer(Modifier.height(8.dp))
+
+            // Image preview chip (only when an image is attached)
+            if (thumbnail != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Panel2, RoundedCornerShape(8.dp))
+                        .padding(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Image(
+                        bitmap = thumbnail!!.asImageBitmap(),
+                        contentDescription = "preview",
+                        modifier = Modifier
+                            .size(48.dp)
+                            .background(Bg, RoundedCornerShape(6.dp)),
+                        contentScale = ContentScale.Crop,
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = pickedFilename,
+                            color = TextMain, fontSize = 12.sp,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = "${(pickedBytes?.size ?: 0) / 1024} KB · 将与文字一起发送",
+                            color = TextDim, fontSize = 10.sp,
+                        )
+                    }
+                    IconButton(
+                        onClick = {
+                            pickedBytes = null
+                            thumbnail = null
+                        },
+                        enabled = !isBusy,
+                    ) {
+                        Icon(Icons.Filled.Close, contentDescription = "移除图片", tint = TextDim)
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+            }
+
             OutlinedTextField(
                 value = text,
                 onValueChange = { text = it },
                 modifier = Modifier.fillMaxWidth().heightIn(min = 90.dp),
                 placeholder = {
                     Text(
-                        "例如: 再写短一些 / 多看 A 股 / 帮我深挖 PAM4 DSP",
+                        if (pickedBytes != null)
+                            "(可选) 给图片加一句说明: 例如 '这个走势怎么看' / '深挖一下'"
+                        else
+                            "例如: 再写短一些 / 多看 A 股 / 帮我深挖 PAM4 DSP",
                         color = TextDim,
                     )
                 },
@@ -506,25 +414,72 @@ private fun ReplyCard(state: DashboardState, onReply: (String) -> Unit) {
                     focusedIndicatorColor = AccentBlue,
                     unfocusedIndicatorColor = Border,
                 ),
+                enabled = !isBusy,
             )
-            Spacer(Modifier.height(8.dp))
+
+            Spacer(Modifier.height(10.dp))
+
             Row(verticalAlignment = Alignment.CenterVertically) {
+                // Paperclip / attach button
+                IconButton(
+                    onClick = {
+                        pickMedia.launch(
+                            PickVisualMediaRequest(
+                                ActivityResultContracts.PickVisualMedia.ImageOnly
+                            )
+                        )
+                    },
+                    enabled = !isBusy,
+                ) {
+                    Icon(
+                        Icons.Filled.AttachFile,
+                        contentDescription = "附加图片",
+                        tint = if (pickedBytes != null) AccentBlue else TextDim,
+                    )
+                }
+                Spacer(Modifier.width(4.dp))
+
+                // Send button
                 Button(
                     onClick = {
-                        onReply(text)
+                        onSendMessage(text, pickedBytes, pickedFilename, pickedMime)
+                        // Optimistically clear local composer; ViewModel will
+                        // re-set status after the network call.
                         text = ""
+                        pickedBytes = null
+                        thumbnail = null
                     },
-                    enabled = !state.sending && text.isNotBlank(),
+                    enabled = canSend,
                     colors = ButtonDefaults.buttonColors(containerColor = AccentOrange),
                     shape = RoundedCornerShape(8.dp),
                 ) {
-                    Icon(Icons.Filled.Send, contentDescription = null, tint = Color(0xFF1A1107))
+                    if (isBusy) {
+                        CircularProgressIndicator(
+                            color = Color(0xFF1A1107),
+                            modifier = Modifier.size(14.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        Icon(Icons.Filled.Send, contentDescription = null,
+                             tint = Color(0xFF1A1107))
+                    }
                     Spacer(Modifier.width(6.dp))
-                    Text("发送", color = Color(0xFF1A1107), fontWeight = FontWeight.SemiBold)
+                    Text(
+                        if (pickedBytes != null) "发送 (含图)" else "发送",
+                        color = Color(0xFF1A1107),
+                        fontWeight = FontWeight.SemiBold,
+                    )
                 }
+
                 Spacer(Modifier.width(12.dp))
-                state.replyStatus?.let { Text(it, color = Good, fontSize = 12.sp) }
+                // One status line — image-pipeline status takes priority over reply status.
+                val status = state.uploadStatus ?: state.replyStatus
+                status?.let {
+                    Text(it, color = Good, fontSize = 11.sp,
+                         maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
             }
+
             Spacer(Modifier.height(4.dp))
             Text(
                 text = "系统会在下一份研报中根据你的反馈调整。",
