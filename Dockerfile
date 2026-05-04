@@ -22,14 +22,26 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 # --- deps stage ---
-# Copy only metadata first so docker caches the heavy pip install when only code changes.
+# CRITICAL: install dependencies based ONLY on pyproject.toml so the heavy
+# pip layer is cached as long as the dep list is unchanged. The previous
+# version COPY'd src/ before pip install, which invalidated the deps layer
+# on every code commit -- meaning Render reinstalled
+# torch+sentence-transformers+pandas+scipy from scratch on every deploy
+# (~12-20 min). Now a code-only commit reuses the cached layer (~30 sec).
+#
+# Trick: we need src/stock to exist for `pip install -e .` to succeed, but
+# we don't want the real source in this layer (it would re-bust the cache).
+# Stub it with a one-line __init__.py; the COPY below overwrites with real code.
 COPY pyproject.toml ./
-COPY src/ ./src/
-RUN pip install --upgrade pip \
+RUN mkdir -p src/stock \
+    && echo '"""stock package -- stub during dep install layer."""' > src/stock/__init__.py \
+    && pip install --upgrade pip \
     && pip install -e .
 
 # --- runtime stage ---
-# Copy everything else (prompts, data templates, scripts).
+# Now copy the real source. Editable install means imports resolve to /app/src/stock,
+# so overwriting the stub with real files Just Works at runtime -- no reinstall needed.
+COPY src/ ./src/
 COPY prompts/ ./prompts/
 COPY data/ ./data/
 COPY scripts/ ./scripts/
