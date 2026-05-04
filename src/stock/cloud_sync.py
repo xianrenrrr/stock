@@ -22,6 +22,7 @@ into `RENDER_SYNC_TOKEN` (defaults to STOCK_API_TOKEN if unset).
 from __future__ import annotations
 
 import logging
+import re
 import secrets
 import sqlite3
 from datetime import datetime, timedelta, timezone
@@ -246,6 +247,50 @@ def get_sync_replies(
     )
 
 
+def get_sync_upload(
+    filename: str,
+    _auth: None = Depends(_require_admin),
+) -> object:
+    """Return the raw bytes of an uploaded image so local can run vision on it.
+
+    Boss uploads to Render's /channel/api/upload_image; in cloud_proxy mode
+    Render skips vision (no Anthropic key) and writes a [image_pending_local_vision]
+    marker. Local cloud_sync detects the marker, calls THIS endpoint to fetch
+    the binary, runs vision locally with its real keys, and writes the proper
+    extraction to local feedback so F13 picks it up.
+
+    Filename is the deterministic <stamp>_<recipient>.<ext> from upload time;
+    we re-validate to prevent path traversal even though we control the
+    naming scheme.
+    """
+    from fastapi.responses import Response
+
+    # Reject anything that isn't a basename (no '/', no '..', no absolute paths)
+    if "/" in filename or "\\" in filename or ".." in filename or filename.startswith("."):
+        raise PermissionError(f"Invalid upload filename: {filename!r}")
+    # Match the same allowed extensions as the upload endpoint
+    suffix = Path(filename).suffix.lower()
+    if suffix not in {".png", ".jpg", ".jpeg", ".gif", ".webp"}:
+        raise PermissionError(f"Disallowed extension: {suffix!r}")
+
+    # Use the same UPLOAD_DIR the channel module wrote to
+    from stock.channel import UPLOAD_DIR
+
+    image_path = Path(UPLOAD_DIR) / filename
+    if not image_path.exists() or not image_path.is_file():
+        raise FileNotFoundError(f"Upload not found: {filename}")
+
+    raw = image_path.read_bytes()
+    mime = {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".gif": "image/gif",
+        ".webp": "image/webp",
+    }[suffix]
+    return Response(content=raw, media_type=mime)
+
+
 def create_router() -> APIRouter:
     """FastAPI router for /sync/* endpoints (cloud_proxy mode)."""
     router = APIRouter(prefix="/sync", tags=["sync"])
@@ -257,6 +302,9 @@ def create_router() -> APIRouter:
     )
     router.add_api_route(
         "/replies", get_sync_replies, methods=["GET"], response_model=SyncRepliesResponse,
+    )
+    router.add_api_route(
+        "/upload/{filename}", get_sync_upload, methods=["GET"],
     )
     return router
 
@@ -326,14 +374,102 @@ def _set_last_pull_ts(conn: sqlite3.Connection, ts: str) -> None:
     conn.commit()
 
 
+_PENDING_VISION_RE = re.compile(
+    r"\[image_pending_local_vision\]\s+(\S+\.(?:png|jpg|jpeg|gif|webp))",
+    re.IGNORECASE,
+)
+
+
+def _fetch_remote_upload_and_run_vision(
+    *, base_url: str, token: str, filename: str, conn: sqlite3.Connection,
+    caption: str, recipient: str,
+) -> str:
+    """Pull the image bytes from Render's /sync/upload, save locally, run vision.
+
+    Returns the formatted feedback body to be written to wechat_feedback.md.
+    Falls back to a stub-formatted body on any failure (network, vision, etc.)
+    so the F13 pipeline still gets *something* to classify rather than nothing.
+    """
+    from stock.channel import UPLOAD_DIR
+    from stock.vision import extract_image_info, format_extraction_as_feedback
+
+    # Clean filename basename guard mirrors the server-side check
+    safe_name = Path(filename).name
+    local_dir = Path(UPLOAD_DIR)
+    local_dir.mkdir(parents=True, exist_ok=True)
+    local_path = local_dir / safe_name
+
+    if not local_path.exists():
+        # Pull binary from Render
+        try:
+            with httpx.Client(timeout=HTTP_TIMEOUT_SECS) as client:
+                resp = client.get(
+                    f"{base_url}/sync/upload/{safe_name}",
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+                resp.raise_for_status()
+                local_path.write_bytes(resp.content)
+                logger.info(
+                    "cloud_sync: pulled image %s (%d bytes) from Render",
+                    safe_name, len(resp.content),
+                )
+        except Exception as exc:
+            logger.warning(
+                "cloud_sync: failed to pull image %s from Render: %s",
+                safe_name, exc,
+            )
+            return (
+                f"[image] {safe_name} (download failed)\n"
+                + (f"[caption] {caption}\n" if caption else "")
+                + f"[recipient] {recipient}"
+            )
+
+    # Run vision LOCALLY where the API keys live
+    try:
+        extraction = extract_image_info(local_path, conn, caption=caption or "")
+        return format_extraction_as_feedback(
+            extraction, image_filename=safe_name, caption=caption or "",
+        )
+    except Exception:
+        logger.exception("cloud_sync: vision failed for %s", safe_name)
+        return (
+            f"[image] {safe_name} (vision failed)\n"
+            + (f"[caption] {caption}\n" if caption else "")
+            + f"[recipient] {recipient}"
+        )
+
+
 def _record_pulled_reply(
-    conn: sqlite3.Connection, recipient: str, body: str, created_at: str
+    conn: sqlite3.Connection, recipient: str, body: str, created_at: str,
+    *, base_url: str = "", token: str = "",
 ) -> None:
-    """Append the boss's reply to wechat_feedback.md so F13 picks it up next call."""
+    """Append the boss's reply to wechat_feedback.md so F13 picks it up next call.
+
+    F18b v2 image flow: when Render runs in cloud_proxy mode, an image upload
+    writes a body that starts with `[image_pending_local_vision] <filename>`
+    instead of running vision. Detect that marker, pull the binary from
+    Render's /sync/upload/{filename}, and replace the body with a proper
+    vision-extracted feedback string. F13 then sees real content, not the
+    pending placeholder.
+    """
     fp = Path(FEEDBACK_PATH)
     fp.parent.mkdir(parents=True, exist_ok=True)
     ts = (created_at or datetime.now(timezone.utc).isoformat())[:16]
-    quoted = "\n".join(f"> {line}" for line in body.splitlines())
+
+    # Detect a pending-vision marker and replace body with real extraction
+    actual_body = body
+    pending_match = _PENDING_VISION_RE.search(body)
+    if pending_match and base_url and token:
+        filename = pending_match.group(1)
+        # Parse caption from the marker block
+        caption_m = re.search(r"\[caption\]\s+(.+?)(?:\n|$)", body)
+        caption = caption_m.group(1).strip() if caption_m else ""
+        actual_body = _fetch_remote_upload_and_run_vision(
+            base_url=base_url, token=token, filename=filename, conn=conn,
+            caption=caption, recipient=recipient,
+        )
+
+    quoted = "\n".join(f"> {line}" for line in actual_body.splitlines())
     entry = (
         f"\n## {ts} -- {recipient}\n"
         f"**source**: cloud_channel\n\n"
@@ -404,6 +540,8 @@ def run_local_sync(conn: sqlite3.Connection) -> CloudSyncResult:
                     recipient=str(reply.get("recipient", "")),
                     body=str(reply.get("body", "")),
                     created_at=str(reply.get("created_at", "")),
+                    base_url=base_url,
+                    token=token,
                 )
                 replies_pulled += 1
 

@@ -31,6 +31,7 @@ from fastapi import APIRouter, Depends, File, Form, Header, Query, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 
+from stock.config import get_settings
 from stock.db import get_conn
 
 # F18: image upload feature -- the boss is lazy, snaps a screenshot, and the
@@ -413,14 +414,42 @@ async def post_upload_image(
         image_path, len(raw), recipient,
     )
 
-    # Extract structured info via the vision pipeline (best-effort, never raises)
-    extraction = extract_image_info(image_path, conn, caption=caption or "")
+    # When running as cloud_proxy (Render), DO NOT call vision -- Render has
+    # no Anthropic key by design (render.yaml: ANTHROPIC_API_KEY=""). Write a
+    # `[image_pending_local_vision]` marker; local laptop's cloud_sync will
+    # fetch the binary via /sync/upload/{filename}, run vision locally with
+    # its real keys, and write a proper extraction back. This keeps the
+    # "Render = passive proxy" design intent intact.
+    settings = get_settings()
+    is_cloud_proxy = (settings.stock_mode or "").strip().lower() == "cloud_proxy"
 
-    # Render as a typed-feedback string and append to wechat_feedback.md so the
-    # F13 pipeline finds it on its next sweep.
-    feedback_body = format_extraction_as_feedback(
-        extraction, image_filename=safe_filename, caption=caption or "",
-    )
+    if is_cloud_proxy:
+        # Skip vision entirely on Render. Local will do it.
+        feedback_body = (
+            f"[image_pending_local_vision] {safe_filename}\n"
+            + (f"[caption] {caption.strip()}\n" if caption.strip() else "")
+            + f"[recipient] {recipient}\n"
+            + f"[uploaded_at] {datetime.now(timezone.utc).isoformat(timespec='seconds')}"
+        )
+        extraction = type("StubExtraction", (), {
+            "backend": "deferred_to_local",
+            "description": f"Image stored on cloud proxy; awaiting local vision: {safe_filename}",
+            "suspected_topic": safe_filename,
+            "ticker_mentions": [],
+            "user_intent": "unknown",
+            "extracted_text": "",
+            "cost_usd": 0.0,
+        })()
+        logger.info(
+            "channel[cloud_proxy]: deferred vision for %s; local will pull via /sync/upload",
+            safe_filename,
+        )
+    else:
+        # Extract structured info via the vision pipeline (best-effort, never raises)
+        extraction = extract_image_info(image_path, conn, caption=caption or "")
+        feedback_body = format_extraction_as_feedback(
+            extraction, image_filename=safe_filename, caption=caption or "",
+        )
     feedback_path = Path(FEEDBACK_PATH)
     feedback_path.parent.mkdir(parents=True, exist_ok=True)
     now_min = datetime.now(timezone.utc).isoformat(timespec="minutes")

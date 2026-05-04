@@ -276,12 +276,14 @@ private fun LatestNoteCard(detail: StockClient.NoteDetail?) {
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = if (detail.kind == "deep_dive") "深挖" else "每日",
+                    text = kindLabel(detail.kind),
                     color = AccentOrange,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                 )
-                detail.topic?.let { Text("  •  $it", color = TextDim, fontSize = 12.sp) }
+                detail.topic?.let {
+                    Text("  •  ${cleanTopic(it)}", color = TextDim, fontSize = 12.sp)
+                }
                 detail.layerFocus?.let { Text("  •  $it", color = TextDim, fontSize = 12.sp) }
                 Spacer(Modifier.width(6.dp))
                 Text(formatTimestamp(detail.createdAt), color = TextDim, fontSize = 11.sp)
@@ -528,17 +530,19 @@ private fun HistoryItem(note: StockClient.NoteSummary, onClick: () -> Unit) {
             ) {
                 Text(
                     text = listOfNotNull(
-                        if (note.kind == "deep_dive") "深挖" else "每日",
-                        note.topic ?: note.layerFocus,
+                        kindLabel(note.kind),
+                        cleanTopic(note.topic) ?: note.layerFocus,
                     ).joinToString(" • "),
                     color = TextDim,
                     fontSize = 12.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Text(formatTimestamp(note.createdAt), color = TextDim, fontSize = 11.sp)
             }
             Spacer(Modifier.height(2.dp))
             Text(
-                text = note.bodyPreview,
+                text = cleanPreview(note.bodyPreview),
                 color = TextMain,
                 fontSize = 13.sp,
                 maxLines = 1,
@@ -587,6 +591,63 @@ private fun buildMarkdownTextView(ctx: Context): TextView {
         setTextColor(AndroidColor.parseColor("#E6EDF3"))
         setLineSpacing(0f, 1.25f)
     }
+}
+
+
+/**
+ * Map a research_reports.kind value to a short Chinese display label.
+ * Defaults to "每日" only for the actual daily research push; everything else
+ * (replies, discovery theses, grading, health checks, deep dives) gets its
+ * own tag so the boss can tell them apart in the history list.
+ */
+private fun kindLabel(kind: String): String = when (kind) {
+    "daily" -> "每日"
+    "deep_dive" -> "深挖"
+    "discovery_thesis" -> "前瞻"
+    "grading" -> "评分"
+    "health_check" -> "体检"
+    "reply" -> "回复"
+    else -> kind
+}
+
+
+/**
+ * Strip channel-internal markers from a topic string so the boss sees the
+ * caption (or a clean fragment) instead of `[caption]/[image]/[summary]/[topic]`
+ * plumbing. Returns null if input was null/blank after cleaning.
+ */
+private fun cleanTopic(topic: String?): String? {
+    if (topic.isNullOrBlank()) return null
+    val captionRe = Regex("""\[caption\]\s+(.+?)(?:\s+\[|\s*$)""")
+    val captionMatch = captionRe.find(topic)
+    if (captionMatch != null) {
+        return captionMatch.groupValues[1].trim().take(80)
+    }
+    // Otherwise: drop any `[xxx]` brackets and collapse whitespace
+    val cleaned = topic
+        .replace(Regex("""\[[a-z_]+\]"""), " ")
+        .replace(Regex("""\s+"""), " ")
+        .trim()
+    return if (cleaned.isEmpty()) null else cleaned.take(80)
+}
+
+
+/**
+ * Same cleanup for body previews. Replaces marker noise with prose.
+ */
+private fun cleanPreview(body: String?): String {
+    if (body.isNullOrBlank()) return ""
+    return body
+        .replace(Regex("""\[image_pending_local_vision\]\s+\S+"""), "[图片处理中…]")
+        .replace(Regex("""\[image\]\s+\S+\.png"""), "[图片]")
+        .replace(Regex("""\[caption\]\s+"""), "")
+        .replace(Regex("""\[summary\]\s+"""), "")
+        .replace(Regex("""\[topic\]\s+"""), "")
+        .replace(Regex("""\[ocr\]\s+"""), "")
+        .replace(Regex("""\[recipient\]\s+\S+"""), "")
+        .replace(Regex("""\[uploaded_at\]\s+\S+"""), "")
+        .replace(Regex("""\s+"""), " ")
+        .trim()
 }
 
 

@@ -11,8 +11,8 @@ android {
         applicationId = "com.stock.research"
         minSdk = 24
         targetSdk = 34
-        versionCode = 3
-        versionName = "0.4.0"
+        versionCode = 4
+        versionName = "0.4.1"
 
         // Strip a trailing "/channel/" or "/" so the user can paste either form
         // (we want just the host root for native API calls).
