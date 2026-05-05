@@ -177,19 +177,82 @@ def _latest_close(conn: sqlite3.Connection, ticker: str) -> float | None:
 
 
 def format_holdings_block(rows: list[Holding], conn: sqlite3.Connection) -> str:
-    """Render holdings as a bullet block with live P&L when prices available."""
+    """Render holdings as a markdown table with P&L + stop distance + alerts.
+
+    Boss explicitly asked for sell-trigger awareness on every holding. This block
+    is the at-a-glance risk dashboard that lands in every daily research note:
+
+      Ticker | Qty | Cost | Last | P&L | Recommended stop | Stop dist | 7d alerts | 14d anomaly
+
+    Stop distance is the gap between latest close and the F24 recommended stop
+    (negative = below stop, sell-trigger fired). 7d alerts is the count of
+    kind='alert' research_reports rows for the ticker in the last 7 days
+    (F28 keyword scan output). 14d anomaly is the most-recent flag_reason
+    in price_anomalies for this ticker, or '—'.
+
+    Notes column omitted from the table to keep it scannable; full notes
+    still live in data/holdings.yaml + the holdings table for context.
+    """
     if not rows:
         return "(no active holdings tracked yet)"
 
-    lines: list[str] = []
+    # Lazy imports to avoid cycles -- holdings is imported by many modules.
+    from datetime import datetime, timedelta, timezone
+    from stock.stops import compute_stop_loss
+
+    lines: list[str] = [
+        "| Ticker | Qty | Cost | Last | P&L | 推荐止损 | 距止损 | 7d alerts | 14d 异常 |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
+    ]
+    now = datetime.now(timezone.utc)
+    week_iso = (now - timedelta(days=7)).isoformat()
+    fortnight_date = (now - timedelta(days=14)).strftime("%Y-%m-%d")
+
     for h in rows:
         close = _latest_close(conn, h.ticker)
-        pnl_str = "P&L=N/A"
+        last_str = f"${close:.2f}" if close is not None else "N/A"
         if close is not None and h.cost_basis > 0:
             pnl_pct = (close - h.cost_basis) / h.cost_basis
-            pnl_str = f"P&L={pnl_pct * 100:+.1f}% (last={close:.2f})"
-        notes = f" -- {h.notes}" if h.notes else ""
+            pnl_str = f"{pnl_pct * 100:+.1f}%"
+        else:
+            pnl_str = "N/A"
+
+        # F24 stop-loss
+        stop = compute_stop_loss(h.ticker, conn)
+        if stop.recommended is not None and close is not None:
+            stop_str = f"${stop.recommended:.2f}"
+            stop_dist_pct = (close - stop.recommended) / close * 100
+            stop_dist_str = f"{stop_dist_pct:+.1f}%"
+            if stop_dist_pct <= 0:
+                stop_dist_str = f"⚠️ {stop_dist_str}"
+        else:
+            stop_str = "N/A"
+            stop_dist_str = "N/A"
+
+        # F28 alert count (last 7d)
+        alert_row = conn.execute(
+            "SELECT COUNT(*) FROM research_reports"
+            " WHERE kind = 'alert' AND COALESCE(topic, '') LIKE ?"
+            " AND created_at >= ?",
+            (f"{h.ticker}%", week_iso),
+        ).fetchone()
+        alert_count = int(alert_row[0]) if alert_row else 0
+        alert_str = f"⚠️ {alert_count}" if alert_count > 0 else "—"
+
+        # F12 anomaly (last 14d, most recent)
+        anom_row = conn.execute(
+            "SELECT ts, pct_change, flag_reason FROM price_anomalies"
+            " WHERE ticker = ? AND ts >= ? ORDER BY ts DESC LIMIT 1",
+            (h.ticker, fortnight_date),
+        ).fetchone()
+        if anom_row:
+            anom_str = f"[{anom_row[0]}] {anom_row[1] * 100:+.1f}% ({anom_row[2]})"
+        else:
+            anom_str = "—"
+
+        cost_str = f"${h.cost_basis:.2f}" if h.cost_basis > 0 else "N/A"
         lines.append(
-            f"- {h.ticker} | qty={h.qty:g} | cost={h.cost_basis:.2f} | {pnl_str}{notes}"
+            f"| {h.ticker} | {h.qty:g} | {cost_str} | {last_str} | {pnl_str}"
+            f" | {stop_str} | {stop_dist_str} | {alert_str} | {anom_str} |"
         )
     return "\n".join(lines)

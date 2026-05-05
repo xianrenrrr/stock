@@ -126,7 +126,9 @@ def test_format_holdings_block_with_pnl(mem_db: sqlite3.Connection) -> None:
     out = format_holdings_block(rows, mem_db)
     assert "NVDA" in out
     assert "+20.0%" in out
-    assert "core" in out
+    # F27 enhancement: notes column dropped from the table to keep it scannable;
+    # full notes still live in holdings.yaml + DB. Block now has table headers.
+    assert "Ticker" in out
 
 
 def test_format_holdings_block_without_price(mem_db: sqlite3.Connection) -> None:
