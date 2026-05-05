@@ -116,6 +116,107 @@ def test_chinese_keywords_fire(mem_db: sqlite3.Connection) -> None:
     assert out.get("SMCI", 0) == 1
 
 
+def _seed_holding_with_cost(
+    conn: sqlite3.Connection, *, ticker: str = "SMCI", cost_basis: float = 100.0,
+) -> None:
+    """Seed an active holding with a real cost basis (not the placeholder $0)."""
+    now = datetime.now(timezone.utc).isoformat()
+    conn.execute(
+        "INSERT INTO holdings (ticker, qty, cost_basis, opened_at, notes,"
+        " active, updated_at) VALUES (?, ?, ?, ?, '', 1, ?)",
+        (ticker, 1.0, cost_basis, now[:10], now),
+    )
+    conn.commit()
+
+
+def _seed_prices(
+    conn: sqlite3.Connection, ticker: str, latest_close: float,
+) -> None:
+    """Insert 30 stable bars at $100 then a final bar at the requested close.
+
+    Stable history makes the F24 ATR + swing-low predictable so the test only
+    needs to think about the cost-anchored breach trigger.
+    """
+    base = datetime.now(timezone.utc) - timedelta(days=30)
+    for i in range(29):
+        ts = (base + timedelta(days=i)).strftime("%Y-%m-%d")
+        conn.execute(
+            "INSERT OR REPLACE INTO prices (ticker, ts, o, h, l, c, v)"
+            " VALUES (?, ?, 100, 102, 98, 100, 1000000)",
+            (ticker, ts),
+        )
+    last_ts = (base + timedelta(days=29)).strftime("%Y-%m-%d")
+    conn.execute(
+        "INSERT OR REPLACE INTO prices (ticker, ts, o, h, l, c, v)"
+        " VALUES (?, ?, 100, 100, ?, ?, 1000000)",
+        (ticker, last_ts, latest_close, latest_close),
+    )
+    conn.commit()
+
+
+def test_stop_breach_above_cost_15pct_no_alert(mem_db: sqlite3.Connection) -> None:
+    """Latest close above cost*0.85 (and above F24 stop) -> no breach."""
+    _seed_holding_with_cost(mem_db, cost_basis=100.0)
+    _seed_prices(mem_db, "SMCI", latest_close=99.0)  # only -1% from cost
+    out = alerts.scan_holdings_for_stop_breach(mem_db)
+    assert "SMCI" not in out
+
+
+def test_stop_breach_below_cost_15pct_fires_alert(
+    mem_db: sqlite3.Connection,
+) -> None:
+    """Latest close < cost*0.85 -> cost-anchored breach fires."""
+    _seed_holding_with_cost(mem_db, cost_basis=100.0)
+    _seed_prices(mem_db, "SMCI", latest_close=80.0)  # -20%, below cost*0.85=$85
+    out = alerts.scan_holdings_for_stop_breach(mem_db)
+    assert "SMCI" in out
+    rows = mem_db.execute(
+        "SELECT topic, body FROM research_reports WHERE kind = 'alert'"
+        " AND topic LIKE 'SMCI stop-breach%'"
+    ).fetchall()
+    assert len(rows) == 1
+    assert "-15% from cost" in rows[0][0]
+    assert "Stop-loss breach" in rows[0][1]
+
+
+def test_stop_breach_skipped_when_cost_basis_unset(
+    mem_db: sqlite3.Connection,
+) -> None:
+    """Placeholder cost_basis=0 disables the cost-anchored trigger."""
+    _seed_holding(mem_db, "SMCI")  # cost_basis defaults to 0.0
+    _seed_prices(mem_db, "SMCI", latest_close=10.0)  # huge "loss" but no anchor
+    out = alerts.scan_holdings_for_stop_breach(mem_db)
+    # No cost anchor + recommended stop floats with the crash -> no breach
+    # (operator must update cost_basis before mechanical breach can fire)
+    assert "SMCI" not in out
+
+
+def test_stop_breach_dedupes_at_same_close(mem_db: sqlite3.Connection) -> None:
+    """Re-running scan at the same breached close doesn't re-alert."""
+    _seed_holding_with_cost(mem_db, cost_basis=100.0)
+    _seed_prices(mem_db, "SMCI", latest_close=80.0)
+    first = alerts.scan_holdings_for_stop_breach(mem_db)
+    second = alerts.scan_holdings_for_stop_breach(mem_db)
+    assert "SMCI" in first
+    assert "SMCI" not in second
+
+
+def test_stop_breach_re_alerts_on_lower_close(mem_db: sqlite3.Connection) -> None:
+    """A FRESH lower close after a breach re-alerts."""
+    _seed_holding_with_cost(mem_db, cost_basis=100.0)
+    _seed_prices(mem_db, "SMCI", latest_close=80.0)
+    first = alerts.scan_holdings_for_stop_breach(mem_db)
+    # Drop the close further
+    last_ts = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
+    mem_db.execute(
+        "UPDATE prices SET c = 70, l = 70 WHERE ticker = 'SMCI' AND ts = ?",
+        (last_ts,),
+    )
+    mem_db.commit()
+    second = alerts.scan_holdings_for_stop_breach(mem_db)
+    assert "SMCI" in first and "SMCI" in second
+
+
 def test_only_active_holdings_scanned(mem_db: sqlite3.Connection) -> None:
     """Inactive / non-holdings tickers don't get scanned."""
     _seed_holding(mem_db, "SMCI")

@@ -240,11 +240,160 @@ def write_alert_note(
     return rid
 
 
+def _stop_breach_key(ticker: str) -> str:
+    """cloud_sync_state key naming for the stop-breach high-water-mark.
+    We track the last close that triggered an alert per ticker so we don't
+    re-alert on every tick after a single breach event."""
+    return f"alerts_stop_breach_last_alerted_{ticker.upper()}"
+
+
+def scan_holdings_for_stop_breach(
+    conn: sqlite3.Connection,
+) -> dict[str, str]:
+    """F32: write a kind='alert' row when latest close breaches a holding's stop.
+
+    Two breach checks per holding (alert fires if EITHER triggers):
+      1. **Cost-anchored breach** (primary): latest close < cost_basis * 0.85.
+         Fixed -15% mechanical stop from entry; doesn't drift as the F24
+         stop-helper adapts to fresh lows. Skipped if cost_basis == 0
+         (placeholder pending operator update).
+      2. **Recommended-stop breach** (secondary): latest close < F24
+         recommended stop AND that stop is below entry (so the helper
+         actually has a defensible level). Catches volatility-tightened
+         stops the operator can't see at-a-glance.
+
+    Idempotent: persists the alerted close in cloud_sync_state so re-runs
+    at the same or higher close don't spam alerts. New alert fires only on
+    a fresh lower close.
+
+    Returns {ticker: breach_message}.
+    """
+    from stock.stops import compute_stop_loss
+
+    out: dict[str, str] = {}
+    active = holdings.list_holdings(conn, active_only=True)
+    for h in active:
+        try:
+            stop = compute_stop_loss(h.ticker, conn)
+            if stop.entry_price is None:
+                continue
+
+            close = stop.entry_price
+            cost_stop = (h.cost_basis * 0.85) if h.cost_basis > 0 else None
+            rec_stop = stop.recommended if (
+                stop.recommended is not None and stop.recommended < close
+            ) else None
+
+            # Determine the "active" stop that fires the breach
+            triggered_stop: float | None = None
+            triggered_label: str = ""
+            if cost_stop is not None and close < cost_stop:
+                triggered_stop = cost_stop
+                triggered_label = f"-15% from cost ${h.cost_basis:.2f}"
+            elif rec_stop is not None and close < rec_stop:
+                triggered_stop = rec_stop
+                triggered_label = "F24 recommended stop"
+
+            if triggered_stop is None:
+                # Above all stops -- reset the high-water-mark so a future
+                # breach triggers cleanly without dedup interference.
+                conn.execute(
+                    "DELETE FROM cloud_sync_state WHERE key = ?",
+                    (_stop_breach_key(h.ticker),),
+                )
+                conn.commit()
+                continue
+
+            # Dedup: only re-alert if today's close is LOWER than the last alert
+            row = conn.execute(
+                "SELECT value FROM cloud_sync_state WHERE key = ?",
+                (_stop_breach_key(h.ticker),),
+            ).fetchone()
+            last_alerted_close = float(row[0]) if row else float("inf")
+            if close >= last_alerted_close:
+                continue
+
+            now = datetime.now(timezone.utc).isoformat()
+            conn.execute(
+                "INSERT INTO cloud_sync_state (key, value, updated_at)"
+                " VALUES (?, ?, ?) ON CONFLICT(key)"
+                " DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+                (_stop_breach_key(h.ticker), str(close), now),
+            )
+
+            # Compose alert body
+            cost_str = f"${h.cost_basis:.2f}" if h.cost_basis > 0 else "(unset)"
+            pnl_str = "(unset)"
+            if h.cost_basis > 0:
+                pnl_pct = (close - h.cost_basis) / h.cost_basis * 100
+                pnl_str = f"{pnl_pct:+.1f}%"
+            breach_pct = (triggered_stop - close) / triggered_stop * 100
+            body_lines = [
+                f"# 🚨 止损触发 / Stop-loss breach -- {h.ticker}",
+                "",
+                f"**Latest close ${close:.2f} is BELOW the {triggered_label} of "
+                f"${triggered_stop:.2f}** (gap: -{breach_pct:.2f}%).",
+                "",
+                "## Position",
+                f"- qty: {h.qty:g}",
+                f"- cost basis: {cost_str}",
+                f"- P&L vs cost: {pnl_str}",
+                "",
+                "## Stop-loss components (F24, recomputed)",
+            ]
+            if stop.atr_20 is not None:
+                body_lines.append(f"- ATR(20): ${stop.atr_20:.2f}")
+            if stop.atr_stop is not None:
+                body_lines.append(f"- ATR-stop (2x): ${stop.atr_stop:.2f}")
+            if stop.swing_low_30d is not None:
+                body_lines.append(f"- 30d swing-low: ${stop.swing_low_30d:.2f}")
+            if stop.percent_stop is not None:
+                body_lines.append(f"- -15% percent stop: ${stop.percent_stop:.2f}")
+            if stop.recommended is not None:
+                body_lines.append(f"- **Recommended (live): ${stop.recommended:.2f}**")
+            body_lines += [
+                "",
+                "## What this means",
+                "The mechanical stop-loss was breached at the latest daily close.",
+                "Either the trade thesis is broken or this is a volatility shakeout.",
+                "The system does NOT auto-sell -- you decide.",
+                "",
+                "_Stop-loss breach alert from F32. Cross-reference today's news + the",
+                "holdings_block in the next research note before acting._",
+                "",
+                "Not financial advice.",
+            ]
+            body = "\n".join(body_lines)
+            cursor = conn.execute(
+                "INSERT INTO research_reports"
+                " (kind, topic, layer_focus, body, cost_usd, created_at)"
+                " VALUES ('alert', ?, NULL, ?, 0, ?)",
+                (
+                    f"{h.ticker} stop-breach: ${close:.2f} < ${triggered_stop:.2f} ({triggered_label})",
+                    body, now,
+                ),
+            )
+            conn.commit()
+            rid = int(cursor.lastrowid or 0)
+            msg = (
+                f"close=${close:.2f} stop=${triggered_stop:.2f} ({triggered_label})"
+                f" breach=-{breach_pct:.1f}% -> alert id={rid}"
+            )
+            out[h.ticker] = msg
+            logger.warning("ALERT: %s stop-loss breach %s", h.ticker, msg)
+        except Exception:
+            logger.exception("alerts: stop-breach scan failed for %s", h.ticker)
+    return out
+
+
 def scan_all_holdings(conn: sqlite3.Connection) -> dict[str, int]:
     """Scan every active holding's news for sell-triggers; write alert notes.
 
     Returns {ticker: alert_count} so the orchestrator can log a one-line summary.
     Best-effort: per-ticker exceptions are logged and don't abort the loop.
+
+    Also runs the F32 stop-breach scan in the same call so a single
+    orchestrator hook covers both keyword-driven AND mechanical alerts.
     """
     counts: dict[str, int] = {}
     active = holdings.list_holdings(conn, active_only=True)
@@ -259,5 +408,14 @@ def scan_all_holdings(conn: sqlite3.Connection) -> dict[str, int]:
                 if rid is not None:
                     counts[h.ticker] = len(alerts)
         except Exception:
-            logger.exception("alerts: scan failed for %s", h.ticker)
+            logger.exception("alerts: keyword-scan failed for %s", h.ticker)
+
+    # F32: mechanical stop-breach scan (close <= recommended stop)
+    try:
+        breaches = scan_holdings_for_stop_breach(conn)
+        for ticker in breaches:
+            counts[ticker] = counts.get(ticker, 0) + 1
+    except Exception:
+        logger.exception("alerts: stop-breach scan raised at top level")
+
     return counts
