@@ -465,6 +465,73 @@ def recent_events_block(
     return "\n".join(lines)
 
 
+_NEW_EVENT_RE = __import__("re").compile(
+    r"^\s*\[NEW EVENT\]\s*"
+    r"(?P<ticker>[A-Z0-9\.]+)\s*\|\s*"
+    r"(?P<event_type>[a-z_]+)\s*\|\s*"
+    r"(?P<title>[^|]+?)\s*\|\s*"
+    r"(?P<outcome>[^|]+?)\s*\|\s*"
+    r"(?P<window_start>\d{4}-\d{2}-\d{2})\s*\|\s*"
+    r"(?P<window_end>\d{4}-\d{2}-\d{2})\s*\|\s*"
+    r"(?P<conf>0?\.\d+|1\.0+|0|1)\s*$",
+    __import__("re").IGNORECASE | __import__("re").MULTILINE,
+)
+
+
+def extract_events_from_research(
+    body: str, conn: sqlite3.Connection, *, source_research_id: int | None = None,
+) -> list[TrackedEvent]:
+    """Parse '[NEW EVENT] ticker | type | title | outcome | start | end | conf'
+    lines emitted by the research-note LLM and add them to tracked_events.
+
+    The research prompt asks the LLM to use that exact format whenever it
+    predicts a new catalyst event. This function turns those lines into real
+    rows so the next-day prompt sees them in the recent_events_block + the
+    nightly verify job grades them when their window closes.
+
+    Idempotent on duplicates: same ticker + title + window_end is skipped.
+    """
+    if not body:
+        return []
+    inserted: list[TrackedEvent] = []
+    for match in _NEW_EVENT_RE.finditer(body):
+        ticker = match.group("ticker").upper()
+        event_type = match.group("event_type").lower()
+        title = match.group("title").strip()[:200]
+        outcome = match.group("outcome").strip()[:500]
+        ws = match.group("window_start") + "T00:00:00+00:00"
+        we = match.group("window_end") + "T23:59:59+00:00"
+        try:
+            conf = float(match.group("conf"))
+        except ValueError:
+            conf = 0.5
+
+        # De-duplicate against existing events with the same ticker + title
+        existing = conn.execute(
+            "SELECT 1 FROM tracked_events"
+            " WHERE ticker = ? AND title = ? AND window_end = ?",
+            (ticker, title, we),
+        ).fetchone()
+        if existing:
+            continue
+
+        try:
+            ev = add_event(
+                conn, ticker=ticker, event_type=event_type, title=title,
+                predicted_outcome=outcome,
+                window_start=ws, window_end=we,
+                confidence=conf, source_research_id=source_research_id,
+            )
+            inserted.append(ev)
+            logger.info(
+                "events.extract: added #%d %s %s -> window_end=%s",
+                ev.id, ticker, event_type, we[:10],
+            )
+        except Exception:
+            logger.exception("events.extract: insert failed for %s | %s", ticker, title)
+    return inserted
+
+
 def event_calibration_summary(
     conn: sqlite3.Connection, *, lookback_days: int = 90,
 ) -> dict[str, float | int]:

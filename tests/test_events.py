@@ -182,6 +182,62 @@ def test_calibration_summary_aggregates_resolved(mem_db: sqlite3.Connection) -> 
     assert s["hit_rate"] == pytest.approx(0.5)
 
 
+def test_extract_events_from_research_parses_lines(mem_db: sqlite3.Connection) -> None:
+    """`[NEW EVENT] ticker | type | title | outcome | start | end | conf` lines
+    in a research-note body are parsed into tracked_events rows."""
+    from stock.events import extract_events_from_research
+
+    # Foreign key requires research_reports.id to exist before tracked_events
+    # can reference it, so insert a parent row first.
+    cur = mem_db.execute(
+        "INSERT INTO research_reports (kind, body, cost_usd, created_at)"
+        " VALUES ('daily', 'stub body', 0, ?)",
+        (datetime.now(timezone.utc).isoformat(),),
+    )
+    parent_id = int(cur.lastrowid)
+    mem_db.commit()
+
+    body = """
+    Some research note prose...
+    [NEW EVENT] NVDA | earnings | Q3 fiscal print | Revenue beat 5%+ and FY guide raise | 2026-08-15 | 2026-08-30 | 0.7
+    More prose.
+    [NEW EVENT] SMCI | guidance | FY26 capex guide upgrade | $200B+ FY guide | 2026-05-10 | 2026-06-01 | 0.55
+    Conclusion.
+    """
+    new_events = extract_events_from_research(body, mem_db, source_research_id=parent_id)
+    assert len(new_events) == 2
+    assert {e.ticker for e in new_events} == {"NVDA", "SMCI"}
+    nvda = next(e for e in new_events if e.ticker == "NVDA")
+    assert nvda.event_type == "earnings"
+    assert nvda.confidence == pytest.approx(0.7)
+    assert nvda.source_research_id == parent_id
+
+
+def test_extract_events_dedupes_existing(mem_db: sqlite3.Connection) -> None:
+    """Re-running extract on the same body doesn't double-insert."""
+    from stock.events import extract_events_from_research
+
+    body = "[NEW EVENT] NVDA | earnings | Q3 fiscal print | beat | 2026-08-15 | 2026-08-30 | 0.7"
+    first = extract_events_from_research(body, mem_db)
+    second = extract_events_from_research(body, mem_db)
+    assert len(first) == 1
+    assert len(second) == 0
+
+
+def test_extract_events_skips_malformed(mem_db: sqlite3.Connection) -> None:
+    """Lines not matching the strict format are silently ignored."""
+    from stock.events import extract_events_from_research
+
+    body = """
+    [NEW EVENT] NVDA earnings missing pipes
+    [NEW EVENT] AMD | earnings | title | outcome | bad-date | 2026-09-01 | 0.5
+    [NEW EVENT] TSM | earnings | clean | outcome | 2026-08-15 | 2026-08-30 | 0.6
+    """
+    new_events = extract_events_from_research(body, mem_db)
+    assert len(new_events) == 1
+    assert new_events[0].ticker == "TSM"
+
+
 def test_recent_events_block_renders_table(mem_db: sqlite3.Connection) -> None:
     """recent_events_block has the column headers and a row per event."""
     _add(mem_db, ticker="NVDA")

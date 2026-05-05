@@ -34,7 +34,11 @@ from stock.models import (
 )
 from stock.score import build_report, format_report
 from stock.discovery_engine import format_candidates_block, list_candidates
-from stock.events import event_calibration_summary, recent_events_block
+from stock.events import (
+    event_calibration_summary,
+    extract_events_from_research,
+    recent_events_block,
+)
 from stock.secular import (
     format_theme_block,
     load_themes,
@@ -488,6 +492,21 @@ def generate_daily_research(
                 )
     except Exception:
         logger.exception("action_queue auto-enqueue failed (non-fatal)")
+
+    # F26: parse `[NEW EVENT] ticker | type | title | outcome | start | end | conf`
+    # lines from the body and add them to tracked_events so the next-day note
+    # sees them in the recent_events_block + nightly verify grades them.
+    try:
+        new_events = extract_events_from_research(
+            body, conn, source_research_id=research_id,
+        )
+        if new_events:
+            logger.info(
+                "events: extracted %d new tracked event(s) from research %d",
+                len(new_events), research_id,
+            )
+    except Exception:
+        logger.exception("events auto-extract failed (non-fatal)")
 
     return ResearchReport(
         research_id=research_id,

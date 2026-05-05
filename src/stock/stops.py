@@ -150,6 +150,10 @@ def format_stop_loss_block(
     """
     if not tickers:
         return "(no tickers to compute stops for)"
+
+    def _cell(value: float | None, *, prefix: str = "$") -> str:
+        return f"{prefix}{value:.2f}" if value is not None else "N/A"
+
     lines = ["| Ticker | Entry | ATR(20) | ATR stop | 30d swing-low | -15% | Recommended |",
              "| --- | ---: | ---: | ---: | ---: | ---: | ---: |"]
     for t in tickers:
@@ -157,12 +161,14 @@ def format_stop_loss_block(
         if s.entry_price is None:
             lines.append(f"| {t} | N/A -- needs data | | | | | |")
             continue
+        rec = f"**${s.recommended:.2f}**" if s.recommended is not None else "N/A"
         lines.append(
-            f"| {t} | ${s.entry_price:.2f}"
-            f" | ${s.atr_20:.2f}" if s.atr_20 is not None else " | N/A"
-            f" | ${s.atr_stop:.2f}" if s.atr_stop is not None else " | N/A"
-            f" | ${s.swing_low_30d:.2f}" if s.swing_low_30d is not None else " | N/A"
-            f" | ${s.percent_stop:.2f}"
-            f" | **${s.recommended:.2f}** |"
+            f"| {t} "
+            f"| {_cell(s.entry_price)} "
+            f"| {_cell(s.atr_20)} "
+            f"| {_cell(s.atr_stop)} "
+            f"| {_cell(s.swing_low_30d)} "
+            f"| {_cell(s.percent_stop)} "
+            f"| {rec} |"
         )
     return "\n".join(lines)
