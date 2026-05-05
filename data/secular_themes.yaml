@@ -99,7 +99,7 @@ themes:
       - {ticker: MO,    name: Altria,                 thesis: "Vice + dividend; recession-resistant"}
       - {ticker: UPST,  name: Upstart,                thesis: "AI credit decisioning -- displacement TO AI, not BY AI"}
       - {ticker: INTU,  name: Intuit (Quickbooks AI), thesis: "SMB autoworking; replaces the bookkeeper that closed shop"}
-      - {ticker: HUMR,  name: HumanaR (Humana),       thesis: "Medicaid managed care expansion as safety-net swells"}
+      - {ticker: HUM,   name: Humana,                 thesis: "Medicaid managed care expansion as safety-net swells"}
       - {ticker: CNC,   name: Centene,                thesis: "Same -- Medicaid managed care, government-backed revenue"}
       - {ticker: WMT,   name: Walmart,                thesis: "Trade-down beneficiary + employs displaced workers"}
     losers:

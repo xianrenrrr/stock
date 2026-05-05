@@ -111,6 +111,11 @@ def test_job_ingest_and_extract_processes_all(
     """Calls fetch_news, fetch_prices, extract_features for each ticker."""
     _add_watchlist_ticker(mock_conn, "AAPL")
     _add_watchlist_ticker(mock_conn, "NVDA")
+    # F29: pin the ingest universe so secular themes + holdings don't bloat
+    # this unit test (which is asserting on call ordering).
+    monkeypatch.setattr(
+        "stock.orchestrator._get_ingest_universe", lambda c: ["AAPL", "NVDA"],
+    )
 
     news_calls: list[str] = []
     prices_calls: list[str] = []
@@ -123,6 +128,10 @@ def test_job_ingest_and_extract_processes_all(
     )
     monkeypatch.setattr(
         "stock.orchestrator.extract_features", lambda t, c: features_calls.append(t)
+    )
+    # F28: holding scan runs after ingest; mock it so the test stays focused
+    monkeypatch.setattr(
+        "stock.orchestrator.alerts.scan_all_holdings", lambda c: {},
     )
 
     _job_ingest_and_extract()
@@ -162,6 +171,12 @@ def test_job_ingest_and_extract_single_error_continues(
     """RuntimeError on first ticker does not block second ticker."""
     _add_watchlist_ticker(mock_conn, "AAPL")
     _add_watchlist_ticker(mock_conn, "NVDA")
+    monkeypatch.setattr(
+        "stock.orchestrator._get_ingest_universe", lambda c: ["AAPL", "NVDA"],
+    )
+    monkeypatch.setattr(
+        "stock.orchestrator.alerts.scan_all_holdings", lambda c: {},
+    )
 
     call_count = {"news": 0}
 
@@ -183,10 +198,12 @@ def test_job_ingest_and_extract_single_error_continues(
 def test_job_ingest_and_extract_empty_watchlist(
     mock_conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """No pipeline calls when watchlist is empty."""
+    """No pipeline calls when ingest universe is empty."""
     news_mock = MagicMock()
     monkeypatch.setattr("stock.orchestrator.fetch_news", news_mock)
-    monkeypatch.setattr("stock.orchestrator.WATCHLIST_PATH", "/nonexistent/path.yaml")
+    # F29 ingest universe pulls from watchlist + holdings + secular_themes;
+    # pin to empty for this no-op test.
+    monkeypatch.setattr("stock.orchestrator._get_ingest_universe", lambda c: [])
 
     _job_ingest_and_extract()
 

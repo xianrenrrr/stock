@@ -607,6 +607,7 @@ private fun kindLabel(kind: String): String = when (kind) {
     "grading" -> "评分"
     "health_check" -> "体检"
     "reply" -> "回复"
+    "alert" -> "⚠️ 警报"
     else -> kind
 }
 
