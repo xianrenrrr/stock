@@ -34,6 +34,13 @@ from stock.models import (
 )
 from stock.score import build_report, format_report
 from stock.discovery_engine import format_candidates_block, list_candidates
+from stock.events import event_calibration_summary, recent_events_block
+from stock.secular import (
+    format_theme_block,
+    load_themes,
+    pick_focus_theme,
+)
+from stock.stops import format_stop_loss_block
 from stock.thesis import compute_thesis_stats, format_thesis_block
 from stock.supply_chain import (
     Layer,
@@ -363,6 +370,41 @@ def generate_daily_research(
     discovery_block = format_candidates_block(
         list_candidates(conn, status="candidate", limit=5)
     )
+
+    # F26: tracked events -- pending + recently-verified, plus a calibration
+    # summary so the LLM sees its own hit-rate and can self-correct confidence.
+    events_block = recent_events_block(conn, lookback_days=30, limit=12)
+    cal = event_calibration_summary(conn, lookback_days=90)
+    events_calibration = (
+        f"Last 90d: {cal['total_resolved']} resolved, {cal['hits']} hits "
+        f"({cal['hit_rate']:.0%}), avg confidence-on-resolve {cal['avg_confidence_when_resolved']:.2f}"
+        if cal["total_resolved"] else
+        "(no resolved events in last 90d -- still building calibration baseline)"
+    )
+
+    # F25: rotate one non-AI long-horizon theme into every note. Boss explicitly
+    # asked for "hidden gems not driven by AI but by things you believe gonna
+    # happen in the next 5-10 years -- China aging, US wealth inequality, AI
+    # displacement / consumer crisis." Themes live in data/secular_themes.yaml;
+    # rotation is by day-of-year so each theme gets ~73 days/year of airtime.
+    secular_focus = pick_focus_theme(load_themes(), now=now)
+    secular_block = format_theme_block(secular_focus)
+
+    # F24: pre-compute stop-loss prices for every watchlist + secular ticker the
+    # note will mention, so the LLM cites real ATR-based + swing-low + percent
+    # stops instead of generic "set a stop" boilerplate. Boss explicitly asked
+    # for stop-loss on every recommendation.
+    stop_loss_tickers: list[str] = []
+    rows_for_stops = conn.execute(
+        "SELECT ticker FROM watchlist WHERE active = 1 ORDER BY ticker"
+    ).fetchall()
+    stop_loss_tickers.extend(str(r[0]) for r in rows_for_stops)
+    if secular_focus is not None:
+        for pick in secular_focus.beneficiaries[:4]:
+            t = pick.ticker.upper()
+            if t and t not in stop_loss_tickers:
+                stop_loss_tickers.append(t)
+    stop_loss_block = format_stop_loss_block(conn, stop_loss_tickers[:30])
     feedback_block = recent_feedback_block()
     anomaly_block = format_anomaly_block(recent_anomalies(conn, days=2))
     previous_followups_block = action_queue.format_previous_followups(
@@ -398,6 +440,10 @@ def generate_daily_research(
         conversation_context_block=conversation_context_block,
         thesis_block=thesis_block,
         discovery_block=discovery_block,
+        secular_block=secular_block,
+        stop_loss_block=stop_loss_block,
+        events_block=events_block,
+        events_calibration=events_calibration,
         max_chars=max_chars,
     )
 

@@ -259,6 +259,31 @@ CREATE TABLE IF NOT EXISTS cloud_sync_state (
     updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS tracked_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticker TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    predicted_outcome TEXT NOT NULL,
+    window_start TEXT NOT NULL,
+    window_end TEXT NOT NULL,
+    confidence REAL NOT NULL DEFAULT 0.5,
+    status TEXT NOT NULL DEFAULT 'pending',
+    actual_outcome TEXT,
+    evidence_text TEXT,
+    evidence_source TEXT,
+    evidence_url TEXT,
+    source_research_id INTEGER REFERENCES research_reports(id),
+    verdict_at TEXT,
+    notes TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_tracked_events_status
+    ON tracked_events (status, window_end);
+CREATE INDEX IF NOT EXISTS idx_tracked_events_ticker
+    ON tracked_events (ticker, status);
+
 CREATE TABLE IF NOT EXISTS discovery_candidates (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ticker TEXT NOT NULL,

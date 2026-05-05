@@ -49,6 +49,40 @@ ticker | FWP score | QAP gate | insider score (cluster size) | 8-K novelty | red
 **Pull at least 1-2 of these into "二阶受益" or "重点跟踪" with concrete thesis + invalidation criteria.** Boss explicitly wants forward-looking calls, not lagging recap.
 {discovery_block}
 
+## 跟踪事件 / Tracked event predictions (with verdicts where available)
+The system maintains a structured calendar of predicted catalyst events and
+grades them against post-window news. The table below shows pending events
+(still in their window) and recently-resolved events (hit / miss / partial /
+expired) so the LLM sees its own track record.
+
+**Calibration**: {events_calibration}
+
+{events_block}
+
+**Rules for today's note**:
+- For ANY ticker you mention with a catalyst, check whether a pending event
+  already exists for it -- if so, REFERENCE the event id (e.g. "see event #5")
+  rather than creating a duplicate.
+- If you predict a NEW catalyst event for a watchlist or secular ticker,
+  state it in this exact format on its own line so the operator can add it via
+  CLI: `[NEW EVENT] ticker | event_type | title | predicted_outcome | window_start (YYYY-MM-DD) | window_end (YYYY-MM-DD) | confidence (0.0-1.0)`
+- If the calibration shows a low hit-rate (<40% with confidence > 0.5),
+  flag this in section 5 (Risks) -- the model is over-confident.
+
+## 长期主题 / Today's secular long-horizon focus (5-10y)
+Outside the AI capex narrative, ONE long-horizon megatrend rotates each day so
+the boss has non-AI hidden-gem exposure. Today's focus is below. Pull 1-2 names
+from the long beneficiaries into the FINAL section "长期受益 / Secular long picks"
+with a stop-loss price (use stop-loss reference table below).
+{secular_block}
+
+## 止损参考 / Pre-computed stop-loss reference table
+For every ticker on watchlist + today's secular theme, this table shows ATR-based,
+30d-swing-low, and -15% percent stops. **Cite the Recommended column when emitting
+any long suggestion.** Never invent a stop-loss price -- use these or write
+"N/A -- needs data".
+{stop_loss_block}
+
 ## Today's focus-layer players
 {focus_layer_players}
 
@@ -72,10 +106,16 @@ output, more A-share names, less rationale, etc., honor the request in this push
 Produce a daily AI-supply-chain research note with the following sections, in {language}:
 
 1. **今日主线 / Theme of the day** — one paragraph naming the dominant AI capex narrative right now and which layer is most exposed.
-2. **重点跟踪 / Watchlist call-outs** — for each ticker on the watchlist with a fresh prediction or unusual news flow, give 1-2 lines: direction lean, key catalyst, what would invalidate.
+2. **重点跟踪 / Watchlist call-outs** — markdown table with these EXACT columns:
+   `Ticker | 方向倾向 / Direction | 催化剂 / Catalyst | 失效 / Invalidation | 止损 / Stop loss`
+   For the Stop loss column, use the Recommended price from the 止损参考 table above.
+   Never write "set a stop" -- emit a real number like "$24.50" or
+   "N/A -- needs data". This is a hard requirement from the boss.
 3. **{focus_layer_name} 深挖 / Layer deep-dive** — pick 2-3 players inside today's focus layer that look most exposed to the current narrative. For each: role in the chain, why now, key risk.
 4. **二阶受益 / Second-derivative ideas** — surface one or two small/mid-cap names two or more layers below the headline driver that could move asymmetrically (the PAM4-DSP / TFLN / InP analogue). **Cross-reference the 前瞻发现 / Forward-discovery candidates block above** — if any high-FWP candidate fits the second-derivative thesis, name it with its FWP score and the specific leading indicator (e.g. "AVGO 内部人聚集买入 5位 + 8-K 新颖度 0.78").
 5. **风险与对冲 / Risk and hedge** — biggest risk to today's setup; a paired short or hedge if obvious.
-6. **AI 自动跟进 / Auto-queued follow-ups** — 2-4 concrete deep-dive topics you want the system to research before the next push. Phrase each as a standalone topic (e.g. "TER WFE bookings vs Q3 guidance", "300308.SZ HBM capacity ramp"). The system will run each as a deep-dive and feed the result back into the next note.
+6. **长期受益 / Secular long picks (today's rotating theme)** — pick 1-2 names from the secular theme block above (NOT AI-supply-chain). For each: ticker | 论点 | catalyst window (5-10y) | 监控指标 (1-2 leading indicators from the block) | 止损价格. These are the "hidden gems" outside the AI narrative the boss explicitly asked for.
+
+7. **AI 自动跟进 / Auto-queued follow-ups** — 2-4 concrete deep-dive topics you want the system to research before the next push. Phrase each as a standalone topic (e.g. "TER WFE bookings vs Q3 guidance", "300308.SZ HBM capacity ramp"). The system will run each as a deep-dive and feed the result back into the next note.
 
 Keep the whole note under {max_chars} characters total so it fits cleanly in a WeChat message. End with "Not financial advice." on its own line.

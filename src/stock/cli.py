@@ -974,6 +974,161 @@ app.add_typer(thesis_app, name="thesis")
 backend_app = typer.Typer(help="Inspect / switch the core LLM backend (F17).")
 app.add_typer(backend_app, name="backend")
 
+event_app = typer.Typer(help="Tracked event-prediction calendar (F26).")
+app.add_typer(event_app, name="event")
+
+
+@event_app.command("add")
+def event_add_cmd(
+    ticker: Annotated[str, typer.Argument(help="Ticker (e.g. NVDA)")],
+    event_type: Annotated[str, typer.Argument(help="earnings | guidance | product_launch | regulatory | contract_win | supply_chain | macro | insider_action | policy | other")],
+    title: Annotated[str, typer.Argument(help="Short event title (e.g. 'NVDA Q3 earnings print')")],
+    predicted_outcome: Annotated[str, typer.Argument(help="What we expect to happen (e.g. 'Revenue beat by 5%+ and FY guidance raise')")],
+    window_start: Annotated[str, typer.Argument(help="ISO date YYYY-MM-DD")],
+    window_end: Annotated[str, typer.Argument(help="ISO date YYYY-MM-DD")],
+    confidence: Annotated[float, typer.Option("--confidence", help="0.0-1.0")] = 0.6,
+    source_research_id: Annotated[
+        int | None, typer.Option("--source", help="research_reports.id this prediction came from"),
+    ] = None,
+    notes: Annotated[str, typer.Option("--notes", help="Free-text notes")] = "",
+) -> None:
+    """Add a new tracked event prediction."""
+    try:
+        from stock import events as _ev
+        conn = get_conn()
+        ev = _ev.add_event(
+            conn, ticker=ticker, event_type=event_type, title=title,
+            predicted_outcome=predicted_outcome,
+            window_start=window_start, window_end=window_end,
+            confidence=confidence, source_research_id=source_research_id,
+            notes=notes or None,
+        )
+        typer.echo(f"Added event #{ev.id}: {ev.ticker} {ev.event_type} -> {ev.window_end}")
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
+@event_app.command("list")
+def event_list_cmd(
+    status: Annotated[
+        str | None, typer.Option("--status", help="pending | hit | miss | partial | expired | cancelled"),
+    ] = None,
+    ticker: Annotated[str | None, typer.Option("--ticker", help="Filter by ticker")] = None,
+    limit: Annotated[int, typer.Option("--limit")] = 50,
+) -> None:
+    """List tracked events with optional filters."""
+    try:
+        from stock import events as _ev
+        conn = get_conn()
+        rows = _ev.list_events(conn, status=status, ticker=ticker, limit=limit)
+        if not rows:
+            typer.echo("(no events)")
+            return
+        for e in rows:
+            tag = {
+                "pending": "PEND", "hit": " HIT", "miss": "MISS",
+                "partial": "PART", "expired": "EXPR", "cancelled": "CXLD",
+            }.get(e.status, "????")
+            typer.echo(
+                f"#{e.id:<4} [{tag}] {e.ticker:<10} {e.event_type:<14}"
+                f" win={e.window_start[:10]}->{e.window_end[:10]}"
+                f" conf={e.confidence:.2f}  {e.title[:60]}"
+            )
+            if e.actual_outcome:
+                typer.echo(f"        actual: {e.actual_outcome[:120]}")
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
+@event_app.command("edit")
+def event_edit_cmd(
+    event_id: Annotated[int, typer.Argument(help="Event id")],
+    title: Annotated[str | None, typer.Option("--title")] = None,
+    predicted_outcome: Annotated[str | None, typer.Option("--outcome")] = None,
+    window_start: Annotated[str | None, typer.Option("--start")] = None,
+    window_end: Annotated[str | None, typer.Option("--end")] = None,
+    confidence: Annotated[float | None, typer.Option("--confidence")] = None,
+    status: Annotated[str | None, typer.Option("--status", help="Force-set status (pending/hit/miss/partial/expired/cancelled)")] = None,
+    notes: Annotated[str | None, typer.Option("--notes")] = None,
+) -> None:
+    """Edit an existing tracked event."""
+    try:
+        from stock import events as _ev
+        conn = get_conn()
+        fields: dict[str, object] = {}
+        if title is not None: fields["title"] = title
+        if predicted_outcome is not None: fields["predicted_outcome"] = predicted_outcome
+        if window_start is not None: fields["window_start"] = window_start
+        if window_end is not None: fields["window_end"] = window_end
+        if confidence is not None: fields["confidence"] = confidence
+        if status is not None: fields["status"] = status
+        if notes is not None: fields["notes"] = notes
+        ok = _ev.edit_event(conn, event_id, **fields)
+        typer.echo(f"Updated event #{event_id}" if ok else "No matching row.")
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
+@event_app.command("delete")
+def event_delete_cmd(
+    event_id: Annotated[int, typer.Argument(help="Event id to delete")],
+) -> None:
+    """Hard-delete a tracked event."""
+    try:
+        from stock import events as _ev
+        conn = get_conn()
+        ok = _ev.delete_event(conn, event_id)
+        typer.echo(f"Deleted event #{event_id}" if ok else "No matching row.")
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
+@event_app.command("verify")
+def event_verify_cmd(
+    event_id: Annotated[int | None, typer.Argument(help="Event id; omit to verify ALL pending")] = None,
+    max_items: Annotated[int, typer.Option("--max")] = 30,
+) -> None:
+    """Verify pending event(s) against post-window news + filings."""
+    try:
+        from stock import events as _ev
+        conn = get_conn()
+        if event_id is not None:
+            ev = _ev.verify_event(conn, event_id)
+            typer.echo(f"#{event_id} verdict: {ev.status if ev else 'no row'}")
+        else:
+            graded = _ev.verify_due_events(conn, max_items=max_items)
+            typer.echo(f"Verified {len(graded)} due event(s)")
+            for ev in graded:
+                typer.echo(f"  #{ev.id} {ev.ticker} -> {ev.status}")
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
+@event_app.command("calibration")
+def event_calibration_cmd(
+    days: Annotated[int, typer.Option("--days")] = 90,
+) -> None:
+    """Show hit-rate stats for resolved events."""
+    try:
+        from stock import events as _ev
+        conn = get_conn()
+        s = _ev.event_calibration_summary(conn, lookback_days=days)
+        typer.echo(f"Resolved events (last {s['lookback_days']}d): {s['total_resolved']}")
+        typer.echo(f"  hits     : {s['hits']}")
+        typer.echo(f"  misses   : {s['misses']}")
+        typer.echo(f"  partial  : {s['partials']}")
+        typer.echo(f"  expired  : {s['expired']}")
+        typer.echo(f"  hit rate : {s['hit_rate']:.1%}")
+        typer.echo(f"  avg conf : {s['avg_confidence_when_resolved']:.2f}")
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
 discover_app = typer.Typer(help="Forward-looking discovery engine (F19) -- find before it explodes.")
 app.add_typer(discover_app, name="forward-discover")
 

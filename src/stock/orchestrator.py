@@ -16,7 +16,7 @@ import time
 import httpx
 import openai
 
-from stock import action_queue, anomaly, conversation, discovery_engine, grading, holdings, intent, prompt_rewriter, self_review, thesis
+from stock import action_queue, anomaly, conversation, discovery_engine, events, grading, holdings, intent, prompt_rewriter, self_review, thesis
 from stock.cloud_sync import run_local_sync
 from stock.config import get_settings
 from stock.db import get_conn
@@ -461,6 +461,34 @@ def _job_research_push() -> None:
         conn.close()
 
 
+def _job_verify_tracked_events() -> None:
+    """F26: nightly verification of pending tracked events against post-window news.
+
+    Runs at 21:50 UTC Mon-Fri after the score + thesis_verify + grade pipeline so
+    fresh news ingest is already in. Drains up to 30 events per run; cost-ceiling
+    skip + per-event exception isolation.
+    """
+    conn = get_conn()
+    try:
+        graded = events.verify_due_events(conn, max_items=30)
+        if graded:
+            counts: dict[str, int] = {}
+            for ev in graded:
+                counts[ev.status] = counts.get(ev.status, 0) + 1
+            counts_str = ", ".join(f"{k}={v}" for k, v in counts.items())
+            logger.info(
+                "Tracked events verified: %d total (%s)", len(graded), counts_str,
+            )
+        else:
+            logger.info("Tracked events: no pending events due for verification")
+    except CostCeilingError:
+        logger.warning("Cost ceiling reached during event verification, skipping")
+    except Exception:
+        logger.exception("Event verification job failed")
+    finally:
+        conn.close()
+
+
 def _job_run_discovery_engine() -> None:
     """F19: forward-looking candidate scoring + auto-promote.
 
@@ -763,6 +791,21 @@ def create_scheduler() -> BlockingScheduler:
         CronTrigger(second="*/5", timezone="UTC"),
         id="sync_to_render",
         name="Push state to Render free tier + pull boss replies",
+    )
+
+    # F26: tracked-event verification at SCORE_HOUR:SCORE_MINUTE+20 (Mon-Fri).
+    # Runs after score + thesis_verify + grade pipeline so fresh news ingest is
+    # already in.
+    scheduler.add_job(
+        _job_verify_tracked_events,
+        CronTrigger(
+            hour=SCORE_HOUR,
+            minute=SCORE_MINUTE + 20,
+            day_of_week="mon-fri",
+            timezone="UTC",
+        ),
+        id="verify_tracked_events",
+        name="F26 nightly tracked-event verification",
     )
 
     # F19: forward-discovery engine daily at 23:00 UTC (07:00 Beijing). Runs

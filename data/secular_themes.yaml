@@ -1,0 +1,133 @@
+# Secular long-horizon themes (5-10 year) -- separate from the AI supply chain.
+# F25: boss explicitly asked for "hidden gems not driven by AI but by things you
+# believe gonna happen in the next 5-10 years -- China aging crisis, US wealth
+# inequality, AI displacement / consumer crisis."
+#
+# Schema mirrors data/ai_supply_chain.yaml: each theme is a top-level entry with
+# a thesis paragraph, leading-indicator triggers we can monitor, and a list of
+# beneficiaries (long) + losers (short candidates). The discovery engine + the
+# daily research generator rotate through these alongside the AI focus layer.
+
+themes:
+  - theme: china_aging_crisis
+    horizon_years: 8
+    thesis: |
+      China's working-age population peaked in 2014; by 2030 ~25% of population
+      will be 60+ vs 18% today. Beneficiaries cluster in healthcare (oncology +
+      chronic disease), eldercare/funeral services, smart-home for accessibility,
+      and dividend-yielding utilities. Losers: K-12 education, baby-formula,
+      real-estate developers in tier-3 cities. The political pressure to keep
+      retirees consuming forces the state to backstop pension flows -> stable
+      dividend payers benefit.
+    leading_indicators:
+      - "China NBS quarterly population release: working-age YoY decline acceleration"
+      - "China healthcare spending as % of GDP (currently ~7%, OECD avg ~9%)"
+      - "Provincial pension shortfall disclosures (Heilongjiang, Liaoning depleted)"
+      - "Tier-3 city housing inventory clearance time (months of supply)"
+    beneficiaries:
+      - {ticker: 600276.SS, name: 恒瑞医药 Hengrui Pharma,    thesis: "Domestic oncology leader; price-cuts mostly priced in"}
+      - {ticker: 600196.SS, name: 复星医药 Fosun Pharma,      thesis: "Diversified pharma + diagnostics + in-vitro"}
+      - {ticker: 600600.SH, name: 青岛啤酒 Tsingtao,           thesis: "Pricing power on premiumization as middle-class shrinks"}
+      - {ticker: 600900.SS, name: 长江电力 Yangtze Power,      thesis: "5%+ dividend yield, hydro monopoly, retiree income vehicle"}
+      - {ticker: 600519.SS, name: 贵州茅台 Kweichow Moutai,   thesis: "Status / inheritance asset; demographic cliff is bullish for scarcity"}
+      - {ticker: 600436.SS, name: 片仔癀 Pien Tze Huang,       thesis: "TCM brand with intergenerational pricing power; eldercare adjacent"}
+      - {ticker: 002001.SZ, name: 新和成 NHU,                  thesis: "Vitamin / fine chemicals supplier into pharma + nutrition"}
+      - {ticker: 601318.SS, name: 中国平安 Ping An,            thesis: "Pension + life insurance dominant; benefits from forced savings"}
+    losers:
+      - {ticker: TAL,      name: TAL Education,                thesis: "K-12 education demand structurally collapsing"}
+      - {ticker: EDU,      name: New Oriental,                 thesis: "Same demographic headwind plus regulatory overhang"}
+      - {ticker: 002311.SZ, name: 海大集团 Haid (animal feed), thesis: "Per-capita protein demand peaks then declines"}
+
+  - theme: us_wealth_inequality_divergence
+    horizon_years: 10
+    thesis: |
+      US Gini coefficient is at multi-decade highs and rising. Bottom-50% share
+      of wealth has fallen below 2.5%. Two consumer economies are emerging:
+      luxury (Ferrari, RH, MELI premium tier) keeps pricing power because the
+      top-10% controls 70%+ of disposable spend, while the bottom-50% migrates
+      to deep-discount, dollar-stores, secondhand, and predatory credit. The
+      MIDDLE collapses -- traditional dept stores, casual dining, mid-tier
+      apparel get squeezed. AI displacement (next theme) accelerates this.
+    leading_indicators:
+      - "US BLS quarterly wage Gini (top-10% / bottom-50% ratio)"
+      - "Subprime auto-loan delinquencies (NY Fed quarterly)"
+      - "Credit card charge-off rates at JPM/BAC/COF (early-cycle stress signal)"
+      - "Dollar-store same-store sales % delta vs Walmart (DG vs WMT divergence)"
+      - "Luxury goods volume vs price split (LVMH organic growth decomposition)"
+    beneficiaries:
+      - {ticker: DG,    name: Dollar General,         thesis: "Bottom-50% staple supply at sub-Walmart price points; rural moat"}
+      - {ticker: TJX,   name: TJX (TJ Maxx),          thesis: "Off-price apparel; trade-down winner from middle collapse"}
+      - {ticker: ROST,  name: Ross Stores,            thesis: "Same off-price thesis; better unit economics than TJX"}
+      - {ticker: COST,  name: Costco,                 thesis: "Bulk-buy efficiency for the squeezed middle"}
+      - {ticker: RACE,  name: Ferrari,                thesis: "Top-1% scarcity asset; production-capped pricing power"}
+      - {ticker: LVMUY, name: LVMH ADR,               thesis: "Luxury bifurcation winner; inheritance demand"}
+      - {ticker: AFRM,  name: Affirm,                 thesis: "BNPL = predatory credit on bottom-50%; cyclical but structurally growing"}
+      - {ticker: FCFS,  name: FirstCash (pawn),       thesis: "Pawn + payday is countercyclical to unemployment shocks"}
+      - {ticker: HRB,   name: H&R Block,              thesis: "Tax-prep for the bottom-50% (EITC-driven seasonality)"}
+    losers:
+      - {ticker: M,     name: Macy's,                 thesis: "Mid-tier department-store collapse"}
+      - {ticker: KSS,   name: Kohl's,                 thesis: "Same"}
+      - {ticker: CMG,   name: Chipotle,               thesis: "Premium-fast-casual squeezed if middle shrinks"}
+
+  - theme: ai_displacement_consumer_crisis
+    horizon_years: 7
+    thesis: |
+      Frontier-model capability now exceeds median human knowledge-worker on most
+      cognitive tasks. The displacement curve will hit white-collar mid-skill
+      jobs (paralegals, accountants, junior consultants, content writers, junior
+      developers) over 5-7 years, hollowing out a 30M+ US workforce segment.
+      Three downstream plays:
+        (a) Defensive staples whose demand floor is set by population, not
+            employment (KO/PEP/PG/CL/MO);
+        (b) Government-backed safety-net infrastructure (SNAP processing,
+            Medicaid managed care, unemployment-insurance tech);
+        (c) AI-AS-A-WORKFORCE for SMBs who can't afford to hire (UPST credit-
+            decisioning AI, INTU autoworking accounting, MSFT Copilot for SMB).
+      Avoid: anything pricing-pressured by the unemployed middle class -- mid-
+      tier travel, mid-tier dining, mid-tier apparel.
+    leading_indicators:
+      - "BLS Job Openings and Labor Turnover Survey (JOLTS) -- white-collar quits"
+      - "Linkedin Hiring Index for non-routine cognitive roles"
+      - "Indeed posted-jobs for paralegal/junior accountant/copywriter (YoY decline)"
+      - "OpenAI/Anthropic enterprise revenue acceleration as a proxy for replacement"
+      - "Federal Reserve consumer credit delinquency 30+ days"
+    beneficiaries:
+      - {ticker: KO,    name: Coca-Cola,              thesis: "Population-floor demand; pricing power maintained"}
+      - {ticker: PEP,   name: PepsiCo,                thesis: "Same"}
+      - {ticker: PG,    name: Procter & Gamble,       thesis: "Staples basket; trade-down to private-label hits OTHER staples first"}
+      - {ticker: CL,    name: Colgate,                thesis: "Toothpaste demand floor"}
+      - {ticker: MO,    name: Altria,                 thesis: "Vice + dividend; recession-resistant"}
+      - {ticker: UPST,  name: Upstart,                thesis: "AI credit decisioning -- displacement TO AI, not BY AI"}
+      - {ticker: INTU,  name: Intuit (Quickbooks AI), thesis: "SMB autoworking; replaces the bookkeeper that closed shop"}
+      - {ticker: HUMR,  name: HumanaR (Humana),       thesis: "Medicaid managed care expansion as safety-net swells"}
+      - {ticker: CNC,   name: Centene,                thesis: "Same -- Medicaid managed care, government-backed revenue"}
+      - {ticker: WMT,   name: Walmart,                thesis: "Trade-down beneficiary + employs displaced workers"}
+    losers:
+      - {ticker: WW,    name: Weight Watchers,        thesis: "Discretionary self-improvement collapses with employment"}
+      - {ticker: BKNG,  name: Booking,                thesis: "Mid-tier travel demand erodes if middle hollow"}
+      - {ticker: DIS,   name: Disney parks,           thesis: "Premium leisure squeeze"}
+
+  - theme: india_demographic_dividend
+    horizon_years: 10
+    thesis: |
+      Counterpoint to China aging: India's median age is 28 vs China's 39, and
+      India is projected to add 200M working-age people through 2035. Combined
+      with English-language fluency, this is the largest hidden labor supply
+      in the world. Beneficiaries: India consumer staples (HUL/ITC), private
+      banks (HDFC/ICICI), domestic IT services pivoting to AI-augmentation
+      (TCS/INFY), Indian small-finance banks. US-listed proxies: ICICI ADR,
+      INFY ADR, INDA ETF.
+    leading_indicators:
+      - "India quarterly working-age YoY growth (continues +1.0%+ thru 2035)"
+      - "RBI consumer confidence index (rising trend)"
+      - "Indian banking sector NPA ratio (declining = expansion phase)"
+      - "Indian software services average billing rate (USD/hr, rising)"
+    beneficiaries:
+      - {ticker: IBN,   name: ICICI Bank ADR,         thesis: "Top private bank, retail-banking secular"}
+      - {ticker: HDB,   name: HDFC Bank ADR,          thesis: "Same; lower NPA, premium franchise"}
+      - {ticker: INFY,  name: Infosys ADR,            thesis: "AI-augmentation pivot; cost-arbitrage moat shrinks but volume expands"}
+      - {ticker: WIT,   name: Wipro ADR,              thesis: "Same"}
+      - {ticker: INDA,  name: iShares India ETF,      thesis: "Broad demographic exposure"}
+      - {ticker: SMIN,  name: India small-cap ETF,    thesis: "Mid/small-cap leverage to domestic consumption"}
+    losers:
+      - {ticker: MCHI,  name: China large-cap ETF,    thesis: "Capital flight from aging China to growing India"}
