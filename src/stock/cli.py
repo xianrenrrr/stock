@@ -1455,6 +1455,174 @@ def thesis_show_cmd(
         raise typer.Exit(code=1)
 
 
+@app.command("check")
+def check_cmd(
+    ticker: Annotated[str, typer.Argument(help="Ticker to inspect (e.g. SMCI)")],
+) -> None:
+    """One-shot status snapshot for a ticker: price, stop, alerts, anomalies, events.
+
+    Useful for quick "should I sell?" checks. Runs entirely on local data,
+    no LLM calls -- always free, always fast.
+    """
+    try:
+        ticker = ticker.upper()
+        from datetime import datetime, timedelta, timezone
+        from stock.events import list_events
+        from stock.stops import compute_stop_loss
+
+        conn = get_conn()
+        now = datetime.now(timezone.utc)
+        week_iso = (now - timedelta(days=7)).isoformat()
+        fortnight_date = (now - timedelta(days=14)).strftime("%Y-%m-%d")
+
+        typer.echo(f"=== {ticker} status snapshot ({now.isoformat(timespec='minutes')} UTC) ===")
+
+        # 1) Recent prices
+        rows = conn.execute(
+            "SELECT ts, c, v FROM prices WHERE ticker = ? ORDER BY ts DESC LIMIT 5",
+            (ticker,),
+        ).fetchall()
+        typer.echo("")
+        typer.echo("--- last 5 daily closes ---")
+        if rows:
+            for r in rows:
+                typer.echo(f"  {r[0]}  close=${r[1]:.2f}  vol={r[2]:,}")
+        else:
+            typer.echo("  (no price history; run `stock ingest prices " + ticker + "` first)")
+
+        # 2) Stop-loss recommendation (F24)
+        stop = compute_stop_loss(ticker, conn)
+        typer.echo("")
+        typer.echo("--- stop-loss reference (F24) ---")
+        if stop.entry_price is not None:
+            typer.echo(f"  entry (latest close): ${stop.entry_price:.2f}")
+            typer.echo(f"  ATR(20):              ${stop.atr_20:.2f}" if stop.atr_20 is not None else "  ATR(20): N/A")
+            typer.echo(f"  ATR-stop (2x):        ${stop.atr_stop:.2f}" if stop.atr_stop is not None else "  ATR-stop: N/A")
+            typer.echo(f"  30d swing-low:        ${stop.swing_low_30d:.2f}" if stop.swing_low_30d is not None else "  swing-low: N/A")
+            typer.echo(f"  -15% percent stop:    ${stop.percent_stop:.2f}" if stop.percent_stop is not None else "")
+            if stop.recommended is not None:
+                dist = (stop.entry_price - stop.recommended) / stop.entry_price * 100
+                typer.echo(f"  RECOMMENDED:          ${stop.recommended:.2f}  ({dist:.1f}% below)")
+        else:
+            typer.echo(f"  {stop.rationale}")
+
+        # 3) Holding info if tracked
+        h_row = conn.execute(
+            "SELECT qty, cost_basis, opened_at FROM holdings"
+            " WHERE ticker = ? AND active = 1",
+            (ticker,),
+        ).fetchone()
+        typer.echo("")
+        typer.echo("--- holding info ---")
+        if h_row:
+            qty, cost, opened = h_row
+            typer.echo(f"  qty={qty:g} cost=${cost:.2f} opened={opened}")
+            if cost > 0 and stop.entry_price:
+                pnl_pct = (stop.entry_price - cost) / cost * 100
+                typer.echo(f"  P&L: {pnl_pct:+.1f}% (last ${stop.entry_price:.2f} vs cost ${cost:.2f})")
+        else:
+            typer.echo("  (not in active holdings -- add with `stock holding add`)")
+
+        # 4) Sell-trigger alerts (F28)
+        alert_rows = conn.execute(
+            "SELECT id, topic, datetime(created_at) FROM research_reports"
+            " WHERE kind = 'alert' AND COALESCE(topic, '') LIKE ? AND created_at >= ?"
+            " ORDER BY created_at DESC LIMIT 5",
+            (f"{ticker}%", week_iso),
+        ).fetchall()
+        typer.echo("")
+        typer.echo(f"--- sell-trigger alerts (last 7d, F28) ---")
+        if alert_rows:
+            for r in alert_rows:
+                typer.echo(f"  [#{r[0]}] {r[2]}  {r[1]}")
+        else:
+            typer.echo("  (none)")
+
+        # 5) Anomaly flags
+        anom_rows = conn.execute(
+            "SELECT ts, pct_change, volume_ratio, flag_reason FROM price_anomalies"
+            " WHERE ticker = ? AND ts >= ? ORDER BY ts DESC LIMIT 5",
+            (ticker, fortnight_date),
+        ).fetchall()
+        typer.echo("")
+        typer.echo("--- price/volume anomalies (last 14d, F12) ---")
+        if anom_rows:
+            for r in anom_rows:
+                typer.echo(
+                    f"  [{r[0]}] pct={r[1] * 100:+.2f}% vol={r[2]:.2f}x reason={r[3]}"
+                )
+        else:
+            typer.echo("  (none flagged)")
+
+        # 6) Recent news
+        news_rows = conn.execute(
+            "SELECT ts, title FROM news WHERE ticker = ? AND ts >= ?"
+            " ORDER BY ts DESC LIMIT 6",
+            (ticker, week_iso),
+        ).fetchall()
+        typer.echo("")
+        typer.echo("--- news headlines (last 7d) ---")
+        if news_rows:
+            for r in news_rows:
+                typer.echo(f"  [{r[0][:10]}] {r[1][:120]}")
+        else:
+            typer.echo("  (none ingested)")
+
+        # 7) Tracked events
+        events_for = list_events(conn, ticker=ticker, limit=10)
+        typer.echo("")
+        typer.echo("--- tracked events (F26) ---")
+        if events_for:
+            for e in events_for:
+                tag = {
+                    "pending": "PEND", "hit": " HIT", "miss": "MISS",
+                    "partial": "PART", "expired": "EXPR", "cancelled": "CXLD",
+                }.get(e.status, "????")
+                typer.echo(
+                    f"  #{e.id} [{tag}] {e.event_type:<14} window_end={e.window_end[:10]}"
+                    f"  conf={e.confidence:.2f}  {e.title[:60]}"
+                )
+        else:
+            typer.echo("  (no tracked events for this ticker)")
+
+        # 8) Forward-discovery score
+        fwp_row = conn.execute(
+            "SELECT score, qap_gate, datetime(last_score_at), status"
+            " FROM discovery_candidates WHERE ticker = ?",
+            (ticker,),
+        ).fetchone()
+        typer.echo("")
+        typer.echo("--- forward-discovery (F19) ---")
+        if fwp_row:
+            gate = "GATE" if fwp_row[1] else "no-gate"
+            typer.echo(
+                f"  FWP={fwp_row[0]:.3f}  [{gate}]  status={fwp_row[3]}"
+                f"  scored_at={fwp_row[2]}"
+            )
+        else:
+            typer.echo("  (not in discovery candidates -- next refresh fires daily 23:00 UTC)")
+
+        # 9) Insider Form 4
+        ins_rows = conn.execute(
+            "SELECT filed_at, filer_name, transaction_type, shares, price"
+            " FROM insider_filings WHERE ticker = ?"
+            " ORDER BY filed_at DESC LIMIT 5",
+            (ticker,),
+        ).fetchall()
+        typer.echo("")
+        typer.echo("--- insider Form 4 (last 5) ---")
+        if ins_rows:
+            for r in ins_rows:
+                typer.echo(
+                    f"  [{str(r[0])[:10]}] {r[1]} {r[2]} {r[3]} @ ${r[4]}"
+                )
+        else:
+            typer.echo("  (none -- next EDGAR pull is Sundays 05:00 UTC)")
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
 @app.command("anomaly-run")
 def anomaly_run_cmd() -> None:
     """Recompute today's price/volume anomalies."""
