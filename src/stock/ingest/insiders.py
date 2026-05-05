@@ -199,7 +199,24 @@ def fetch_form4(
 def persist_insiders(
     conn: sqlite3.Connection, ticker: str, *, limit: int = DEFAULT_LIMIT
 ) -> int:
-    """Fetch + UPSERT Form 4 rows for a ticker. Returns inserted count."""
+    """Fetch + UPSERT Form 4 rows for a ticker. Returns inserted count.
+
+    KNOWN LIMITATION (2026-05-05): the current ATOM-feed fetcher only
+    extracts metadata (ticker, filer_name, filer_role, form_type, filed_at,
+    accession_number, raw_url). It does NOT parse the Form 4 XML body, so
+    transaction_type / shares / price are persisted as NULL.
+
+    Downstream impact: stock.leading.compute_insider_acceleration filters
+    on `transaction_type IN ('P', 'P-Purchase', 'purchase', 'BUY')` and
+    multiplies by `shares * price`; with NULL values the filter rejects
+    all rows and OCIS = 0 for every ticker. F19 forward-discovery FWP is
+    therefore missing the insider-cluster signal.
+
+    Real fix is to download each accession_number's Form 4 XML and parse
+    the <transactionCode>, <transactionShares>, <transactionPricePerShare>
+    elements. Defer to a future feature -- the rest of FWP (8-K novelty,
+    theme velocity, reddit acceleration) still works.
+    """
     rows = fetch_form4(ticker, limit=limit)
     if not rows:
         return 0
