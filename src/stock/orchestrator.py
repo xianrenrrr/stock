@@ -69,7 +69,11 @@ class ScheduleInfo(BaseModel):
 
 
 def _get_active_tickers(conn: sqlite3.Connection) -> list[str]:
-    """Load active tickers from the watchlist table, falling back to YAML."""
+    """Load active tickers from the watchlist table, falling back to YAML.
+
+    NARROW universe: this is what the prediction job consumes (LLM call per
+    ticker = real cost). Stays AI-supply-chain focused.
+    """
     # Query the DB watchlist for active tickers
     rows = conn.execute(
         "SELECT ticker FROM watchlist WHERE active = 1 ORDER BY ticker"
@@ -87,14 +91,59 @@ def _get_active_tickers(conn: sqlite3.Connection) -> list[str]:
     return []
 
 
+def _get_ingest_universe(conn: sqlite3.Connection) -> list[str]:
+    """WIDE universe for price + news ingestion (no LLM cost per ticker).
+
+    Combines:
+      - active watchlist (predictions universe)
+      - active holdings (boss's positions -- need price for stop-loss + P&L)
+      - secular theme tickers (F25; non-AI long-horizon names that need price
+        history for the stop-loss reference table)
+
+    Used by _job_ingest_and_extract so EVERY ticker the daily research note
+    might mention has fresh price + news, not just the AI watchlist.
+    """
+    seen: list[str] = list(_get_active_tickers(conn))
+    seen_set = {t for t in seen}
+
+    # Active holdings -- always ingest
+    try:
+        for h in holdings.list_holdings(conn, active_only=True):
+            t = h.ticker.upper()
+            if t not in seen_set:
+                seen.append(t)
+                seen_set.add(t)
+    except Exception:
+        logger.exception("ingest_universe: holdings lookup failed (non-fatal)")
+
+    # F25 secular theme tickers
+    try:
+        from stock.secular import all_secular_tickers
+        for t in all_secular_tickers():
+            t = t.upper()
+            if t not in seen_set:
+                seen.append(t)
+                seen_set.add(t)
+    except Exception:
+        logger.exception("ingest_universe: secular lookup failed (non-fatal)")
+
+    return seen
+
+
 def _job_ingest_and_extract() -> None:
-    """Fetch news, prices, extract features, then scan active holdings for sell-triggers."""
+    """Fetch news, prices, extract features, then scan active holdings for sell-triggers.
+
+    Uses the WIDE ingest universe (watchlist + holdings + secular themes) so
+    every ticker the daily research note might mention has fresh price + news
+    history. LLM-cost feature extraction still only fires on watchlist members.
+    """
     conn = get_conn()
     try:
-        tickers = _get_active_tickers(conn)
+        tickers = _get_ingest_universe(conn)
         if not tickers:
-            logger.warning("No active tickers in watchlist, skipping ingest")
+            logger.warning("No tickers in ingest universe, skipping")
             return
+        watchlist_set = set(_get_active_tickers(conn))
 
         for ticker in tickers:
             try:
@@ -104,8 +153,11 @@ def _job_ingest_and_extract() -> None:
                 # Pull latest daily OHLCV bars
                 fetch_prices(ticker, conn)
 
-                # Extract features for any unfeatured news
-                extract_features(ticker, conn)
+                # Extract features ONLY for the predict universe (LLM-priced).
+                # Secular + holdings tickers ride along for price/news without
+                # burning LLM cost per ticker.
+                if ticker in watchlist_set:
+                    extract_features(ticker, conn)
             except CostCeilingError:
                 logger.warning("Cost ceiling reached during ingest, stopping")
                 return
