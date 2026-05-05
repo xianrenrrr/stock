@@ -16,7 +16,7 @@ import time
 import httpx
 import openai
 
-from stock import action_queue, anomaly, conversation, discovery_engine, events, grading, holdings, intent, prompt_rewriter, self_review, thesis
+from stock import action_queue, alerts, anomaly, conversation, discovery_engine, events, grading, holdings, intent, prompt_rewriter, self_review, thesis
 from stock.cloud_sync import run_local_sync
 from stock.config import get_settings
 from stock.db import get_conn
@@ -88,7 +88,7 @@ def _get_active_tickers(conn: sqlite3.Connection) -> list[str]:
 
 
 def _job_ingest_and_extract() -> None:
-    """Fetch news, prices, and extract features for all watchlist tickers."""
+    """Fetch news, prices, extract features, then scan active holdings for sell-triggers."""
     conn = get_conn()
     try:
         tickers = _get_active_tickers(conn)
@@ -111,6 +111,17 @@ def _job_ingest_and_extract() -> None:
                 return
             except Exception:
                 logger.exception("Ingest/extract failed for %s", ticker)
+
+        # F28: after fresh news lands, scan active holdings for sell-trigger
+        # keywords (margin compression, compliance events, price wars, etc.)
+        # and write a kind='alert' note if anything fires. Best-effort.
+        try:
+            alert_counts = alerts.scan_all_holdings(conn)
+            if alert_counts:
+                summary = ", ".join(f"{t}={n}" for t, n in alert_counts.items())
+                logger.info("Holding alerts fired this tick: %s", summary)
+        except Exception:
+            logger.exception("Holding sell-trigger scan failed (non-fatal)")
     finally:
         conn.close()
 
