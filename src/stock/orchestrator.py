@@ -16,7 +16,7 @@ import time
 import httpx
 import openai
 
-from stock import action_queue, alerts, anomaly, conversation, discovery_engine, events, grading, holdings, intent, prompt_rewriter, self_review, thesis
+from stock import action_queue, alerts, anomaly, backup, conversation, discovery_engine, events, grading, holdings, intent, prompt_rewriter, self_review, thesis
 from stock.cloud_sync import run_local_sync
 from stock.config import get_settings
 from stock.db import get_conn
@@ -524,6 +524,20 @@ def _job_research_push() -> None:
         conn.close()
 
 
+def _job_backup_db() -> None:
+    """F33: nightly SQLite online backup to data/backups/stock.db.<date>.bak."""
+    try:
+        result = backup.backup_now()
+        logger.info(
+            "DB backup ok: %s (%.1f MB)",
+            result.backup_path, result.bytes / (1024 * 1024),
+        )
+    except FileNotFoundError as exc:
+        logger.warning("DB backup skipped: %s", exc)
+    except Exception:
+        logger.exception("DB backup job failed")
+
+
 def _job_verify_tracked_events() -> None:
     """F26: nightly verification of pending tracked events against post-window news.
 
@@ -869,6 +883,16 @@ def create_scheduler() -> BlockingScheduler:
         ),
         id="verify_tracked_events",
         name="F26 nightly tracked-event verification",
+    )
+
+    # F33: nightly SQLite backup at 23:30 UTC (between discovery_engine at
+    # 23:00 and the 02:30 morning research push). Online backup is safe under
+    # concurrent writes; retains the last 7 daily snapshots.
+    scheduler.add_job(
+        _job_backup_db,
+        CronTrigger(hour=23, minute=30, timezone="UTC"),
+        id="backup_db",
+        name="F33 nightly SQLite online backup",
     )
 
     # F19: forward-discovery engine daily at 23:00 UTC (07:00 Beijing). Runs
