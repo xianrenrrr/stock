@@ -45,6 +45,7 @@ from stock.secular import (
     pick_focus_theme,
 )
 from stock.stops import format_stop_loss_block
+from stock.options import format_uoa_block
 from stock.thesis import compute_thesis_stats, format_thesis_block
 from stock.supply_chain import (
     Layer,
@@ -409,6 +410,9 @@ def generate_daily_research(
             if t and t not in stop_loss_tickers:
                 stop_loss_tickers.append(t)
     stop_loss_block = format_stop_loss_block(conn, stop_loss_tickers[:30])
+    # F36: unusual options activity from the last 3 sessions, top 12.
+    # Caller-renders an empty string when nothing fired (silent on quiet days).
+    uoa_block = format_uoa_block(conn, days=3, limit=12)
     feedback_block = recent_feedback_block()
     anomaly_block = format_anomaly_block(recent_anomalies(conn, days=2))
     previous_followups_block = action_queue.format_previous_followups(
@@ -448,6 +452,7 @@ def generate_daily_research(
         stop_loss_block=stop_loss_block,
         events_block=events_block,
         events_calibration=events_calibration,
+        uoa_block=uoa_block or "(no unusual options activity in the last 3 sessions)",
         max_chars=max_chars,
     )
 

@@ -1747,6 +1747,38 @@ def check_cmd(
         raise typer.Exit(code=1)
 
 
+@app.command("uoa-scan")
+def uoa_scan_cmd(
+    ticker: str = typer.Argument(None, help="Optional single ticker; default = watchlist + holdings"),
+) -> None:
+    """F36: scan for unusual options activity. Persists hits, prints a report."""
+    from stock import options as options_module
+    try:
+        conn = get_conn()
+        if ticker:
+            tickers = [ticker.upper()]
+        else:
+            wl = [str(r[0]) for r in conn.execute(
+                "SELECT ticker FROM watchlist WHERE active = 1"
+            ).fetchall()]
+            hl = [h.ticker for h in holdings.list_holdings(conn, active_only=True)]
+            tickers = sorted(set(wl) | set(hl))
+        total = 0
+        for t in tickers:
+            hits = options_module.scan_ticker(conn, t)
+            total += len(hits)
+            for h in hits:
+                typer.echo(
+                    f"  {t} {h.option_type.upper()} ${h.strike:.0f} {h.expiry}"
+                    f" vol={h.volume:,} OI={h.open_interest:,}"
+                    f" V/OI={h.vol_oi_ratio:.1f}x score={h.score:.1f} -- {h.flag_reason}"
+                )
+        typer.echo(f"\nScanned {len(tickers)} tickers, {total} hits.")
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
 @app.command("anomaly-run")
 def anomaly_run_cmd() -> None:
     """Recompute today's price/volume anomalies."""

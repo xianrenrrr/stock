@@ -16,7 +16,7 @@ import time
 import httpx
 import openai
 
-from stock import action_queue, alerts, anomaly, backup, conversation, discovery_engine, events, grading, holdings, intent, prompt_rewriter, self_review, thesis
+from stock import action_queue, alerts, anomaly, backup, conversation, discovery_engine, events, grading, holdings, intent, options as options_module, prompt_rewriter, self_review, thesis
 from stock.cloud_sync import run_local_sync
 from stock.config import get_settings
 from stock.db import get_conn
@@ -538,6 +538,55 @@ def _job_backup_db() -> None:
         logger.exception("DB backup job failed")
 
 
+def _job_scan_unusual_options() -> None:
+    """F36: scan watchlist + holdings tickers for unusual options activity.
+
+    Runs once per session at 21:55 UTC -- a few minutes after the close so
+    yfinance has the day's final volume + open interest snapshot. Persists
+    UOA hits to option_anomalies; an extreme hit (vol/OI >= 20 OR volume
+    >= 10000) on a holding triggers a kind='alert' research_reports row
+    so the boss sees it in the next push.
+    """
+    conn = get_conn()
+    try:
+        tickers = sorted({*_get_active_tickers(conn), *{h.ticker for h in holdings.list_holdings(conn, active_only=True)}})
+        total_hits = 0
+        for ticker in tickers:
+            try:
+                hits = options_module.scan_ticker(conn, ticker)
+            except Exception:  # noqa: BLE001 -- per-ticker isolation
+                logger.debug("UOA scan failed for %s", ticker, exc_info=True)
+                continue
+            total_hits += len(hits)
+            extreme = [h for h in hits if h.vol_oi_ratio >= 20 or h.volume >= 10000]
+            if extreme and ticker.upper() in {t.upper() for t in {h.ticker for h in holdings.list_holdings(conn, active_only=True)}}:
+                _write_uoa_alert(conn, ticker, extreme)
+        logger.info("UOA scan: %d tickers, %d total hits", len(tickers), total_hits)
+    except Exception:
+        logger.exception("UOA scan job failed")
+    finally:
+        conn.close()
+
+
+def _write_uoa_alert(conn: sqlite3.Connection, ticker: str, hits: list) -> None:
+    """Persist an alert-kind research_reports row for extreme UOA on a holding."""
+    summary_lines = [f"# 异常期权流入 {ticker}", ""]
+    for h in hits[:3]:
+        summary_lines.append(
+            f"- {h.option_type.upper()} ${h.strike:.0f} {h.expiry}: "
+            f"vol={h.volume:,} OI={h.open_interest:,} ({h.vol_oi_ratio:.1f}x) "
+            f"-- {h.flag_reason}"
+        )
+    body = "\n".join(summary_lines)
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    conn.execute(
+        "INSERT INTO research_reports (kind, topic, body, model, created_at)"
+        " VALUES ('alert', ?, ?, 'uoa-detector', ?)",
+        (f"{ticker} 异常期权", body, now),
+    )
+    conn.commit()
+
+
 def _job_verify_tracked_events() -> None:
     """F26: nightly verification of pending tracked events against post-window news.
 
@@ -893,6 +942,16 @@ def create_scheduler() -> BlockingScheduler:
         CronTrigger(hour=23, minute=30, timezone="UTC"),
         id="backup_db",
         name="F33 nightly SQLite online backup",
+    )
+
+    # F36: unusual-options-activity scan, 21:55 UTC Mon-Fri (a few minutes
+    # after the close). Persists to option_anomalies; extreme hits on a
+    # holding fire a kind='alert' research_reports row for the next push.
+    scheduler.add_job(
+        _job_scan_unusual_options,
+        CronTrigger(hour=21, minute=55, day_of_week="mon-fri", timezone="UTC"),
+        id="uoa_scan",
+        name="F36 unusual options activity scan",
     )
 
     # F19: forward-discovery engine daily at 23:00 UTC (07:00 Beijing). Runs

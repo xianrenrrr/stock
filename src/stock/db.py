@@ -191,6 +191,25 @@ CREATE TABLE IF NOT EXISTS price_anomalies (
     UNIQUE(ticker, ts)
 );
 
+CREATE TABLE IF NOT EXISTS option_anomalies (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticker TEXT NOT NULL,
+    contract_symbol TEXT NOT NULL,
+    option_type TEXT NOT NULL,
+    strike REAL NOT NULL,
+    expiry TEXT NOT NULL,
+    volume INTEGER NOT NULL,
+    open_interest INTEGER NOT NULL,
+    vol_oi_ratio REAL NOT NULL,
+    implied_vol REAL,
+    underlying_price REAL,
+    distance_pct REAL,
+    score REAL NOT NULL,
+    flag_reason TEXT NOT NULL,
+    detected_at TEXT NOT NULL,
+    UNIQUE(contract_symbol, detected_at)
+);
+
 CREATE TABLE IF NOT EXISTS conversations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     run_id TEXT NOT NULL,
@@ -227,6 +246,10 @@ CREATE INDEX IF NOT EXISTS idx_action_queue_status ON action_queue (status, queu
 CREATE INDEX IF NOT EXISTS idx_action_queue_source ON action_queue (source_research_id);
 CREATE INDEX IF NOT EXISTS idx_insider_filings_ticker ON insider_filings (ticker, filed_at DESC);
 CREATE INDEX IF NOT EXISTS idx_anomalies_ts ON price_anomalies (ts DESC);
+CREATE INDEX IF NOT EXISTS idx_option_anom_ticker_detected
+    ON option_anomalies (ticker, detected_at DESC);
+CREATE INDEX IF NOT EXISTS idx_option_anom_score
+    ON option_anomalies (detected_at DESC, score DESC);
 CREATE INDEX IF NOT EXISTS idx_conversations_recipient_created
     ON conversations (recipient, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_conversations_intent

@@ -170,10 +170,138 @@ def parse_atom_feed(text: str, *, ticker: str) -> list[InsiderTransaction]:
     return out
 
 
+_INDEX_HOST = "https://www.sec.gov"
+
+
+def _accession_index_url(cik: str, accession_number: str) -> str:
+    """Build the index.json URL for a Form 4 accession.
+
+    accession_number comes back from the ATOM feed in the dashed form
+    (0001234567-26-009123); the EDGAR archive path uses it un-dashed.
+    """
+    no_dashes = accession_number.replace("-", "")
+    return f"{_INDEX_HOST}/Archives/edgar/data/{int(cik)}/{no_dashes}/{accession_number}-index.json"
+
+
+def _form4_xml_url_from_index(cik: str, accession_number: str) -> str | None:
+    """Fetch the accession index, find the .xml file that's the Form 4 doc."""
+    try:
+        time.sleep(SEC_REQUEST_DELAY_SECS)
+        resp = _http_get(_accession_index_url(cik, accession_number))
+        if resp.status_code != 200:
+            return None
+        data = resp.json()
+    except (httpx.HTTPError, ValueError):
+        return None
+
+    items = data.get("directory", {}).get("item", [])
+    if not isinstance(items, list):
+        return None
+    # Pick the *.xml file that is the actual Form 4 document. Common names:
+    # wf-form4_xxxxx.xml, primary_doc.xml, or just an accession-prefixed .xml.
+    # Skip filing-summary.xml which is metadata only.
+    candidates = [
+        i for i in items
+        if isinstance(i, dict)
+        and str(i.get("name", "")).lower().endswith(".xml")
+        and "filing" not in str(i.get("name", "")).lower()
+    ]
+    if not candidates:
+        return None
+    name = str(candidates[0].get("name", ""))
+    no_dashes = accession_number.replace("-", "")
+    return f"{_INDEX_HOST}/Archives/edgar/data/{int(cik)}/{no_dashes}/{name}"
+
+
+def parse_form4_xml(text: str) -> tuple[str | None, float | None, float | None, str | None]:
+    """Parse Form 4 XML and return (transaction_code, shares, weighted_price, role).
+
+    Sums non-derivative transactions of the SAME code (P or S); a typical
+    Form 4 has one transaction so this is usually a no-op accumulator.
+    Weighted price = sum(shares * price) / sum(shares).
+    Returns Nones for every field if no parse hits -- caller handles gracefully.
+    """
+    if not text:
+        return (None, None, None, None)
+
+    # Officer / director role from reportingOwnerRelationship
+    role: str | None = None
+    title_match = re.search(
+        r"<officerTitle[^>]*>(.*?)</officerTitle>", text, re.DOTALL | re.IGNORECASE,
+    )
+    if title_match:
+        role = title_match.group(1).strip()
+    else:
+        if re.search(r"<isDirector[^>]*>1</isDirector>", text, re.IGNORECASE):
+            role = "Director"
+        elif re.search(r"<isOfficer[^>]*>1</isOfficer>", text, re.IGNORECASE):
+            role = "Officer"
+
+    # Sum non-derivative transactions
+    code_counts: dict[str, tuple[float, float]] = {}  # code -> (sum_shares, sum_shares*price)
+    txn_re = re.compile(
+        r"<nonDerivativeTransaction>(.*?)</nonDerivativeTransaction>",
+        re.DOTALL | re.IGNORECASE,
+    )
+    for txn in txn_re.findall(text):
+        code_match = re.search(
+            r"<transactionCode[^>]*>([A-Z])</transactionCode>", txn, re.IGNORECASE,
+        )
+        shares_match = re.search(
+            r"<transactionShares>\s*<value>([\d.]+)</value>", txn, re.DOTALL | re.IGNORECASE,
+        )
+        price_match = re.search(
+            r"<transactionPricePerShare>\s*<value>([\d.]+)</value>",
+            txn, re.DOTALL | re.IGNORECASE,
+        )
+        if not code_match or not shares_match:
+            continue
+        code = code_match.group(1).upper()
+        try:
+            sh = float(shares_match.group(1))
+        except ValueError:
+            continue
+        try:
+            pr = float(price_match.group(1)) if price_match else 0.0
+        except ValueError:
+            pr = 0.0
+        cur_sh, cur_value = code_counts.get(code, (0.0, 0.0))
+        code_counts[code] = (cur_sh + sh, cur_value + sh * pr)
+
+    if not code_counts:
+        return (None, None, None, role)
+
+    # Pick the dominant code (most shares). Ties broken alphabetically.
+    dominant = max(code_counts.items(), key=lambda kv: (kv[1][0], kv[0]))
+    code = dominant[0]
+    total_sh, total_val = dominant[1]
+    avg_price = (total_val / total_sh) if total_sh > 0 and total_val > 0 else None
+    return (code, total_sh, avg_price, role)
+
+
+def _fetch_and_parse_xml(cik: str, accession_number: str) -> tuple[str | None, float | None, float | None, str | None]:
+    """Resolve the XML doc URL via the accession index, fetch + parse it."""
+    xml_url = _form4_xml_url_from_index(cik, accession_number)
+    if not xml_url:
+        return (None, None, None, None)
+    try:
+        time.sleep(SEC_REQUEST_DELAY_SECS)
+        resp = _http_get(xml_url)
+        if resp.status_code != 200:
+            return (None, None, None, None)
+        return parse_form4_xml(resp.text)
+    except httpx.HTTPError:
+        return (None, None, None, None)
+
+
 def fetch_form4(
-    ticker: str, *, limit: int = DEFAULT_LIMIT
+    ticker: str, *, limit: int = DEFAULT_LIMIT,
 ) -> list[InsiderTransaction]:
-    """Pull the most recent Form 4 entries for a ticker via EDGAR ATOM feed."""
+    """Pull the most recent Form 4 entries for a ticker via EDGAR ATOM feed.
+
+    Metadata only -- transaction_type / shares / price are NULL. Use
+    persist_insiders for the deep flow that also parses Form 4 XML.
+    """
     cik = lookup_cik(ticker)
     if not cik:
         logger.info("No CIK for ticker %s; skipping insider fetch", ticker)
@@ -201,28 +329,19 @@ def persist_insiders(
 ) -> int:
     """Fetch + UPSERT Form 4 rows for a ticker. Returns inserted count.
 
-    KNOWN LIMITATION (2026-05-05): the current ATOM-feed fetcher only
-    extracts metadata (ticker, filer_name, filer_role, form_type, filed_at,
-    accession_number, raw_url). It does NOT parse the Form 4 XML body, so
-    transaction_type / shares / price are persisted as NULL.
-
-    Downstream impact: stock.leading.compute_insider_acceleration filters
-    on `transaction_type IN ('P', 'P-Purchase', 'purchase', 'BUY')` and
-    multiplies by `shares * price`; with NULL values the filter rejects
-    all rows and OCIS = 0 for every ticker. F19 forward-discovery FWP is
-    therefore missing the insider-cluster signal.
-
-    Real fix is to download each accession_number's Form 4 XML and parse
-    the <transactionCode>, <transactionShares>, <transactionPricePerShare>
-    elements. Defer to a future feature -- the rest of FWP (8-K novelty,
-    theme velocity, reddit acceleration) still works.
+    F35: pulls ATOM metadata first, INSERTs new rows, then for any row
+    whose transaction_type is still NULL (just-inserted OR previously-
+    fetched-but-not-yet-parsed) downloads the Form 4 XML and UPDATEs the
+    transaction code / shares / price / role. This unlocks F19 OCIS.
     """
     rows = fetch_form4(ticker, limit=limit)
     if not rows:
         return 0
 
+    cik = lookup_cik(ticker)  # safe: fetch_form4 returned, so CIK existed
     now = datetime.now(timezone.utc).isoformat()
     inserted = 0
+    # Insert metadata-only rows first
     for row in rows:
         cursor = conn.execute(
             "INSERT OR IGNORE INTO insider_filings"
@@ -237,6 +356,40 @@ def persist_insiders(
         )
         if cursor.rowcount:
             inserted += 1
+    conn.commit()
+
+    # Find rows still missing transaction details (this run + earlier metadata-only runs)
+    accession_list = [r.accession_number for r in rows]
+    if not accession_list or not cik:
+        return inserted
+    placeholders = ",".join("?" for _ in accession_list)
+    needs_xml = conn.execute(
+        f"SELECT accession_number FROM insider_filings"
+        f" WHERE ticker = ? AND transaction_type IS NULL"
+        f" AND accession_number IN ({placeholders})",
+        (ticker.upper(), *accession_list),
+    ).fetchall()
+
+    for (accession_number,) in needs_xml:
+        try:
+            code, shares, price, role = _fetch_and_parse_xml(cik, accession_number)
+        except Exception:  # noqa: BLE001 -- network/parse, log and skip
+            logger.debug(
+                "Form 4 XML parse failed for %s %s",
+                ticker, accession_number, exc_info=True,
+            )
+            continue
+        if code is None and shares is None and price is None and role is None:
+            continue
+        conn.execute(
+            "UPDATE insider_filings SET"
+            " transaction_type = COALESCE(?, transaction_type),"
+            " shares = COALESCE(?, shares),"
+            " price = COALESCE(?, price),"
+            " filer_role = COALESCE(filer_role, ?)"
+            " WHERE ticker = ? AND accession_number = ?",
+            (code, shares, price, role, ticker.upper(), accession_number),
+        )
     conn.commit()
     return inserted
 

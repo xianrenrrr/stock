@@ -83,6 +83,15 @@ any long suggestion.** Never invent a stop-loss price -- use these or write
 "N/A -- needs data".
 {stop_loss_block}
 
+## 异常期权流入 / Unusual options activity (last 3 sessions)
+Single-day volume spikes with vol/OI >= 5 and strike within 12% of spot. Treat
+EXTREME (vol/OI >= 20) or size-whale (volume >= 10000) prints as smart-money
+positioning -- mention them by ticker in the relevant section if the strike +
+direction supports the narrative. Do NOT recommend buying the option itself
+(yfinance is end-of-day, we don't have the bid/ask context). Use it to confirm
+or contradict your equity view.
+{uoa_block}
+
 ## Today's focus-layer players
 {focus_layer_players}
 
