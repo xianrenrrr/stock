@@ -1455,6 +1455,130 @@ def thesis_show_cmd(
         raise typer.Exit(code=1)
 
 
+@app.command("summary")
+def summary_cmd(
+    days: Annotated[int, typer.Option("--days", help="Lookback for recent activity")] = 3,
+) -> None:
+    """Morning view: latest daily note + holdings dashboard + recent alerts + pending events.
+
+    Designed as the first thing the operator runs in the morning. Pulls everything
+    from local data; no LLM cost. Run with `stock summary` for default 3-day window.
+    """
+    try:
+        from datetime import datetime, timedelta, timezone
+        from stock import discovery_engine
+        from stock.events import event_calibration_summary, list_events
+        from stock.holdings import format_holdings_block, list_holdings
+
+        conn = get_conn()
+        now = datetime.now(timezone.utc)
+        since_iso = (now - timedelta(days=days)).isoformat()
+
+        typer.echo(f"=== STOCK morning summary ({now.isoformat(timespec='minutes')} UTC) ===")
+
+        # 1. Latest daily research note
+        row = conn.execute(
+            "SELECT id, layer_focus, datetime(created_at) FROM research_reports"
+            " WHERE kind = 'daily' ORDER BY created_at DESC LIMIT 1"
+        ).fetchone()
+        typer.echo("")
+        typer.echo("--- latest daily research note ---")
+        if row:
+            typer.echo(f"  id={row[0]}  layer={row[1]}  created={row[2]} UTC")
+            typer.echo(f"  Read in full: APK / dashboard /channel/, or `stock research`")
+        else:
+            typer.echo("  (none yet)")
+
+        # 2. Active holdings risk dashboard
+        active = list_holdings(conn, active_only=True)
+        typer.echo("")
+        typer.echo("--- active holdings (P&L + stop + alerts + anomalies) ---")
+        if active:
+            typer.echo(format_holdings_block(active, conn))
+        else:
+            typer.echo("  (no active holdings)")
+
+        # 3. Recent alerts
+        alert_rows = conn.execute(
+            "SELECT id, topic, datetime(created_at) FROM research_reports"
+            " WHERE kind = 'alert' AND created_at >= ?"
+            " ORDER BY created_at DESC LIMIT 10",
+            (since_iso,),
+        ).fetchall()
+        typer.echo("")
+        typer.echo(f"--- alerts in last {days}d ---")
+        if alert_rows:
+            for r in alert_rows:
+                typer.echo(f"  ⚠️ #{r[0]} [{r[2]}]  {r[1]}")
+        else:
+            typer.echo("  (none)")
+
+        # 4. Pending tracked events (next 30d)
+        pending_events = list_events(conn, status="pending", limit=20)
+        typer.echo("")
+        typer.echo("--- pending event predictions ---")
+        if pending_events:
+            for e in pending_events[:8]:
+                typer.echo(
+                    f"  #{e.id} {e.ticker:<8} {e.event_type:<14}"
+                    f" window={e.window_start[:10]}->{e.window_end[:10]}"
+                    f" conf={e.confidence:.2f}  {e.title[:55]}"
+                )
+            if len(pending_events) > 8:
+                typer.echo(f"  ... +{len(pending_events) - 8} more (use `stock event list --status pending`)")
+        else:
+            typer.echo("  (none -- system will start emitting [NEW EVENT] lines in next research note)")
+
+        # 5. Calibration summary
+        cal = event_calibration_summary(conn, lookback_days=90)
+        typer.echo("")
+        typer.echo("--- event calibration (last 90d) ---")
+        if cal["total_resolved"]:
+            typer.echo(
+                f"  {cal['total_resolved']} resolved: {cal['hits']} hit, "
+                f"{cal['misses']} miss, {cal['partials']} partial, {cal['expired']} expired"
+            )
+            typer.echo(
+                f"  hit-rate {cal['hit_rate']:.0%}, avg-conf-on-resolve {cal['avg_confidence_when_resolved']:.2f}"
+            )
+        else:
+            typer.echo("  (still building baseline -- no events resolved yet)")
+
+        # 6. Top forward-discovery candidates
+        top = discovery_engine.list_candidates(conn, status="candidate", limit=5)
+        typer.echo("")
+        typer.echo("--- top 5 forward-discovery candidates (FWP) ---")
+        if top:
+            for cs in top:
+                gate = "GATE" if cs.qap_gate else "no-gate"
+                typer.echo(
+                    f"  {cs.ticker:<8} FWP={cs.fwp:.3f}  [{gate}]"
+                    f"  scored_at={cs.score_at[:16]}"
+                )
+        else:
+            typer.echo("  (none -- next refresh fires daily 23:00 UTC)")
+
+        # 7. What to do
+        typer.echo("")
+        typer.echo("--- next actions ---")
+        typer.echo(f"  - Read the latest daily note (id={row[0] if row else 'N/A'}) on the APK")
+        if active:
+            zero_cost = [h.ticker for h in active if h.cost_basis == 0]
+            if zero_cost:
+                typer.echo(
+                    f"  - Update cost_basis for {', '.join(zero_cost)}: "
+                    f"`stock holding add {zero_cost[0]} <qty> <real_cost>` "
+                    f"(currently placeholder, breaks F32 mechanical stop alert)"
+                )
+        if cal["total_resolved"] == 0:
+            typer.echo("  - Calibration has no resolved events yet; system will fill in over time")
+        typer.echo(f"  - Next morning research push: 02:30 UTC = 10:30 Beijing tomorrow")
+        typer.echo(f"  - Next autopilot: 06:00 UTC = 14:00 Beijing tomorrow")
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
 @app.command("check")
 def check_cmd(
     ticker: Annotated[str, typer.Argument(help="Ticker to inspect (e.g. SMCI)")],
