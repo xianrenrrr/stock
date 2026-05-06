@@ -97,7 +97,13 @@ def _classify_risk(decel: float | None, margin_compression: float | None) -> str
 
 
 def _yfinance_panel_data(ticker: str) -> tuple[float | None, float | None, float | None, float | None, float | None]:
-    """Pull (latest_q_rev, latest_q_yoy, prior_4q_mean_yoy, latest_gm, prior_4q_mean_gm).
+    """Pull (latest_q_rev, latest_growth, prior_growth_mean, latest_gm, prior_4q_mean_gm).
+
+    yfinance free tier returns ~5 quarters of quarterly_income_stmt. To compute
+    a YoY-of-YoY deceleration we'd need 9, so we fall back to QoQ-of-QoQ:
+    with 5 quarters we get 4 QoQ growth datapoints; latest vs trailing-3Q
+    mean is the deceleration signal. QoQ is seasonally noisier but a
+    consistent panel-wide signal still detects loop-closure stress.
 
     Tolerant of missing data -- returns Nones rather than raising. Tests
     inject a stub provider instead of calling this.
@@ -110,20 +116,24 @@ def _yfinance_panel_data(ticker: str) -> tuple[float | None, float | None, float
             return (None, None, None, None, None)
 
         latest_q_rev = None
-        rev_yoys: list[float] = []
+        # QoQ growth across whatever quarters yfinance gave us
+        qoqs: list[float] = []
         if "Total Revenue" in df.index:
             rev_series = df.loc["Total Revenue"].dropna()
             rev_list = rev_series.tolist()  # most-recent-first
             if rev_list:
                 latest_q_rev = float(rev_list[0])
-            # YoY: each quarter vs same quarter 4 periods ago
-            for i in range(min(5, len(rev_list) - 4)):
-                prev = rev_list[i + 4]
+            for i in range(len(rev_list) - 1):
+                prev = rev_list[i + 1]
                 if prev:
-                    rev_yoys.append((rev_list[i] - prev) / abs(prev))
+                    qoqs.append((rev_list[i] - prev) / abs(prev))
 
-        latest_q_yoy = rev_yoys[0] if rev_yoys else None
-        prior_4q_mean_yoy = sum(rev_yoys[1:5]) / max(1, len(rev_yoys[1:5])) if len(rev_yoys) > 1 else None
+        latest_q_yoy = qoqs[0] if qoqs else None
+        # Use up to 3 prior QoQ datapoints as the "trailing baseline"
+        prior_4q_mean_yoy = (
+            sum(qoqs[1:4]) / max(1, len(qoqs[1:4]))
+            if len(qoqs) > 1 else None
+        )
 
         # Gross margin: Gross Profit / Total Revenue
         gms: list[float] = []
