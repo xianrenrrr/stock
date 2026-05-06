@@ -149,7 +149,13 @@ def post_sync_notes(
     _auth: None = Depends(_require_admin),
     conn: sqlite3.Connection = Depends(get_db_conn),
 ) -> SyncWriteResponse:
-    """Upsert research_reports rows pushed from the laptop."""
+    """Upsert research_reports rows pushed from the laptop.
+
+    `upserted` counts both INSERT and UPDATE -- it's the number of rows
+    actually written, which is what the operator wants to see in logs.
+    The audit-log "Boss-bound note received" only fires on INSERT so a
+    routine re-push of existing rows doesn't flood the log.
+    """
     upserted = 0
     new_notes: list[tuple[int, str, str]] = []
     for note in body.notes:
@@ -166,7 +172,6 @@ def post_sync_notes(
                     note.body, note.cost_usd, note.created_at,
                 ),
             )
-            upserted += 1
             new_notes.append((note.research_id, note.kind, (note.topic or "")[:80]))
         else:
             conn.execute(
@@ -177,9 +182,8 @@ def post_sync_notes(
                     note.body, note.cost_usd, note.created_at, note.research_id,
                 ),
             )
+        upserted += 1
     conn.commit()
-    # Audit log: a new boss-bound note has arrived on Render. Routine repushes
-    # of existing notes (upserted=0) stay silent so the log isn't flooded.
     for nid, kind, topic in new_notes:
         logger.info(
             "Boss-bound note received on Render: id=%d kind=%s topic=%r",
@@ -193,7 +197,12 @@ def post_sync_tokens(
     _auth: None = Depends(_require_admin),
     conn: sqlite3.Connection = Depends(get_db_conn),
 ) -> SyncWriteResponse:
-    """Upsert recipient_tokens rows pushed from the laptop."""
+    """Upsert recipient_tokens rows pushed from the laptop.
+
+    `upserted` counts both INSERT and UPDATE -- the operator's log is
+    misleading otherwise (a routine re-push of an existing token would
+    show 0 even though the row was refreshed).
+    """
     upserted = 0
     for tok in body.tokens:
         existing = conn.execute(
@@ -209,12 +218,12 @@ def post_sync_tokens(
                     tok.last_seen_at, tok.revoked,
                 ),
             )
-            upserted += 1
         else:
             conn.execute(
                 "UPDATE recipient_tokens SET recipient=?, revoked=? WHERE token=?",
                 (tok.recipient, tok.revoked, tok.token),
             )
+        upserted += 1
     conn.commit()
     return SyncWriteResponse(upserted=upserted)
 
