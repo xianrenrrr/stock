@@ -34,3 +34,20 @@ tickers:
   - GOOGL
   - META
   - ORCL
+  # ---- 中国半导体 / Chinese semiconductor (boss directive 2026-05-05) ----
+  # Focus: equipment + materials + foundry, less downstream IC design.
+  # The "find before it explodes" angle = small-mid caps with niche
+  # bottleneck moats and recent revenue inflection.
+  - 688082.SS  # 盛美上海 ACMR Shanghai -- wet bench, plating, anneal
+  - 688012.SS  # 中微公司 AMEC -- etch (high-end), MOCVD
+  - 002371.SZ  # 北方华创 NAURA -- broadest equipment portfolio in China
+  - 688126.SS  # 沪硅产业 SICC -- 300mm silicon wafers
+  - 600584.SS  # 长电科技 JCET -- advanced packaging (HBM beneficiary)
+  - 688981.SS  # 中芯国际 SMIC A -- foundry leader (mature node domestic)
+  - 0981.HK    # 中芯国际 SMIC HK
+  - 603501.SS  # 韦尔股份 Will Semi -- CIS / image sensors
+  - 002129.SZ  # TCL中环 -- silicon wafers
+  - 688521.SS  # 芯原股份 VeriSilicon -- IP licensing
+  - 688385.SS  # 复旦微电 -- mature-node MCU + FPGA
+  - 002049.SZ  # 紫光国微 -- specialty IC + smart card
+  - 688360.SS  # 德科立 -- optical components (AI DC interconnect)

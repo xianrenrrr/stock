@@ -44,15 +44,14 @@ SAMPLE_FORM4_XML = """<?xml version="1.0"?>
 """
 
 
-SAMPLE_INDEX_JSON = {
-    "directory": {
-        "item": [
-            {"name": "filing-summary.xml", "type": "summary"},
-            {"name": "wf-form4_1234567.xml", "type": "form4-doc"},
-            {"name": "primary_doc.html", "type": "html"},
-        ]
-    }
-}
+SAMPLE_INDEX_HTM = """
+<html><body>
+<a href="/Archives/edgar/data/1234567/000123456726000123/xslF345X05/wf-form4_1234567.xml">XSLT view</a>
+<a href="/Archives/edgar/data/1234567/000123456726000123/wf-form4_1234567.xml">Raw XML</a>
+<a href="/Archives/edgar/data/1234567/000123456726000123/filing-summary.xml">summary</a>
+<a href="/Archives/edgar/data/1234567/000123456726000123/primary_doc.html">html view</a>
+</body></html>
+"""
 
 
 def test_parse_form4_xml_extracts_code_shares_price() -> None:
@@ -129,14 +128,15 @@ def test_parse_form4_xml_sums_multi_transactions_same_code() -> None:
     assert price == 17.5
 
 
-def test_form4_xml_url_picks_form4_doc_skipping_summary() -> None:
-    """_form4_xml_url_from_index skips filing-summary.xml and picks the doc."""
-    fake_resp = httpx.Response(200, json=SAMPLE_INDEX_JSON)
+def test_form4_xml_url_picks_form4_doc_skipping_xslt_and_summary() -> None:
+    """_form4_xml_url_from_index skips XSLT view + filing-summary, picks raw XML."""
+    fake_resp = httpx.Response(200, text=SAMPLE_INDEX_HTM)
     with patch.object(insiders, "_http_get", return_value=fake_resp):
         url = insiders._form4_xml_url_from_index("0001234567", "0001234567-26-000123")
     assert url is not None
     assert url.endswith("wf-form4_1234567.xml")
-    assert "000123456726000123" in url  # un-dashed accession in path
+    assert "/xsl" not in url  # XSLT view rejected
+    assert "summary" not in url  # filing-summary rejected
 
 
 def test_form4_xml_url_returns_none_on_404() -> None:

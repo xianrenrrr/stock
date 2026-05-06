@@ -131,3 +131,58 @@ themes:
       - {ticker: SMIN,  name: India small-cap ETF,    thesis: "Mid/small-cap leverage to domestic consumption"}
     losers:
       - {ticker: MCHI,  name: China large-cap ETF,    thesis: "Capital flight from aging China to growing India"}
+
+  - theme: china_semi_value
+    horizon_years: 7
+    thesis: |
+      Boss directive 2026-05-05: dig deep on Chinese semiconductor names that
+      are NOT yet broadly noticed. Three structural drivers compounding:
+      (1) US export controls + entity-list expansion FORCE Chinese hyperscalers
+      (Alibaba, ByteDance, Tencent, Huawei) to source domestically -- a
+      captive demand backstop equipment + materials suppliers do not have in
+      a normal cycle. (2) "Big Fund Phase III" RMB 344B (~$48B) launched
+      May 2024, deploying through 2030; A-share semi names get direct gov
+      orders + state-bank cheap credit. (3) HBM + advanced packaging is the
+      AI bottleneck and China is 1-2 nodes behind on logic but only 1
+      generation behind on packaging -- packaging is where Chinese suppliers
+      can reach parity FIRST and benefit from Nvidia / hyperscaler diversification.
+
+      Find-before-it-explodes angle: Bloom Energy ran 20x because it solved
+      a concrete near-term bottleneck (fast-deploy DC power). Chinese semi
+      analogues with the same shape: domestic CMP slurry, EUV pellicle,
+      300mm wafer reclaim, ESC chuck, atomic-layer deposition precursors.
+      Most are 50M-2B USD market cap with revenue inflection from a single
+      customer onboard at SMIC / YMTC / CXMT.
+
+    leading_indicators:
+      - "MOFCOM monthly export-control entity list updates (broader = stronger thesis)"
+      - "SMIC capex disclosure + A-share semi equipment order book QoQ"
+      - "Big Fund Phase III monthly deployment rate (PBoC quarterly disclosure)"
+      - "TSMC + Samsung HBM allocation cuts to non-Nvidia clients (signals diversion to China-buy)"
+      - "Huawei Ascend chip yield rumors / Mate-series shipment numbers"
+      - "China customs HS-8542 (ICs) import volume -- inverse signal for domestic share"
+    beneficiaries:
+      # Equipment -- highest moat, longest order-book visibility
+      - {ticker: 688082.SS, name: 盛美上海 ACMR Shanghai,    thesis: "Wet-bench + plating + anneal; SAPS clean monopoly domestically; US ADR ACMR is parent"}
+      - {ticker: ACMR,      name: ACM Research US ADR,       thesis: "Same business, US-listed; -65% from 2024 peak on entity-list fears that have since priced in"}
+      - {ticker: 688012.SS, name: 中微公司 AMEC,            thesis: "Etch + MOCVD; only Chinese name with serious 5nm-class etch tool ramp"}
+      - {ticker: 002371.SZ, name: 北方华创 NAURA,           thesis: "Broadest domestic equipment portfolio (etch/CVD/diffusion/cleaning); de-facto national champion"}
+      # Materials -- the 'shovel' layer most overlooked
+      - {ticker: 688126.SS, name: 沪硅产业 SICC,            thesis: "300mm silicon wafer; replaces Shin-Etsu/SUMCO at SMIC; gross margins inflecting positive"}
+      - {ticker: 002129.SZ, name: TCL中环 Zhonghuan,        thesis: "300mm wafer + solar wafers; vertical integration story"}
+      # Packaging -- the AI/HBM beneficiary closest to parity
+      - {ticker: 600584.SS, name: 长电科技 JCET,             thesis: "Top-3 OSAT globally; HBM CoWoS-analogue capacity ramp; quietly added Nvidia in 2025"}
+      - {ticker: 002185.SZ, name: 华天科技 HuaTian,          thesis: "Smaller OSAT; advanced fan-out packaging niche; cheaper FCF/EV than JCET"}
+      # Foundry / fabless that ride the wave
+      - {ticker: 688981.SS, name: 中芯国际 SMIC A-share,     thesis: "Mature-node domestic monopoly; AI inference chip foundry of choice for Cambricon/Huawei"}
+      - {ticker: 0981.HK,   name: 中芯国际 SMIC HK,          thesis: "Same; HK-listed at material discount to A-share"}
+      - {ticker: 603501.SS, name: 韦尔股份 Will Semi,        thesis: "CIS image sensors; auto + smartphone recovery + secured Apple slot"}
+      - {ticker: 688521.SS, name: 芯原股份 VeriSilicon,      thesis: "IP licensing; AI accelerator IP licensed to Chinese fabless; royalty inflection if Cambricon/Huawei volumes scale"}
+      - {ticker: 688385.SS, name: 复旦微电 Fudan Micro,     thesis: "Mature-node MCU + FPGA; quiet defense/aerospace customer base"}
+      # Optical / interconnect -- AI DC pulls demand
+      - {ticker: 688360.SS, name: 德科立 Dekoli,             thesis: "DWDM optical components for DC interconnect; small cap (~1.5B USD), revenue inflecting"}
+      - {ticker: 002463.SZ, name: 沪电股份 ShenNan PCB,      thesis: "AI-server PCB beneficiary; high-multilayer + HDI moat"}
+    losers:
+      # Anti-thesis names: Chinese fabless dependent on TSMC node access
+      - {ticker: BABA,  name: Alibaba,                  thesis: "Pingtouge AI chip program crippled by TSMC cut-off; spent capex doesn't print revenue"}
+      - {ticker: BIDU,  name: Baidu,                    thesis: "Kunlun-3 tape-out blocked; loses AI-inference-cost arbitrage vs Aliyun"}

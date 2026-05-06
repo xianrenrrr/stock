@@ -174,43 +174,55 @@ _INDEX_HOST = "https://www.sec.gov"
 
 
 def _accession_index_url(cik: str, accession_number: str) -> str:
-    """Build the index.json URL for a Form 4 accession.
+    """Build the index.htm URL for a Form 4 accession.
 
-    accession_number comes back from the ATOM feed in the dashed form
-    (0001234567-26-009123); the EDGAR archive path uses it un-dashed.
+    The .json variant returns 404 for many filings (esp. inline-XBRL ones)
+    so we use the .htm variant which is universally available, then scrape
+    the .xml hrefs out of the HTML.
     """
     no_dashes = accession_number.replace("-", "")
-    return f"{_INDEX_HOST}/Archives/edgar/data/{int(cik)}/{no_dashes}/{accession_number}-index.json"
+    return f"{_INDEX_HOST}/Archives/edgar/data/{int(cik)}/{no_dashes}/{accession_number}-index.htm"
+
+
+_INDEX_XML_HREF_RE = re.compile(
+    r'href=["\']([^"\']+\.xml)["\']', re.IGNORECASE,
+)
 
 
 def _form4_xml_url_from_index(cik: str, accession_number: str) -> str | None:
-    """Fetch the accession index, find the .xml file that's the Form 4 doc."""
+    """Fetch the accession HTML index, find the actual Form 4 XML document.
+
+    EDGAR ships TWO xml links per Form 4 filing: one rooted in /xslF345X05/
+    which is the XSLT-stylesheet view, and one at the bare path which is
+    the raw XML. We want the raw one. Skip /xsl* paths and skip
+    filing-summary metadata.
+    """
     try:
         time.sleep(SEC_REQUEST_DELAY_SECS)
         resp = _http_get(_accession_index_url(cik, accession_number))
         if resp.status_code != 200:
             return None
-        data = resp.json()
-    except (httpx.HTTPError, ValueError):
+    except httpx.HTTPError:
         return None
 
-    items = data.get("directory", {}).get("item", [])
-    if not isinstance(items, list):
-        return None
-    # Pick the *.xml file that is the actual Form 4 document. Common names:
-    # wf-form4_xxxxx.xml, primary_doc.xml, or just an accession-prefixed .xml.
-    # Skip filing-summary.xml which is metadata only.
-    candidates = [
-        i for i in items
-        if isinstance(i, dict)
-        and str(i.get("name", "")).lower().endswith(".xml")
-        and "filing" not in str(i.get("name", "")).lower()
-    ]
+    hrefs = _INDEX_XML_HREF_RE.findall(resp.text)
+    candidates: list[str] = []
+    for href in hrefs:
+        lower = href.lower()
+        if "/xsl" in lower:
+            continue  # XSLT-rendered view, not the source XML
+        if "filing" in lower or "summary" in lower:
+            continue  # metadata, not the form body
+        candidates.append(href)
     if not candidates:
         return None
-    name = str(candidates[0].get("name", ""))
+    href = candidates[0]
+    if href.startswith("/"):
+        return f"{_INDEX_HOST}{href}"
+    if href.startswith("http"):
+        return href
     no_dashes = accession_number.replace("-", "")
-    return f"{_INDEX_HOST}/Archives/edgar/data/{int(cik)}/{no_dashes}/{name}"
+    return f"{_INDEX_HOST}/Archives/edgar/data/{int(cik)}/{no_dashes}/{href}"
 
 
 def parse_form4_xml(text: str) -> tuple[str | None, float | None, float | None, str | None]:

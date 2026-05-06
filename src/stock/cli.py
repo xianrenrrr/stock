@@ -1747,6 +1747,29 @@ def check_cmd(
         raise typer.Exit(code=1)
 
 
+@app.command("qa-dive")
+def qa_dive_cmd(
+    ticker: str = typer.Argument(..., help="Ticker to deep-dive (e.g. ACMR, 688082.SS)"),
+    thesis: str = typer.Option("", help="Seed thesis to anchor the first question"),
+    rounds: int = typer.Option(5, help="Number of Q&A rounds (2-8)"),
+) -> None:
+    """F37: progressive Q&A deep-dive on one ticker. Each round drills the prior answer."""
+    from stock import qa_deepdive
+    try:
+        conn = get_conn()
+        dive = qa_deepdive.run_and_persist(
+            ticker=ticker, seed_thesis=thesis, conn=conn, rounds=rounds,
+        )
+        if not dive.rounds:
+            typer.echo("No rounds completed (check cost ceiling / backend).", err=True)
+            raise typer.Exit(code=1)
+        typer.echo(qa_deepdive.render_markdown(dive))
+        typer.echo(f"\nPersisted as research_id={dive.research_id}, {len(dive.rounds)} rounds.")
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
 @app.command("uoa-scan")
 def uoa_scan_cmd(
     ticker: str = typer.Argument(None, help="Optional single ticker; default = watchlist + holdings"),

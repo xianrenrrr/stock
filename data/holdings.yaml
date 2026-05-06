@@ -4,22 +4,21 @@
 # this file manually and the next startup syncs it.
 
 holdings:
+  # SMCI -- CLOSED 2026-05-05 AH at $32.50 (+16.07% realized).
+  # Boss bought 2026-05-04 at $28, ~$20k notional (~714 shares), sold the
+  # next AH session into the Q3 fiscal 2026 earnings pop ($28 -> $33.90 high).
+  # Disciplined exit: cost-locked stop framework + sell-into-strength on
+  # the gap to avoid giving back gains to an AH fade.
   - ticker: SMCI
-    qty: 1
-    cost_basis: 0.00
+    qty: 0
+    cost_basis: 28.00
     opened_at: '2026-05-04'
+    active: 0
     notes: |
-      Bought 2026-05-04 on id=24 thesis: DLC liquid-cool rack leader,
-      ships GB200 NVL72 1-2 quarters ahead of ODM peers. Half size per
-      system caveat (high beta, not high alpha; net margin 5-8%).
-
-      === STOP-LOSS (computed 2026-05-04, F24 helper) ===
-      Recommended hard stop: $23.91 (-11.7% from $27.09 close)
-        - ATR(20) = $1.59; 2x ATR stop = $23.91
-        - 30-day swing-low = $21.34 (worst-case secondary stop)
-        - -15% mechanical floor = $23.03
-      Re-run anytime: `stock event ...` or just look at the next morning
-      research note's 止损参考 / Stop-loss reference table.
+      CLOSED 2026-05-05 AH @ $32.50 from $28 cost ($20k position).
+      Realized: +$4.50/sh ~ +16.07% over 1 trading day on the Q3 pop.
+      Original thesis (DLC liquid-cool, GB200 NVL72 lead) intact;
+      exit was a price/risk decision, not a thesis break.
 
       === SELL TRIGGERS (any one = re-evaluate; multiple = exit) ===
       1. Q3 print: margin stuck < 11% -> thesis broken, cut.
