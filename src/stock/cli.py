@@ -1747,6 +1747,66 @@ def check_cmd(
         raise typer.Exit(code=1)
 
 
+@app.command("ai-loop-measure")
+def ai_loop_measure_cmd() -> None:
+    """F39: measure the AI commercial-loop panel right now (slow yfinance walk)."""
+    from stock import ai_loop_monitor
+    try:
+        conn = get_conn()
+        measurements = ai_loop_monitor.measure_panel()
+        n = ai_loop_monitor.persist(conn, measurements)
+        status = ai_loop_monitor.overall_loop_status(measurements)
+        flags: dict[str, int] = {}
+        for m in measurements:
+            flags[m.risk_flag] = flags.get(m.risk_flag, 0) + 1
+        typer.echo(f"\nAI loop status: {status}  ({flags})")
+        typer.echo(f"Inserted: {n}\n")
+        for m in sorted(measurements, key=lambda x: 0 if x.risk_flag == "severe" else 1 if x.risk_flag == "mild" else 2):
+            decel = f"{(m.revenue_decel or 0)*100:+.1f}pp" if m.revenue_decel is not None else "-"
+            comp = f"{(m.margin_compression or 0)*100:+.1f}pp" if m.margin_compression is not None else "-"
+            typer.echo(f"  {m.ticker:6}  {m.risk_flag:6}  decel={decel:>7}  GM_comp={comp:>7}")
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
+@app.command("weekly-qa-dive")
+def weekly_qa_dive_cmd() -> None:
+    """F40: run F37 Q&A on the top-5 FWP candidates right now (instead of waiting for Saturday)."""
+    from stock.orchestrator import _job_weekly_qa_dive
+    try:
+        _job_weekly_qa_dive()
+        typer.echo("Weekly QA dive complete. See research_reports kind='deep_qa'.")
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
+@app.command("smallcap-scan")
+def smallcap_scan_cmd(
+    sector: str = typer.Option(None, help="Filter to one sector (ai_semis_smallcap, biopharma_smallcap, ai_dc_energy_smallcap)"),
+) -> None:
+    """F38: scan the curated three-sector small-cap universe + persist + print top hits."""
+    from stock import smallcap_scanner
+    try:
+        conn = get_conn()
+        cands = smallcap_scanner.scan_universe(conn)
+        if sector:
+            cands = [c for c in cands if c.sector == sector]
+        smallcap_scanner.persist(conn, cands)
+        cands.sort(key=lambda c: c.score, reverse=True)
+        typer.echo(f"\nScanned {len(cands)} tickers:\n")
+        for c in cands[:20]:
+            cap = f"${(c.market_cap_usd or 0)/1e9:.1f}B" if c.market_cap_usd else "?"
+            typer.echo(
+                f"  {c.ticker:8} {c.sector[:24]:24} cap={cap:>6} "
+                f"score={c.score:.2f} -- {c.flag_reason} | {c.niche_bottleneck[:60]}"
+            )
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
 @app.command("qa-dive")
 def qa_dive_cmd(
     ticker: str = typer.Argument(..., help="Ticker to deep-dive (e.g. ACMR, 688082.SS)"),

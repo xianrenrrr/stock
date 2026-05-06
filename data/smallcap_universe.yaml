@@ -1,0 +1,67 @@
+# Small-cap "find before it explodes" universe (F38).
+#
+# Boss directive 2026-05-05: dig deep on names that solve a CONCRETE near-term
+# bottleneck and are NOT yet broadly noticed -- the Bloom Energy template
+# (~$2B before its 20x run; solved fast-deploy DC power; 12-18 months ahead
+# of the consensus narrative).
+#
+# Three sector pillars:
+#   1. ai_semis_smallcap     -- the layer-3+ supply chain plays consensus skips
+#   2. biopharma_smallcap    -- mechanism+ small-mid biotechs ahead of pivotal data
+#   3. ai_dc_energy_smallcap -- physical-power solvers for the AI-DC bottleneck
+#
+# Each ticker carries:
+#   - niche_bottleneck: the SPECIFIC problem it solves (one sentence)
+#   - mkt_cap_target_usd: the cap range we EXPECT (skip if grossly above it)
+#   - inflection_signal: what would confirm the thesis (revenue line, customer, regulatory)
+#   - notes: optional one-liner
+
+universe:
+
+  # =====================================================================
+  # AI semiconductor supply-chain small-mid cap
+  # =====================================================================
+  ai_semis_smallcap:
+    - {ticker: ACMR,     name: ACM Research,           mkt_cap_target_usd: 1500000000, niche_bottleneck: "Wet bench + plating cleaning at SMIC/YMTC; SAPS clean monopoly; ADR of A-share 盛美", inflection_signal: "Quarterly system-shipment count; SMIC capex disclosure"}
+    - {ticker: AOSL,     name: Alpha & Omega Semi,     mkt_cap_target_usd: 1100000000, niche_bottleneck: "Power MOSFET / IGBT for AI-DC PSU + EV inverter; underowned vs ON/STM", inflection_signal: "AI server PSU design wins"}
+    - {ticker: COHU,     name: Cohu,                   mkt_cap_target_usd: 1200000000, niche_bottleneck: "Semi test handler equipment; smaller cousin of Teradyne; HBM test demand inflecting", inflection_signal: "Quarterly orders from Korean HBM customers"}
+    - {ticker: ICHR,     name: Ichor Holdings,         mkt_cap_target_usd: 700000000,  niche_bottleneck: "Fluid delivery subsystems for AMAT/LRCX; pure-play WFE shovel maker", inflection_signal: "AMAT + LRCX guidance up = ICHR up 1Q later"}
+    - {ticker: ONTO,     name: Onto Innovation,        mkt_cap_target_usd: 7000000000, niche_bottleneck: "Optical metrology for HBM packaging; quietly added by Samsung/SK", inflection_signal: "HBM-bound revenue % disclosure in next earnings"}
+    - {ticker: AEHR,     name: Aehr Test Systems,      mkt_cap_target_usd: 350000000,  niche_bottleneck: "Wafer-level burn-in for SiC + photonics; nichest of niches", inflection_signal: "ON Semi or Wolfspeed adding capacity"}
+    - {ticker: PLAB,     name: Photon Dynamics,        mkt_cap_target_usd: 1200000000, niche_bottleneck: "Photomask supplier 2nd-source vs Toppan; DUV/EUV-prep mask demand", inflection_signal: "Sole-supply contract loss recovery"}
+    - {ticker: AMSC,     name: American Superconductor, mkt_cap_target_usd: 800000000, niche_bottleneck: "HTS cable for grid + Navy; AI-DC interconnect adjacency", inflection_signal: "Utility partnership announcements"}
+    - {ticker: NVMI,     name: Nova,                   mkt_cap_target_usd: 7500000000, niche_bottleneck: "Process-control metrology for advanced nodes; >5nm beneficiary", inflection_signal: "TSMC 2nm volume timing"}
+    - {ticker: SITM,     name: SiTime,                 mkt_cap_target_usd: 4500000000, niche_bottleneck: "MEMS oscillator replacing quartz; AI server timing demand", inflection_signal: "Hyperscaler design-win disclosures"}
+
+  # =====================================================================
+  # Biopharma small-mid cap pre-catalyst
+  # =====================================================================
+  biopharma_smallcap:
+    - {ticker: VKTX,     name: Viking Therapeutics,    mkt_cap_target_usd: 4000000000, niche_bottleneck: "GLP-1 oral + injectable next-gen; Phase 2 efficacy beat Wegovy", inflection_signal: "Phase 3 enrollment + interim readouts"}
+    - {ticker: CRSP,     name: CRISPR Therapeutics,    mkt_cap_target_usd: 4500000000, niche_bottleneck: "First-approved CRISPR therapy; sickle cell + hemophilia rollout", inflection_signal: "Casgevy commercial uptake QoQ"}
+    - {ticker: BEAM,     name: Beam Therapeutics,      mkt_cap_target_usd: 2500000000, niche_bottleneck: "Base editing -- next-gen CRISPR; better safety profile", inflection_signal: "First base-editing IND filings"}
+    - {ticker: SRPT,     name: Sarepta,                mkt_cap_target_usd: 9000000000, niche_bottleneck: "Duchenne MD gene therapy ELEVIDYS; expansion to older patients", inflection_signal: "Confirmatory trial readout 2026"}
+    - {ticker: NUVL,     name: Nuvalent,               mkt_cap_target_usd: 8000000000, niche_bottleneck: "ROS1 + ALK selective TKIs; cleaner safety profile", inflection_signal: "Pivotal data + accelerated approval"}
+    - {ticker: KRYS,     name: Krystal Biotech,        mkt_cap_target_usd: 6000000000, niche_bottleneck: "Topical gene therapy delivery platform; rare derm + lung", inflection_signal: "Pipeline expansion beyond DEB"}
+    - {ticker: ARWR,     name: Arrowhead Pharma,       mkt_cap_target_usd: 3000000000, niche_bottleneck: "RNAi platform; cardiometabolic + CNS pipeline", inflection_signal: "Plozasiran Phase 3 / partnership"}
+    - {ticker: RXRX,     name: Recursion,              mkt_cap_target_usd: 1500000000, niche_bottleneck: "AI-driven drug discovery (NVDA partner); first IND from platform", inflection_signal: "Platform-derived Phase 1 readout"}
+    - {ticker: VOR,      name: Vor Biopharma,          mkt_cap_target_usd: 250000000,  niche_bottleneck: "Engineered HSCs to enable CD33-targeted post-transplant therapy", inflection_signal: "Trem-cel + Mylotarg combo data"}
+    - {ticker: PRTA,     name: Prothena,               mkt_cap_target_usd: 1500000000, niche_bottleneck: "Anti-amyloid + tau pipeline; AD adjacencies post-Lecanemab", inflection_signal: "Birtamimab Phase 3 readout"}
+
+  # =====================================================================
+  # AI data-center power / cooling small-mid cap (the Bloom Energy template)
+  # =====================================================================
+  ai_dc_energy_smallcap:
+    - {ticker: BE,       name: Bloom Energy,           mkt_cap_target_usd: 6500000000, niche_bottleneck: "SOFC fuel cells -- fast-deploy behind-the-meter power for AI DCs", inflection_signal: "Hyperscaler PPAs + utility partnerships"}
+    - {ticker: TPIC,     name: TPI Composites,         mkt_cap_target_usd: 250000000,  niche_bottleneck: "Wind blade manufacturer; AI-DC PPA demand spillover", inflection_signal: "Order book vs 2024 trough"}
+    - {ticker: STEM,     name: Stem,                   mkt_cap_target_usd: 200000000,  niche_bottleneck: "AI-driven battery storage optimization software; behind-the-meter", inflection_signal: "Athena ARR YoY"}
+    - {ticker: FLNC,     name: Fluence Energy,         mkt_cap_target_usd: 2200000000, niche_bottleneck: "Grid-scale battery EPC; co-located with AI-DC PPA", inflection_signal: "Backlog QoQ + gross margin"}
+    - {ticker: NEE,      name: NextEra Energy,         mkt_cap_target_usd: 130000000000,niche_bottleneck: "Largest US renewables IPP; AI-DC PPA pipeline", inflection_signal: "FERC capacity additions"}
+    - {ticker: AY,       name: Atlantica Sustainable,  mkt_cap_target_usd: 2500000000, niche_bottleneck: "Diversified renewables yieldco; cheap dividend+AI-DC contract optionality", inflection_signal: "Inflation-linked PPA renewals"}
+    - {ticker: GEV,      name: GE Vernova,             mkt_cap_target_usd: 90000000000, niche_bottleneck: "Gas turbine + grid equipment; AI-DC firm-power dominant supplier", inflection_signal: "Backlog QoQ"}
+    - {ticker: VRT,      name: Vertiv Holdings,        mkt_cap_target_usd: 35000000000, niche_bottleneck: "AI-DC liquid cooling + power management; already running but loop-closure tied", inflection_signal: "Hyperscaler capex guidance"}
+    - {ticker: STRL,     name: Sterling Infrastructure,mkt_cap_target_usd: 5500000000, niche_bottleneck: "Site preparation + e-infrastructure for AI-DC builds", inflection_signal: "Backlog disclosures + AI-DC revenue mix"}
+    - {ticker: MOD,      name: Modine Manufacturing,   mkt_cap_target_usd: 5500000000, niche_bottleneck: "Cooling systems for DC + EV thermal management", inflection_signal: "Data center segment growth"}
+    - {ticker: NPWR,     name: NET Power,              mkt_cap_target_usd: 350000000,  niche_bottleneck: "Allam-cycle natural gas zero-emission power; first commercial plant 2027", inflection_signal: "First MW online + offtake announcements"}
+    - {ticker: OKLO,     name: Oklo,                   mkt_cap_target_usd: 8000000000, niche_bottleneck: "Small modular nuclear reactor; AI-DC PPA optionality", inflection_signal: "NRC license application progress"}
+    - {ticker: NNE,      name: Nano Nuclear Energy,    mkt_cap_target_usd: 700000000,  niche_bottleneck: "Microreactor concept stage; speculative AI-DC SMR play", inflection_signal: "DOE funding + first-fuel milestones"}

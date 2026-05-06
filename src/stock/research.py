@@ -45,7 +45,9 @@ from stock.secular import (
     pick_focus_theme,
 )
 from stock.stops import format_stop_loss_block
+from stock.ai_loop_monitor import format_loop_block
 from stock.options import format_uoa_block
+from stock.smallcap_scanner import format_smallcap_block
 from stock.thesis import compute_thesis_stats, format_thesis_block
 from stock.supply_chain import (
     Layer,
@@ -413,6 +415,12 @@ def generate_daily_research(
     # F36: unusual options activity from the last 3 sessions, top 12.
     # Caller-renders an empty string when nothing fired (silent on quiet days).
     uoa_block = format_uoa_block(conn, days=3, limit=12)
+    # F38: top forward-discovery small-caps in 3 sectors (AI semis, biopharma,
+    # AI-DC energy). Refreshed by the 22:15 UTC nightly scan.
+    smallcap_block = format_smallcap_block(conn, days=2)
+    # F39: AI commercial-loop closure-risk monitor. Headline + table of any
+    # panel companies showing simultaneous deceleration + margin compression.
+    ai_loop_block = format_loop_block(conn, days=120)
     feedback_block = recent_feedback_block()
     anomaly_block = format_anomaly_block(recent_anomalies(conn, days=2))
     previous_followups_block = action_queue.format_previous_followups(
@@ -453,6 +461,8 @@ def generate_daily_research(
         events_block=events_block,
         events_calibration=events_calibration,
         uoa_block=uoa_block or "(no unusual options activity in the last 3 sessions)",
+        smallcap_block=smallcap_block or "(smallcap scan has not run yet today)",
+        ai_loop_block=ai_loop_block or "(AI loop monitor not yet measured this cycle)",
         max_chars=max_chars,
     )
 

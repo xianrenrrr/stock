@@ -17,6 +17,7 @@ from stock.orchestrator import (
     _job_reflect_weekly,
     _job_run_predictions,
     _job_score_daily,
+    _job_weekly_qa_dive,
     create_scheduler,
     get_schedule_info,
     run_orchestrator,
@@ -363,16 +364,99 @@ def test_job_reflect_weekly_cost_ceiling(
     _job_reflect_weekly()
 
 
+# -- _job_weekly_qa_dive tests (F40) ----------------------------------------
+
+
+def test_job_weekly_qa_dive_iterates_top5(
+    mock_conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F40 calls qa_deepdive.run_and_persist for each top-FWP candidate."""
+    from stock.discovery_engine import CandidateScore
+
+    fake_candidates = [
+        CandidateScore(
+            ticker=t, fwp=0.7 - i * 0.05, fwp_pre_gate=0.7 - i * 0.05,
+            qap_gate=True, components={"insider": 0.4, "novelty": 0.6},
+            score_at="2026-05-05T22:00:00+00:00",
+        )
+        for i, t in enumerate(["ACMR", "VKTX", "BE", "AOSL", "RXRX"])
+    ]
+    monkeypatch.setattr(
+        "stock.discovery_engine.list_candidates",
+        lambda conn, **kwargs: fake_candidates,
+    )
+
+    calls: list[str] = []
+    def fake_run_and_persist(*, ticker, seed_thesis, conn, rounds):
+        calls.append(ticker)
+        from stock.qa_deepdive import QADeepDive
+        return QADeepDive(
+            ticker=ticker, seed_thesis=seed_thesis, rounds=[],
+            created_at="2026-05-05T22:00:00+00:00", research_id=None,
+        )
+
+    monkeypatch.setattr("stock.qa_deepdive.run_and_persist", fake_run_and_persist)
+
+    _job_weekly_qa_dive()
+
+    assert calls == ["ACMR", "VKTX", "BE", "AOSL", "RXRX"]
+
+
+def test_job_weekly_qa_dive_skips_when_no_candidates(
+    mock_conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F40 logs and exits when discovery_engine has no candidates -- no crash."""
+    monkeypatch.setattr(
+        "stock.discovery_engine.list_candidates", lambda conn, **kwargs: [],
+    )
+    # If this raises, test fails.
+    _job_weekly_qa_dive()
+
+
+def test_job_weekly_qa_dive_continues_on_per_ticker_failure(
+    mock_conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One bad qa_deepdive call doesn't stop the rest of the loop."""
+    from stock.discovery_engine import CandidateScore
+
+    monkeypatch.setattr(
+        "stock.discovery_engine.list_candidates",
+        lambda conn, **kwargs: [
+            CandidateScore(ticker="A", fwp=0.7, fwp_pre_gate=0.7, qap_gate=True,
+                           components={}, score_at=""),
+            CandidateScore(ticker="B", fwp=0.6, fwp_pre_gate=0.6, qap_gate=True,
+                           components={}, score_at=""),
+        ],
+    )
+    seen: list[str] = []
+    def fake_run_and_persist(*, ticker, seed_thesis, conn, rounds):
+        seen.append(ticker)
+        if ticker == "A":
+            raise RuntimeError("boom on A")
+        from stock.qa_deepdive import QADeepDive
+        return QADeepDive(
+            ticker=ticker, seed_thesis=seed_thesis, rounds=[],
+            created_at="2026-05-05T22:00:00+00:00", research_id=None,
+        )
+
+    monkeypatch.setattr("stock.qa_deepdive.run_and_persist", fake_run_and_persist)
+
+    _job_weekly_qa_dive()
+
+    assert seen == ["A", "B"]  # B was attempted despite A failing
+
+
 # -- create_scheduler tests -------------------------------------------------
 
 
 def test_create_scheduler_has_expected_jobs() -> None:
-    """Scheduler registers all F00-F36 pipeline jobs.
+    """Scheduler registers all F00-F40 pipeline jobs.
 
-    19 + backup_db (F33) + uoa_scan (F36) = 21.
+    19 + backup_db (F33) + uoa_scan (F36) + smallcap_scan (F38)
+    + ai_loop (F39) + weekly_qa_dive (F40) = 24.
     """
     scheduler = create_scheduler()
-    assert len(scheduler.get_jobs()) == 21
+    assert len(scheduler.get_jobs()) == 24
 
 
 def test_create_scheduler_job_ids() -> None:
@@ -402,6 +486,9 @@ def test_create_scheduler_job_ids() -> None:
         "verify_tracked_events",
         "backup_db",
         "uoa_scan",
+        "smallcap_scan",
+        "ai_loop_measure",
+        "weekly_qa_dive",
     }
     assert job_ids == expected
 
@@ -431,7 +518,7 @@ def test_get_schedule_info_format() -> None:
     info = get_schedule_info(scheduler)
 
     assert isinstance(info, ScheduleInfo)
-    assert len(info.jobs) == 21
+    assert len(info.jobs) == 24
 
     # Each entry has name and next_run keys
     for entry in info.jobs:

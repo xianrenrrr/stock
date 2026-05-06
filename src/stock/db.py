@@ -191,6 +191,36 @@ CREATE TABLE IF NOT EXISTS price_anomalies (
     UNIQUE(ticker, ts)
 );
 
+CREATE TABLE IF NOT EXISTS ai_loop_health (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticker TEXT NOT NULL,
+    measured_at TEXT NOT NULL,
+    quarterly_revenue_usd REAL,
+    quarterly_revenue_yoy REAL,
+    revenue_yoy_4q_mean REAL,
+    revenue_decel REAL,
+    gross_margin REAL,
+    gross_margin_4q_mean REAL,
+    margin_compression REAL,
+    risk_flag TEXT NOT NULL,
+    UNIQUE(ticker, measured_at)
+);
+
+CREATE TABLE IF NOT EXISTS smallcap_candidates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticker TEXT NOT NULL,
+    sector TEXT NOT NULL,
+    market_cap_usd REAL,
+    revenue_inflection REAL,
+    news_sparsity_score REAL,
+    score REAL NOT NULL,
+    niche_bottleneck TEXT NOT NULL,
+    inflection_signal TEXT,
+    flag_reason TEXT NOT NULL,
+    detected_at TEXT NOT NULL,
+    UNIQUE(ticker, detected_at)
+);
+
 CREATE TABLE IF NOT EXISTS option_anomalies (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ticker TEXT NOT NULL,
@@ -246,6 +276,12 @@ CREATE INDEX IF NOT EXISTS idx_action_queue_status ON action_queue (status, queu
 CREATE INDEX IF NOT EXISTS idx_action_queue_source ON action_queue (source_research_id);
 CREATE INDEX IF NOT EXISTS idx_insider_filings_ticker ON insider_filings (ticker, filed_at DESC);
 CREATE INDEX IF NOT EXISTS idx_anomalies_ts ON price_anomalies (ts DESC);
+CREATE INDEX IF NOT EXISTS idx_ai_loop_measured
+    ON ai_loop_health (measured_at DESC);
+CREATE INDEX IF NOT EXISTS idx_smallcap_score
+    ON smallcap_candidates (detected_at DESC, score DESC);
+CREATE INDEX IF NOT EXISTS idx_smallcap_sector
+    ON smallcap_candidates (sector, detected_at DESC);
 CREATE INDEX IF NOT EXISTS idx_option_anom_ticker_detected
     ON option_anomalies (ticker, detected_at DESC);
 CREATE INDEX IF NOT EXISTS idx_option_anom_score

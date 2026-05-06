@@ -109,6 +109,28 @@ direction supports the narrative. Do NOT recommend buying the option itself
 or contradict your equity view.
 {uoa_block}
 
+## 小盘前瞻发现 / Three-sector small-cap forward-discovery (F38)
+Curated universe across AI semis (layer-3+ supply chain), biopharma pre-catalyst,
+and AI-DC energy ("Bloom Energy template"). Each name is scored on (a) market
+cap (smaller = higher), (b) revenue inflection (latest QoQ vs trailing 4Q mean),
+(c) news sparsity (LESS coverage = higher because the boss wants names BEFORE
+they're widely noticed). **Pull at least one name from each sector into the
+appropriate output section if the score >= 0.55 and the niche-bottleneck story
+fits today's narrative.** Cite the niche bottleneck verbatim -- that is the
+reason the name is on this list, not the market-cap arithmetic.
+{smallcap_block}
+
+## AI 商业闭环监控 / AI commercial-loop closure risk (F39 -- BOSS PRIORITY)
+Boss's tail-risk thesis: AI cloud capex is producing real revenue NOW, but if
+the SaaS / consumer-app companies CONSUMING that AI cloud spend can't show
+profitability by 2027-2028, expectations re-rate => crash. The panel below
+tracks AI-using SaaS / consumer-app gross margin + revenue growth trends:
+deceleration AND margin compression are the leading indicator of loop failure.
+**You MUST cite the headline status (severe / elevated / ok) in the Risk and
+hedge section.** When status is severe, downgrade conviction on AI-cap-ex-
+levered names by one notch and call out hedge candidates.
+{ai_loop_block}
+
 ## Today's focus-layer players
 {focus_layer_players}
 

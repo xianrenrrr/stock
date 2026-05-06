@@ -16,7 +16,7 @@ import time
 import httpx
 import openai
 
-from stock import action_queue, alerts, anomaly, backup, conversation, discovery_engine, events, grading, holdings, intent, options as options_module, prompt_rewriter, self_review, thesis
+from stock import action_queue, ai_loop_monitor, alerts, anomaly, backup, conversation, discovery_engine, events, grading, holdings, intent, options as options_module, prompt_rewriter, self_review, smallcap_scanner, thesis
 from stock.cloud_sync import run_local_sync
 from stock.config import get_settings
 from stock.db import get_conn
@@ -538,6 +538,104 @@ def _job_backup_db() -> None:
         logger.exception("DB backup job failed")
 
 
+def _job_weekly_qa_dive() -> None:
+    """F40: weekly autonomous Q&A deep-dive on the top-5 FWP candidates.
+
+    Boss directive: "他主力盯住几只板块几个股票, 不断地做深入挖掘." Cron picks
+    the highest-FWP names from discovery_candidates and runs F37's Q&A engine
+    on each. 5 names × 5 rounds × ~700 tokens ~ $0.50-1.50 per weekly run --
+    cheap insurance that the system stays digging into the same candidates
+    week-over-week instead of forgetting what it found.
+
+    Saturday 07:00 UTC = post-Friday-close, before the weekly reflect job.
+    """
+    from stock import discovery_engine, qa_deepdive
+    conn = get_conn()
+    try:
+        candidates = discovery_engine.list_candidates(conn, status="candidate", limit=5)
+        if not candidates:
+            logger.info("Weekly QA: no candidates available -- skipping")
+            return
+        for c in candidates:
+            try:
+                seed = (
+                    f"FWP score {c.fwp:.2f} (rank from latest discovery_engine run); "
+                    f"signal components {dict((k, round(v, 2)) for k, v in c.components.items() if isinstance(v, (int, float)))}. "
+                    f"Why is THIS the right time to dig deep, and what's the highest-conviction follow-up?"
+                )
+                dive = qa_deepdive.run_and_persist(
+                    ticker=c.ticker, seed_thesis=seed, conn=conn, rounds=5,
+                )
+                logger.info(
+                    "Weekly QA dive done: %s -> research_id=%s (%d rounds)",
+                    c.ticker, dive.research_id, len(dive.rounds),
+                )
+            except CostCeilingError:
+                logger.warning("Cost ceiling hit during weekly QA on %s; stopping", c.ticker)
+                break
+            except Exception:
+                logger.exception("Weekly QA dive failed for %s", c.ticker)
+                continue
+    except Exception:
+        logger.exception("Weekly QA orchestration failed")
+    finally:
+        conn.close()
+
+
+def _job_measure_ai_loop() -> None:
+    """F39: weekly measurement of the AI commercial-loop panel.
+
+    Income statements only update quarterly, so a daily cron is wasteful;
+    once a week is enough to catch new earnings prints across the panel.
+    Runs Mondays at 06:30 UTC -- after the weekend, before the Monday
+    morning research push.
+    """
+    conn = get_conn()
+    try:
+        measurements = ai_loop_monitor.measure_panel()
+        n = ai_loop_monitor.persist(conn, measurements)
+        status = ai_loop_monitor.overall_loop_status(measurements)
+        flag_counts: dict[str, int] = {}
+        for m in measurements:
+            flag_counts[m.risk_flag] = flag_counts.get(m.risk_flag, 0) + 1
+        logger.info(
+            "AI loop measurement: %d new rows; status=%s; flags=%s",
+            n, status, flag_counts,
+        )
+    except Exception:
+        logger.exception("AI loop measurement job failed")
+    finally:
+        conn.close()
+
+
+def _job_scan_smallcap_universe() -> None:
+    """F38: nightly scan of the curated 3-sector small-cap universe.
+
+    Runs at 22:30 UTC after FWP discovery_engine (23:00 UTC) -- wait, no,
+    we need it BEFORE the discovery engine so the small-cap candidates
+    can flow into the next morning's research note. Move to 22:15 UTC
+    Mon-Fri; sits between the 21:30 score_daily and 23:00 discovery_engine.
+
+    Pulls market cap + revenue trajectory via yfinance, computes the
+    composite score, persists rows with score >= MIN_SCORE_TO_PERSIST.
+    Per-ticker isolation; one failure doesn't crash the whole scan.
+    """
+    conn = get_conn()
+    try:
+        candidates = smallcap_scanner.scan_universe(conn)
+        n_above_floor = sum(1 for c in candidates if c.score >= smallcap_scanner.MIN_SCORE_TO_PERSIST)
+        smallcap_scanner.persist(conn, candidates)
+        logger.info(
+            "Smallcap scan: %d scanned, %d above noise floor, %d sectors",
+            len(candidates), n_above_floor,
+            len({c.sector for c in candidates}),
+        )
+    except Exception:
+        logger.exception("Smallcap scan job failed")
+    finally:
+        conn.close()
+
+
 def _job_scan_unusual_options() -> None:
     """F36: scan watchlist + holdings tickers for unusual options activity.
 
@@ -952,6 +1050,36 @@ def create_scheduler() -> BlockingScheduler:
         CronTrigger(hour=21, minute=55, day_of_week="mon-fri", timezone="UTC"),
         id="uoa_scan",
         name="F36 unusual options activity scan",
+    )
+
+    # F38: small-cap "find before it explodes" scan, 22:15 UTC Mon-Fri.
+    # Runs between score_daily (21:30) and discovery_engine (23:00) so the
+    # smallcap_candidates table is fresh for the next morning's research push.
+    scheduler.add_job(
+        _job_scan_smallcap_universe,
+        CronTrigger(hour=22, minute=15, day_of_week="mon-fri", timezone="UTC"),
+        id="smallcap_scan",
+        name="F38 three-sector smallcap forward-discovery scan",
+    )
+
+    # F39: AI commercial-loop measurement, weekly Monday 06:30 UTC. Income
+    # statements only update quarterly so a daily cron would burn yfinance
+    # quota for nothing; once-weekly catches new earnings across the panel.
+    scheduler.add_job(
+        _job_measure_ai_loop,
+        CronTrigger(day_of_week="mon", hour=6, minute=30, timezone="UTC"),
+        id="ai_loop_measure",
+        name="F39 weekly AI commercial-loop closure-risk measurement",
+    )
+
+    # F40: weekly autonomous Q&A deep-dive on the top-5 FWP candidates.
+    # Saturday 07:00 UTC, after the Friday discovery_engine + before the
+    # weekly reflect job. Cost: 5 names x 5 rounds x ~700 tokens.
+    scheduler.add_job(
+        _job_weekly_qa_dive,
+        CronTrigger(day_of_week="sat", hour=7, minute=0, timezone="UTC"),
+        id="weekly_qa_dive",
+        name="F40 weekly Q&A deep-dive on top-FWP candidates",
     )
 
     # F19: forward-discovery engine daily at 23:00 UTC (07:00 Beijing). Runs
