@@ -9,9 +9,16 @@ from stock.ingest import PriceBar
 
 
 def fetch_daily_prices(ticker: str, days: int = 30) -> list[PriceBar]:
-    """Download daily OHLCV bars for a ticker via yfinance."""
-    end_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    start_date = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
+    """Download daily OHLCV bars for a ticker via yfinance.
+
+    yfinance treats the `end` parameter as EXCLUSIVE -- end='2026-05-05'
+    returns data strictly before that date. We want to include today's
+    close once it's settled (US session ends 20:00 UTC; data settles in
+    yfinance shortly after), so set end to tomorrow.
+    """
+    today = datetime.now(timezone.utc)
+    end_date = (today + timedelta(days=1)).strftime("%Y-%m-%d")
+    start_date = (today - timedelta(days=days)).strftime("%Y-%m-%d")
 
     df = yfinance.download(ticker, start=start_date, end=end_date, progress=False, auto_adjust=False)
 

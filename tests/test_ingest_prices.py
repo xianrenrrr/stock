@@ -70,6 +70,24 @@ def test_fetch_daily_prices_drops_nan_rows(
     assert len(bars) == 4
 
 
+@patch("stock.ingest.prices.yfinance.download")
+def test_fetch_daily_prices_passes_inclusive_end_date(
+    mock_download: object, prices_dataframe_fixture: pd.DataFrame
+) -> None:
+    """Regression: yfinance.download `end` is exclusive, so we must pass
+    tomorrow's date if we want today's close included. Pre-fix the cron
+    asked for end=today, which dropped today's close for ~16 hours after
+    the US session closed."""
+    from datetime import datetime, timezone
+    mock_download.return_value = prices_dataframe_fixture  # type: ignore[union-attr]
+    fetch_daily_prices("AAPL", days=30)
+    args, kwargs = mock_download.call_args
+    end_date_str = kwargs["end"]
+    today_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    # The end we pass should be > today (tomorrow), so today's bar is not excluded
+    assert end_date_str > today_utc
+
+
 # ---------------------------------------------------------------------------
 # Integration tests (fetch_prices orchestrator)
 # ---------------------------------------------------------------------------
