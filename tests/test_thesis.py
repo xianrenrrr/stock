@@ -89,7 +89,7 @@ def test_extract_theses_persists_atomic_claims(mem_db: sqlite3.Connection) -> No
 
     with (
         patch("stock.thesis.check_cost_ceiling"),
-        patch("stock.thesis.get_client", return_value=client),
+        patch("stock.thesis.get_core_client", return_value=client),
     ):
         rows = extract_theses(pid, mem_db)
 
@@ -111,7 +111,7 @@ def test_extract_theses_idempotent(mem_db: sqlite3.Connection) -> None:
 
     with (
         patch("stock.thesis.check_cost_ceiling"),
-        patch("stock.thesis.get_client", return_value=client) as mock_factory,
+        patch("stock.thesis.get_core_client", return_value=client) as mock_factory,
     ):
         first = extract_theses(pid, mem_db)
         second = extract_theses(pid, mem_db)
@@ -133,7 +133,7 @@ def test_extract_theses_invalid_claim_type_coerced(mem_db: sqlite3.Connection) -
 
     with (
         patch("stock.thesis.check_cost_ceiling"),
-        patch("stock.thesis.get_client", return_value=client),
+        patch("stock.thesis.get_core_client", return_value=client),
     ):
         rows = extract_theses(pid, mem_db)
 
@@ -149,7 +149,7 @@ def test_extract_theses_json_parse_failure_returns_empty(
     client = _patch_minimax("not json at all")
     with (
         patch("stock.thesis.check_cost_ceiling"),
-        patch("stock.thesis.get_client", return_value=client),
+        patch("stock.thesis.get_core_client", return_value=client),
     ):
         rows = extract_theses(pid, mem_db)
     assert rows == []
@@ -170,7 +170,7 @@ def test_extract_theses_caps_at_five(mem_db: sqlite3.Connection) -> None:
 
     with (
         patch("stock.thesis.check_cost_ceiling"),
-        patch("stock.thesis.get_client", return_value=client),
+        patch("stock.thesis.get_core_client", return_value=client),
     ):
         rows = extract_theses(pid, mem_db)
     assert len(rows) == 5
@@ -212,7 +212,7 @@ def test_verify_thesis_supported(mem_db: sqlite3.Connection) -> None:
 
     with (
         patch("stock.thesis.check_cost_ceiling"),
-        patch("stock.thesis.get_client", return_value=client),
+        patch("stock.thesis.get_core_client", return_value=client),
     ):
         result = verify_thesis(tid, mem_db)
 
@@ -233,7 +233,7 @@ def test_verify_thesis_skips_when_no_outcome(mem_db: sqlite3.Connection) -> None
 
     with (
         patch("stock.thesis.check_cost_ceiling"),
-        patch("stock.thesis.get_client") as mock_factory,
+        patch("stock.thesis.get_core_client") as mock_factory,
     ):
         result = verify_thesis(tid, mem_db)
 
@@ -254,7 +254,7 @@ def test_verify_thesis_invalid_verdict_coerced(mem_db: sqlite3.Connection) -> No
     client = _patch_minimax(fake_response)
     with (
         patch("stock.thesis.check_cost_ceiling"),
-        patch("stock.thesis.get_client", return_value=client),
+        patch("stock.thesis.get_core_client", return_value=client),
     ):
         verify_thesis(tid, mem_db)
 
@@ -288,7 +288,7 @@ def test_verify_due_theses_iterates_all_pending(mem_db: sqlite3.Connection) -> N
 
     with (
         patch("stock.thesis.check_cost_ceiling"),
-        patch("stock.thesis.get_client", return_value=client),
+        patch("stock.thesis.get_core_client", return_value=client),
     ):
         graded = verify_due_theses(mem_db)
 

@@ -63,7 +63,7 @@ def test_extract_single_parses_valid_json(
     """Valid JSON response is parsed and stored in the features table."""
     news_id = _insert_news(mem_db)
 
-    with patch("stock.features.get_client") as mock_get:
+    with patch("stock.features.get_core_client") as mock_get:
         mock_client = MagicMock()
         mock_get.return_value = mock_client
         mock_client.chat.return_value = _mock_chat_response()
@@ -90,7 +90,7 @@ def test_extract_single_handles_code_fences(
     news_id = _insert_news(mem_db)
 
     fenced = f"```json\n{VALID_FEATURE_JSON}\n```"
-    with patch("stock.features.get_client") as mock_get:
+    with patch("stock.features.get_core_client") as mock_get:
         mock_client = MagicMock()
         mock_get.return_value = mock_client
         mock_client.chat.return_value = _mock_chat_response(fenced)
@@ -109,7 +109,7 @@ def test_extract_single_rejects_invalid_json(
     """Garbage LLM output raises an exception."""
     news_id = _insert_news(mem_db)
 
-    with patch("stock.features.get_client") as mock_get:
+    with patch("stock.features.get_core_client") as mock_get:
         mock_client = MagicMock()
         mock_get.return_value = mock_client
         mock_client.chat.return_value = _mock_chat_response("not valid json")
@@ -130,7 +130,7 @@ def test_extract_features_skips_already_featured(
     )
     mem_db.commit()
 
-    with patch("stock.features.get_client") as mock_get:
+    with patch("stock.features.get_core_client") as mock_get:
         mock_client = MagicMock()
         mock_get.return_value = mock_client
 
@@ -169,7 +169,7 @@ def test_extract_features_processes_unfeatured(
     )
     mem_db.commit()
 
-    with patch("stock.features.get_client") as mock_get:
+    with patch("stock.features.get_core_client") as mock_get:
         mock_client = MagicMock()
         mock_get.return_value = mock_client
         mock_client.chat.return_value = _mock_chat_response()
@@ -197,7 +197,7 @@ def test_extract_features_stops_on_cost_ceiling(
         )
     mem_db.commit()
 
-    with patch("stock.features.get_client") as mock_get:
+    with patch("stock.features.get_core_client") as mock_get:
         mock_client = MagicMock()
         mock_get.return_value = mock_client
         mock_client.chat.side_effect = [

@@ -112,7 +112,7 @@ def test_verify_event_with_news_marks_hit(mem_db: sqlite3.Connection) -> None:
     }), cost_usd=0.0008)
     with (
         patch("stock.events.check_cost_ceiling"),
-        patch("stock.events.get_client") as mock_factory,
+        patch("stock.events.get_core_client") as mock_factory,
     ):
         mock_client = MagicMock()
         mock_client.chat.return_value = fake_response
@@ -132,7 +132,7 @@ def test_verify_skips_already_resolved(mem_db: sqlite3.Connection) -> None:
     """Already-resolved events are returned unchanged, no LLM call."""
     ev = _add(mem_db)
     edit_event(mem_db, ev.id, status="hit", actual_outcome="...")
-    with patch("stock.events.get_client") as mock_factory:
+    with patch("stock.events.get_core_client") as mock_factory:
         verify_event(mem_db, ev.id)
     mock_factory.assert_not_called()
 
@@ -154,7 +154,7 @@ def test_verify_due_events_walks_only_open_window(
     }), cost_usd=0.0)
     with (
         patch("stock.events.check_cost_ceiling"),
-        patch("stock.events.get_client") as mock_factory,
+        patch("stock.events.get_core_client") as mock_factory,
     ):
         mock_factory.return_value.chat.return_value = fake_response
         verify_due_events(mem_db)

@@ -11,10 +11,10 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from stock.models import (
-    MINIMAX_DEFAULT_MODEL,
     ChatMessage,
     CostCeilingError,
-    get_client,
+    get_core_client,
+    get_core_model,
     parse_llm_json,
 )
 
@@ -76,12 +76,13 @@ def extract_single(
     truncated_body = body[:MAX_BODY_CHARS]
     prompt = template.format(ticker=ticker, title=title, body=truncated_body)
 
-    # Call MiniMax for feature extraction
+    # Call the active core backend (claude_cli or minimax via CORE_LLM_BACKEND)
     messages: list[ChatMessage] = [{"role": "user", "content": prompt}]
-    client = get_client("minimax")
+    client = get_core_client()
+    model = get_core_model()
     response = client.chat(
         messages=messages,
-        model=MINIMAX_DEFAULT_MODEL,
+        model=model,
         max_tokens=300,
         conn=conn,
         caller="features.extract_single",
@@ -102,7 +103,7 @@ def extract_single(
         (
             news_id,
             json.dumps(parsed),
-            MINIMAX_DEFAULT_MODEL,
+            model,
             datetime.now(timezone.utc).isoformat(),
         ),
     )

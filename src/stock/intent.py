@@ -10,12 +10,12 @@ from pydantic import BaseModel
 
 from stock.config import get_settings
 from stock.models import (
-    MINIMAX_DEFAULT_MODEL,
     ChatMessage,
     ChatResponse,
     CostCeilingError,
     check_cost_ceiling,
-    get_client,
+    get_core_client,
+    get_core_model,
     parse_llm_json,
 )
 
@@ -83,10 +83,10 @@ def classify(
 
     messages: list[ChatMessage] = [{"role": "user", "content": user_message}]
     try:
-        client = get_client("minimax")
+        client = get_core_client()
         response: ChatResponse = client.chat(
             messages=messages,
-            model=MINIMAX_DEFAULT_MODEL,
+            model=get_core_model(),
             max_tokens=INTENT_MAX_TOKENS,
             conn=conn,
             caller="intent.classify",

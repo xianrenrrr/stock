@@ -23,12 +23,12 @@ from pydantic import BaseModel
 from stock.config import get_settings
 from stock.ingest.insiders import format_insider_block, recent_for_ticker
 from stock.models import (
-    MINIMAX_DEFAULT_MODEL,
     ChatMessage,
     ChatResponse,
     CostCeilingError,
     check_cost_ceiling,
-    get_client,
+    get_core_client,
+    get_core_model,
     parse_llm_json,
 )
 
@@ -194,10 +194,10 @@ def extract_theses(
 
     messages: list[ChatMessage] = [{"role": "user", "content": user_message}]
     try:
-        client = get_client("minimax")
+        client = get_core_client()
         response: ChatResponse = client.chat(
             messages=messages,
-            model=MINIMAX_DEFAULT_MODEL,
+            model=get_core_model(),
             max_tokens=THESIS_EXTRACT_MAX_TOKENS,
             conn=conn,
             caller="thesis.extract",
@@ -369,10 +369,10 @@ def verify_thesis(
 
     messages: list[ChatMessage] = [{"role": "user", "content": user_message}]
     try:
-        client = get_client("minimax")
+        client = get_core_client()
         response: ChatResponse = client.chat(
             messages=messages,
-            model=MINIMAX_DEFAULT_MODEL,
+            model=get_core_model(),
             max_tokens=THESIS_VERIFY_MAX_TOKENS,
             conn=conn,
             caller="thesis.verify",

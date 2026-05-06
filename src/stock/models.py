@@ -34,7 +34,13 @@ def strip_thinking(content: str) -> str:
 MINIMAX_BASE_URL: str = "https://api.minimaxi.com/v1"
 MINIMAX_DEFAULT_MODEL: str = "MiniMax-M2.5-highspeed"
 MINIMAX_HTTP_TIMEOUT_SECS: float = 60.0
-MINIMAX_MAX_RETRIES: int = 8
+# Cap retries low: when balance is depleted MiniMax returns 429 with
+# `insufficient_balance_error` and the OpenAI SDK auto-retries up to N times
+# with exponential backoff. With N=8 a single bad call burns ~28s; with the
+# whole watchlist that compounds into hour-long ingest hangs. With balance
+# the calls succeed first try anyway, so 1 retry is the right ceiling --
+# transient network blip recovers, true failures fail fast.
+MINIMAX_MAX_RETRIES: int = 1
 
 PRICING: dict[str, dict[str, float]] = {
     "MiniMax-M1-80k": {"input": 0.30, "output": 1.20},
@@ -437,17 +443,19 @@ class ClaudeCliClient:
 
 
 def get_core_client() -> LLMClient | ClaudeCliClient:
-    """Return the active 'core thinking' backend selected by Settings.core_llm_backend.
+    """Return the active backend selected by Settings.core_llm_backend.
 
-    Used by the user-facing flows (research, reply, grading, deep-dive, health-check)
-    so the operator can swap between MiniMax (fast, cheap, metered) and a local
-    Claude Code subprocess (Opus-class, free under the user's subscription, has
-    built-in WebSearch) with one env var. Utility callers (intent, prompt_rewriter,
-    thesis extract/verify, discover, features) keep talking to MiniMax directly --
-    they're high-frequency and don't benefit from the Opus-class jump.
+    All LLM-touching modules now route through this helper -- core flows
+    (research, reply, grading, deep-dive, qa-dive) AND utility flows
+    (features, intent, thesis, discover, events, self_review). One env var
+    (`CORE_LLM_BACKEND=claude_cli|minimax`, set via `stock backend set ...`)
+    swaps the entire system between Opus-class via the local Claude Code
+    subprocess (free under the user's subscription) and MiniMax via the
+    OpenAI-compatible endpoint (metered, faster, but balance-dependent).
 
-    Env: CORE_LLM_BACKEND=minimax|claude_cli (default minimax).
-    Falls back to MiniMax if claude_cli is configured but the binary is missing.
+    Falls back to MiniMax if claude_cli is configured but the binary is
+    missing -- that lets the system keep running through a partial
+    misconfiguration rather than failing all calls.
     """
     settings = get_settings()
     backend = (settings.core_llm_backend or "minimax").strip().lower()

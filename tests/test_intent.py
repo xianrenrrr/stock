@@ -28,7 +28,7 @@ def test_classify_question(
 
     fake_client = MagicMock()
     fake_client.chat = MagicMock(return_value=_stub_response(json_payload))
-    monkeypatch.setattr("stock.intent.get_client", lambda provider: fake_client)
+    monkeypatch.setattr("stock.intent.get_core_client", lambda: fake_client)
 
     result = classify("What's TER doing?", recipient="boss", conn=mem_db)
 
@@ -48,7 +48,7 @@ def test_classify_instruction(
 
     fake_client = MagicMock()
     fake_client.chat = MagicMock(return_value=_stub_response(json_payload))
-    monkeypatch.setattr("stock.intent.get_client", lambda provider: fake_client)
+    monkeypatch.setattr("stock.intent.get_core_client", lambda: fake_client)
 
     result = classify("shorter notes please", recipient="boss", conn=mem_db)
 
@@ -65,7 +65,7 @@ def test_classify_ack(
 
     fake_client = MagicMock()
     fake_client.chat = MagicMock(return_value=_stub_response(json_payload))
-    monkeypatch.setattr("stock.intent.get_client", lambda provider: fake_client)
+    monkeypatch.setattr("stock.intent.get_core_client", lambda: fake_client)
 
     result = classify("good", recipient="boss", conn=mem_db)
 
@@ -79,7 +79,7 @@ def test_classify_unknown_on_bad_json(
     """Non-JSON output collapses to intent='unknown' instead of raising."""
     fake_client = MagicMock()
     fake_client.chat = MagicMock(return_value=_stub_response("definitely not json"))
-    monkeypatch.setattr("stock.intent.get_client", lambda provider: fake_client)
+    monkeypatch.setattr("stock.intent.get_core_client", lambda: fake_client)
 
     result = classify("???", recipient="boss", conn=mem_db)
 
@@ -116,7 +116,7 @@ def test_classify_invalid_intent_label(
 
     fake_client = MagicMock()
     fake_client.chat = MagicMock(return_value=_stub_response(json_payload))
-    monkeypatch.setattr("stock.intent.get_client", lambda provider: fake_client)
+    monkeypatch.setattr("stock.intent.get_core_client", lambda: fake_client)
 
     result = classify("???", recipient="boss", conn=mem_db)
     assert result.intent == "unknown"

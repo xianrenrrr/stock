@@ -16,7 +16,8 @@ from stock.models import (
     ChatResponse,
     CostCeilingError,
     check_cost_ceiling,
-    get_client,
+    get_core_client,
+    get_core_model,
     parse_llm_json,
 )
 
@@ -364,12 +365,12 @@ def propose_via_minimax(
     user_message = user_template.format(packet=packet.body)
     messages: list[ChatMessage] = [{"role": "user", "content": user_message}]
 
-    # Call MiniMax
+    # Call the active core backend (claude_cli or minimax via CORE_LLM_BACKEND)
     try:
-        client = get_client("minimax")
+        client = get_core_client()
         response: ChatResponse = client.chat(
             messages=messages,
-            model=SELF_REVIEW_MODEL,
+            model=get_core_model(),
             max_tokens=SELF_REVIEW_MAX_TOKENS,
             conn=conn,
             caller="self_review.propose",
