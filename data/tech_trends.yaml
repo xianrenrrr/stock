@@ -150,23 +150,43 @@ trends:
   # Energy (3) -- the AI-DC firm-power complex
   # =====================================================================
 
-  - id: ai_dc_firm_power_gas
-    name: Behind-the-meter gas peakers + co-located generation for AI-DC
+  - id: sofc_island_firm_power
+    name: SOFC fuel cells -- fast-deploy island firm power for AI-DC (no grid wait)
     sector: energy
     horizon: "2-3y"
     why_now:
-      - "Hyperscaler PPAs already announced (BE/AEP/CEG) with delivery 2026-2028"
-      - "GE Vernova gas turbine backlog at multi-year highs; pricing power inflecting"
+      - "SOFC operates 700-1000°C; high temp lets non-precious-metal catalysts (Ni cermet anode + LSM cathode) hit reaction activity equivalent to Pt -- catalyst cost ~1/80 of PEMFC"
+      - "Solid oxide electrolyte transports O2- ions through dense ceramic; no proton-exchange membrane, no platinum, no water management overhead"
+      - "Runs on natural gas (not pure H2) -> uses existing pipeline infrastructure as fuel input"
+      - "Boss core insight: the ALPHA is fast deploy + island operation. AI-DC grid interconnect queues are 6+ years; SOFC ships and runs in <12 months without utility approval"
+      - "Bloom Energy hyperscaler PPAs already announced; AEP / Microsoft co-location demand visible"
+    falsification:
+      - "If hyperscalers stop announcing SOFC PPAs for 4 consecutive quarters"
+      - "If natural gas price spikes sustained >$8/MMBtu kill SOFC unit economics vs grid power"
+      - "If SOC degradation rate fails to hit <0.5%/1000h target (limits commercial scale)"
+      - "If FERC fast-tracks AI-DC grid interconnects (removes the time-to-power moat)"
+    vehicles_pure_play: [BE]
+    vehicles_diversified: [PLUG, FCEL]
+    ai_biopharma_combo: false
+    enabled: true   # toggle via `stock trend toggle <id>` or edit here directly
+
+  - id: ai_dc_gas_turbines
+    name: Gas turbine backlog squeeze for AI-DC firm power (GE Vernova lane)
+    sector: energy
+    horizon: "2-3y"
+    why_now:
+      - "GE Vernova H-class gas turbine backlog at multi-year highs; pricing power inflecting"
+      - "Hyperscaler PPAs co-located with new gas peakers (Texas/PJM/SPP)"
       - "Solar+battery economics insufficient for 24/7 200MW+ AI-DC firm load"
       - "Grid interconnect queue +6 years average -> behind-the-meter is the only fast path"
     falsification:
       - "If solar+battery LCOE drops >40% AND 24/7 reliability proven for >100MW AI-DC"
       - "If gas turbine backlog declines QoQ (would signal overcapacity)"
       - "If FERC fast-tracks interconnect approvals (removes the bottleneck)"
-    vehicles_pure_play: [BE]
-    vehicles_diversified: [GEV, CEG, VST]
+    vehicles_pure_play: [GEV]
+    vehicles_diversified: [CEG, VST, ETN]
     ai_biopharma_combo: false
-    enabled: true   # toggle via `stock trend toggle <id>` or edit here directly
+    enabled: false   # only 10 trend slots; toggled OFF by default to leave SOFC active
 
   - id: smr_commercial_deployment
     name: Small modular nuclear (SMR) NRC certification + first deployments

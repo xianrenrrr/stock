@@ -1948,6 +1948,45 @@ def conviction_remove_cmd(ticker: str) -> None:
         typer.echo(str(e), err=True); raise typer.Exit(code=1)
 
 
+@app.command("daily-zh")
+def daily_zh_cmd() -> None:
+    """Generate today's Chinese daily activity report; persist to pipeline/."""
+    from stock import daily_zh
+    try:
+        conn = get_conn()
+        path, body = daily_zh.generate_daily_zh_report(conn)
+        typer.echo(f"Wrote {path}")
+        typer.echo("---")
+        typer.echo(body)
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
+@app.command("tech-dive")
+def tech_dive_cmd(
+    topic: str = typer.Argument(..., help="What to mine, e.g. 'OCS optical circuit switch vs CPO'"),
+    sector: str = typer.Option("information", help="information | biopharma_ai | energy"),
+    language: str = typer.Option("zh-en", help="zh | en | zh-en"),
+) -> None:
+    """F43: structured 4-round tech-trend deep-dive (free via claude_cli)."""
+    from stock import tech_dive
+    try:
+        conn = get_conn()
+        dive = tech_dive.run_and_persist(
+            topic=topic, sector=sector, conn=conn, language=language,
+        )
+        if not dive.rounds:
+            typer.echo("No rounds completed (cost ceiling or backend down).", err=True)
+            raise typer.Exit(code=1)
+        typer.echo(f"\nDive complete: {len(dive.rounds)} rounds, research_id={dive.research_id}")
+        typer.echo(f"Read with: python -c \"from stock.db import get_conn; "
+                   f"print(get_conn().execute('SELECT body FROM research_reports WHERE id={dive.research_id}').fetchone()[0])\"")
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
 @app.command("smallcap-scan")
 def smallcap_scan_cmd(
     sector: str = typer.Option(None, help="Filter to one sector (ai_semis_smallcap, biopharma_smallcap, ai_dc_energy_smallcap)"),

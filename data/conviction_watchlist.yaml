@@ -78,14 +78,14 @@ names:
 
   - ticker: CEG
     name: Constellation Energy
-    trend_id: ai_dc_firm_power_gas
-    why: "Largest US nuclear fleet + AI-DC PPA flow (Microsoft, Meta announced)"
+    trend_id: smr_commercial_deployment
+    why: "Largest US nuclear fleet + offtaker for SMR + Microsoft/Meta PPA flow"
     enabled: true
 
   - ticker: BE
     name: Bloom Energy
-    trend_id: ai_dc_firm_power_gas
-    why: "SOFC fuel cells; behind-the-meter fast-deploy power; the original AI-DC energy template"
+    trend_id: sofc_island_firm_power
+    why: "SOFC pure-play; 1/80 catalyst cost vs PEMFC; fast-deploy island power for AI-DC"
     enabled: true
 
   - ticker: OKLO
@@ -93,3 +93,55 @@ names:
     trend_id: smr_commercial_deployment
     why: "Lead SMR commercial timeline; DOE site approval + fuel sourcing in place"
     enabled: true
+
+  # =====================================================================
+  # Boss directive 2026-05-06 (round 2): focus-track adds
+  # 三个中国, plus AMD, AXTI, COHR, LITE
+  # =====================================================================
+
+  - ticker: 300408.SZ
+    name: 三环集团 CCTC (MLCC + ceramic packaging)
+    trend_id: photonic_rack_interconnect
+    why: "MLCC + ceramic substrate supplier into AI-DC packaging chain; 潮州三环"
+    enabled: true
+
+  - ticker: 300456.SZ
+    name: 赛微电子 (MEMS foundry — optical MEMS for OCS)
+    trend_id: photonic_rack_interconnect
+    why: "MEMS optical switch foundry; OCS chain (the boss's canonical example)"
+    enabled: true
+
+  - ticker: 300620.SZ
+    name: 光库科技 (fiber-optic components)
+    trend_id: tfln_at_1p6t
+    why: "Fiber optic passive components into 1.6T module BoM; TFLN-adjacent supply chain"
+    enabled: true
+
+  - ticker: AXTI
+    name: AXT Inc (高纯磷化铟衬底 / InP substrate)
+    trend_id: tfln_at_1p6t
+    why: "High-purity InP substrate; supplies COHR/LITE EML laser layer; pairs with TFLN modulator"
+    enabled: true
+
+  - ticker: AMD
+    name: AMD (Ryzen AI + Instinct GPU)
+    trend_id: photonic_rack_interconnect
+    why: "Currently held. AI compute alt-vehicle to NVDA; MI300X gaining traction at hyperscalers"
+    enabled: true
+
+  - ticker: COHR
+    name: Coherent (1.6T optics + InP integration)
+    trend_id: tfln_at_1p6t
+    why: "1.6T optical module ramp; InP laser + optical assembly vertical integration"
+    enabled: true
+
+  - ticker: LITE
+    name: Lumentum (EML laser + 1.6T optics)
+    trend_id: tfln_at_1p6t
+    why: "EML laser foundry-of-choice for 1.6T modules; FWP novelty 0.94 in latest discovery run"
+    enabled: true
+
+  # NOTE: 盛合晶微 (Sheng-He Crystal Micro / SMIC advanced packaging JV) is private
+  # -- no public ticker yet. Tracked qualitatively until parent SMIC (688981.SS /
+  # 0981.HK) discloses or the JV gets spun out separately. If you find a different
+  # interpretation of "盛合微晶", `stock conviction add ...` to register it.

@@ -191,6 +191,17 @@ CREATE TABLE IF NOT EXISTS price_anomalies (
     UNIQUE(ticker, ts)
 );
 
+CREATE TABLE IF NOT EXISTS tech_dive_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    topic TEXT NOT NULL,
+    sector TEXT NOT NULL,
+    language TEXT NOT NULL DEFAULT 'zh',
+    research_id INTEGER REFERENCES research_reports(id),
+    rounds INTEGER NOT NULL,
+    cost_usd REAL NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS ai_loop_health (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ticker TEXT NOT NULL,
