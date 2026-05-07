@@ -52,6 +52,7 @@ Grouped by responsibility:
 | `events.py` | Tracked event predictions + verification (F26) | nightly 21:50 |
 | `qa_deepdive.py` | Progressive Q&A dive on a ticker (F37) | on-demand + Sat 07:00 |
 | `tech_dive.py` | Structured 4-round tech topic deep-dive (F43) | on-demand + daily 04:30 UTC sector-rotated |
+| `analyst_skills.py` | F44: earnings_review (3-round) / dd_checklist (1-shot) / morning_note from Anthropic FSI patterns | on-demand |
 | `pdf_export.py` | Markdown -> PDF + HTML output (weasyprint -> xhtml2pdf fallback) | on-demand |
 | `self_review.py` | Daily review packet + auto-rewrites (F18) | 06:00 UTC |
 | `ai_loop_monitor.py` | AI commercial-loop closure monitor (F39) | weekly Mon 06:30 |
@@ -172,6 +173,9 @@ Grouped by responsibility:
 - `weekly-qa-dive` (F40)
 - `qa-dive <ticker>` (F37)
 - **`tech-dive <topic> [--sector ...]`** (F43)
+- **`earnings-review <ticker>`** (F44, equity-research style)
+- **`dd-checklist <ticker>`** (F44, 12-item punch list)
+- **`morning-note`** (F44, overnight roll-up)
 - **`pdf-export research:<id> | file:<path> | recent-dives`** -- weasyprint or xhtml2pdf
 - `anomaly-run` (F12)
 - `backend show/set/test` (claude_cli vs minimax flip)

@@ -52,3 +52,4 @@ mobile/captures/
 *.class
 *.jks
 *.keystore
+external/

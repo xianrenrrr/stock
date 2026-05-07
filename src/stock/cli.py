@@ -1977,6 +1977,53 @@ def pdf_export_cmd(
         raise typer.Exit(code=1)
 
 
+@app.command("earnings-review")
+def earnings_review_cmd(ticker: str = typer.Argument(...)) -> None:
+    """Post-earnings 3-round structured review (free via claude_cli)."""
+    from stock import analyst_skills
+    try:
+        conn = get_conn()
+        report = analyst_skills.earnings_review(ticker=ticker, conn=conn)
+        if not report.body:
+            typer.echo("No output (cost ceiling or backend down).", err=True)
+            raise typer.Exit(code=1)
+        typer.echo(f"Persisted as research_id={report.research_id}")
+        typer.echo(f"Read: stock pdf-export research:{report.research_id}")
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
+@app.command("dd-checklist")
+def dd_checklist_cmd(ticker: str = typer.Argument(...)) -> None:
+    """12-item DD punch list for a ticker (free via claude_cli)."""
+    from stock import analyst_skills
+    try:
+        conn = get_conn()
+        report = analyst_skills.dd_checklist(ticker=ticker, conn=conn)
+        if not report.body:
+            typer.echo("No output.", err=True); raise typer.Exit(code=1)
+        typer.echo(f"Persisted as research_id={report.research_id}")
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
+@app.command("morning-note")
+def morning_note_cmd() -> None:
+    """Tight overnight roll-up across conviction names (free via claude_cli)."""
+    from stock import analyst_skills
+    try:
+        conn = get_conn()
+        report = analyst_skills.morning_note(conn=conn)
+        if not report.body:
+            typer.echo("No output.", err=True); raise typer.Exit(code=1)
+        typer.echo(f"Persisted as research_id={report.research_id}")
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
 @app.command("daily-zh")
 def daily_zh_cmd() -> None:
     """Generate today's Chinese daily activity report; persist to pipeline/."""
