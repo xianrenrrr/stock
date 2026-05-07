@@ -1948,6 +1948,35 @@ def conviction_remove_cmd(ticker: str) -> None:
         typer.echo(str(e), err=True); raise typer.Exit(code=1)
 
 
+@app.command("pdf-export")
+def pdf_export_cmd(
+    target: str = typer.Argument(..., help="research:<id> | file:<path.md> | recent-dives"),
+) -> None:
+    """Render a research report or markdown file to PDF (weasyprint)."""
+    from stock import pdf_export
+    try:
+        conn = get_conn()
+        if target.startswith("research:"):
+            rid = int(target.split(":", 1)[1])
+            out = pdf_export.export_research_report(conn, rid)
+            typer.echo(f"Wrote {out}")
+        elif target.startswith("file:"):
+            path = target.split(":", 1)[1]
+            out = pdf_export.export_markdown_file(path)
+            typer.echo(f"Wrote {out}")
+        elif target == "recent-dives":
+            paths = pdf_export.export_recent_tech_dives(conn, days=2)
+            for p in paths:
+                typer.echo(f"Wrote {p}")
+            typer.echo(f"Total: {len(paths)} PDFs")
+        else:
+            typer.echo("Use research:<id>, file:<path>, or recent-dives", err=True)
+            raise typer.Exit(code=1)
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
 @app.command("daily-zh")
 def daily_zh_cmd() -> None:
     """Generate today's Chinese daily activity report; persist to pipeline/."""

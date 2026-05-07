@@ -4,7 +4,7 @@ Per boss instruction 2026-05-06: maintained on every commit so the project
 state is always inspectable from one document. If a feature lands without
 a corresponding entry here, the commit is incomplete.
 
-Last updated: 2026-05-06 (commit pending: F41/F42/F43 trend atlas + tech-dive)
+Last updated: 2026-05-07 (F43 cron + topic queue + PDF export shipped)
 
 ---
 
@@ -51,7 +51,8 @@ Grouped by responsibility:
 | `thesis.py` | Atomic-claim extract + verify (F16) | post-prediction |
 | `events.py` | Tracked event predictions + verification (F26) | nightly 21:50 |
 | `qa_deepdive.py` | Progressive Q&A dive on a ticker (F37) | on-demand + Sat 07:00 |
-| `tech_dive.py` | Structured 4-round tech topic deep-dive (F43) | on-demand + daily per-sector |
+| `tech_dive.py` | Structured 4-round tech topic deep-dive (F43) | on-demand + daily 04:30 UTC sector-rotated |
+| `pdf_export.py` | Markdown -> PDF + HTML output (weasyprint -> xhtml2pdf fallback) | on-demand |
 | `self_review.py` | Daily review packet + auto-rewrites (F18) | 06:00 UTC |
 | `ai_loop_monitor.py` | AI commercial-loop closure monitor (F39) | weekly Mon 06:30 |
 | `learn.py` | Weekly reflection + bandit calibration | Sat 06:00 |
@@ -98,6 +99,7 @@ Grouped by responsibility:
 | `tech_trends.yaml` (**F41**) | 10 specific tech trends w/ evidence + falsification + vehicles | `stock trend list/show/toggle/swap/add/remove` or edit text |
 | `conviction_watchlist.yaml` (**F42**) | Deeply-tracked tickers, 1+ per trend | `stock conviction list/toggle/swap/add/remove` or edit text |
 | `smallcap_universe.yaml` | 33 small-caps across 3 sectors (F38) | edit text |
+| `topic_queue.yaml` | F43 daily-dive topic rotation (9 topics across 3 sectors) | edit text or `stock topic add` |
 | `ai_supply_chain.yaml` | AI capex layered chain map | edit text |
 | `feedback_rules.yaml` | Boss-feedback derived response rules | self-rewriter updates |
 
@@ -169,18 +171,20 @@ Grouped by responsibility:
 - `ai-loop-measure` (F39)
 - `weekly-qa-dive` (F40)
 - `qa-dive <ticker>` (F37)
-- **`tech-dive <topic> [--sector ...]`** (F43, new)
+- **`tech-dive <topic> [--sector ...]`** (F43)
+- **`pdf-export research:<id> | file:<path> | recent-dives`** -- weasyprint or xhtml2pdf
 - `anomaly-run` (F12)
 - `backend show/set/test` (claude_cli vs minimax flip)
 
 ### Reports
 - **`daily-zh`** (new) -- Chinese activity report for the day
 
-## Cron schedule (24 jobs)
+## Cron schedule (25 jobs)
 
 Run order on a typical Mon-Fri:
 ```
-06:00 UTC  daily_self_review
+04:30 UTC  daily_tech_dive (F43 -- sector rotates by weekday)
+06:00      daily_self_review
 06:30      ai_loop_measure (Mon only)
 07:00      weekly_qa_dive (Sat only)
 14:00-21:45 ingest_and_extract (every 15 min)
@@ -208,7 +212,7 @@ Run order on a typical Mon-Fri:
 
 ## Deferred / known gaps
 
-- **PDF/PPT report generation** (boss requested 2026-05-06): markdown -> PDF via weasyprint or pandoc, not yet wired
+- **PDF CJK font** -- xhtml2pdf renders Chinese chars as boxes (no CJK font shipped). HTML output is generated alongside every PDF; boss can open `*.html` in Chrome to read Chinese, or use Chrome's "Save as PDF". Permanent fix is installing GTK + weasyprint OR embedding a CJK TTF in xhtml2pdf -- both deferred until requested
 - **盛合晶微** (boss-named): private SMIC packaging JV, no public ticker -- tracked qualitatively only
 - **APK feature gap**: image attachment works (F18); Q&A-style threading not yet built
 - **Render sync log noise**: 5s cron is intentional but floods orchestrator.log -- log-level tuning deferred

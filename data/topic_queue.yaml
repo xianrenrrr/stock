@@ -1,0 +1,63 @@
+# F43 tech-dive topic queue. Boss directive 2026-05-06: large-scale mining
+# of cutting-edge tech in 3 sectors. Each topic must be specific (not "AI"
+# but "TFLN displacing PAM4" level), with a focused chain to surface.
+#
+# Topics rotate sector-by-day:
+#   information / biopharma_ai / energy / information / ...
+#
+# `enabled: false` on a topic skips it. The daily cron job pops the
+# longest-untouched enabled topic for today's sector.
+#
+# Add new topics: edit this file or `stock topic add <sector> "<topic>"`.
+
+topics:
+
+  # =====================================================================
+  # information / IT / AI compute
+  # =====================================================================
+  - sector: information
+    topic: "OCS optical circuit switch (Google Jupiter) vs CPO + traditional optical modules: which wins the rack-level photonic interconnect, and the public-company chain that benefits"
+    enabled: false      # already run -- research_id=36
+    last_run: "2026-05-06"
+
+  - sector: information
+    topic: "HBM4 stacking yield bottleneck: who solves it (Micron 1ynm vs SK hynix 1cnm vs Samsung 1c), what's the equipment + materials chain (e.g. ASMPT TCB, Disco SDH grinder, Nagase polishing slurry), and the public-company beneficiaries"
+    enabled: true
+
+  - sector: information
+    topic: "TSMC CoWoS-L vs Intel EMIB vs Samsung X-Cube: 2.5D advanced packaging capacity bottleneck for AI accelerators in 2026-2027 -- what's the equipment + bridge-die + organic-substrate chain, and the listed beneficiaries"
+    enabled: true
+
+  - sector: information
+    topic: "China semi domesticization deep-dive: 盛美 ACMR + 中微 AMEC + 北方华创 NAURA + 长电 JCET -- which equipment vendor is closest to non-Pluggable parity at SMIC's 5nm-class node, and what's the realistic 2027 revenue path"
+    enabled: true
+
+  # =====================================================================
+  # biopharma x AI (boss explicit priority)
+  # =====================================================================
+  - sector: biopharma_ai
+    topic: "AI antibody discovery commercial inflection: AbCellera (ABCL) + Recursion (RXRX) + Schrödinger (SDGR) -- which platform has the cleanest first-in-class IND from AI design, what's the validation evidence, and how to size the pre-clinical pipeline"
+    enabled: true
+
+  - sector: biopharma_ai
+    topic: "Foundation models for protein structure prediction post-AlphaFold2: who has commercialized AlphaFold-class capability (DeepMind Isomorphic, Recursion, Insilico, Tempus), the public-company chain, and where revenue actually accrues"
+    enabled: true
+
+  - sector: biopharma_ai
+    topic: "AI clinical trials operations: Tempus AI (TEM) + Veeva (VEEV) + IQV (IQVIA) -- can AI cut Phase 3 trial cost 30%+, what's the actual workflow that gets compressed, and which name has the cleanest revenue model"
+    enabled: true
+
+  # =====================================================================
+  # energy (AI-DC firm-power complex)
+  # =====================================================================
+  - sector: energy
+    topic: "SOFC unit economics at scale: Bloom Energy (BE) -- what's the capex per MW today vs 2030, fuel cost sensitivity at $4-8 natural gas, degradation rate (target <0.5%/1000h), and the supply chain (Ceres Power, ENN Group, 安泰科技 China stack maker) that matters"
+    enabled: true
+
+  - sector: energy
+    topic: "Small modular nuclear (SMR) commercial deployment: Oklo (OKLO) + NuScale + BWXT + GE-Hitachi BWRX-300 -- NRC license decision timeline, fuel sourcing constraints (HALEU bottleneck, Centrus CCJ Cameco), and which company actually ships first MW in 2029-2030"
+    enabled: true
+
+  - sector: energy
+    topic: "Immersion cooling for AI-DC: who's winning the dielectric fluid + tank chain (Vertiv VRT + Submer + LiquidStack + 3M Novec replacement) as 1MW+ rack densities arrive in 2026-2027, and which name is the listed pure-play"
+    enabled: true

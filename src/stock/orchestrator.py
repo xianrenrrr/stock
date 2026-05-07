@@ -16,7 +16,7 @@ import time
 import httpx
 import openai
 
-from stock import action_queue, ai_loop_monitor, alerts, anomaly, backup, conversation, discovery_engine, events, grading, holdings, intent, options as options_module, prompt_rewriter, self_review, smallcap_scanner, thesis
+from stock import action_queue, ai_loop_monitor, alerts, anomaly, backup, conversation, discovery_engine, events, grading, holdings, intent, options as options_module, prompt_rewriter, self_review, smallcap_scanner, tech_dive, thesis
 from stock.cloud_sync import run_local_sync
 from stock.config import get_settings
 from stock.db import get_conn
@@ -536,6 +536,88 @@ def _job_backup_db() -> None:
         logger.warning("DB backup skipped: %s", exc)
     except Exception:
         logger.exception("DB backup job failed")
+
+
+TOPIC_QUEUE_PATH: str = "data/topic_queue.yaml"
+
+
+def _pop_next_topic(sector: str) -> tuple[str, str] | None:
+    """Pick the longest-untouched enabled topic for a sector from topic_queue.yaml.
+
+    Updates last_run on the picked topic so the next run rotates through.
+    Returns (sector, topic) or None if no enabled topics for that sector.
+    """
+    from pathlib import Path
+    import yaml
+    p = Path(TOPIC_QUEUE_PATH)
+    if not p.exists():
+        return None
+    data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    topics = data.get("topics") or []
+
+    candidates = [
+        (i, t) for i, t in enumerate(topics)
+        if t.get("enabled", True) and t.get("sector") == sector
+    ]
+    if not candidates:
+        return None
+
+    # Sort by last_run ASC (None first) so least-recent gets picked
+    candidates.sort(key=lambda kv: kv[1].get("last_run") or "")
+    idx, picked = candidates[0]
+    topic = str(picked.get("topic", "")).strip()
+    if not topic:
+        return None
+
+    picked["last_run"] = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    topics[idx] = picked
+    data["topics"] = topics
+    p.write_text(
+        yaml.safe_dump(data, sort_keys=False, allow_unicode=True, default_flow_style=False, width=200),
+        encoding="utf-8",
+    )
+    return (sector, topic)
+
+
+def _job_daily_tech_dive() -> None:
+    """F43 daily cron: rotate sector by day-of-year, pick next topic, dive.
+
+    Day rotation: Mon/Thu = information, Tue/Fri = biopharma_ai,
+    Wed/Sat/Sun = energy. Yields ~2 dives per sector per week.
+    """
+    sector_by_dow = {
+        0: "information",   # Mon
+        1: "biopharma_ai",  # Tue
+        2: "energy",        # Wed
+        3: "information",   # Thu
+        4: "biopharma_ai",  # Fri
+        5: "energy",        # Sat
+        6: "energy",        # Sun
+    }
+    dow = datetime.now(timezone.utc).weekday()
+    sector = sector_by_dow[dow]
+
+    pick = _pop_next_topic(sector)
+    if not pick:
+        logger.info("Daily tech dive: no enabled topics for %s today", sector)
+        return
+
+    sector, topic = pick
+    logger.info("Daily tech dive starting: sector=%s topic=%s", sector, topic[:80])
+    conn = get_conn()
+    try:
+        dive = tech_dive.run_and_persist(
+            topic=topic, sector=sector, conn=conn, language="zh-en",
+        )
+        if dive.rounds:
+            logger.info(
+                "Daily tech dive done: research_id=%s rounds=%d",
+                dive.research_id, len(dive.rounds),
+            )
+    except Exception:
+        logger.exception("Daily tech dive failed (sector=%s)", sector)
+    finally:
+        conn.close()
 
 
 def _job_weekly_qa_dive() -> None:
@@ -1080,6 +1162,16 @@ def create_scheduler() -> BlockingScheduler:
         CronTrigger(day_of_week="sat", hour=7, minute=0, timezone="UTC"),
         id="weekly_qa_dive",
         name="F40 weekly Q&A deep-dive on top-FWP candidates",
+    )
+
+    # F43 daily tech dive at 04:30 UTC -- after midnight UTC so the topic
+    # queue's last_run dates are clean. Sector rotates by weekday so each
+    # sector gets ~2 dives/week. Free via claude_cli, ~10 min runtime.
+    scheduler.add_job(
+        _job_daily_tech_dive,
+        CronTrigger(hour=4, minute=30, timezone="UTC"),
+        id="daily_tech_dive",
+        name="F43 daily tech-trend deep-dive (sector-rotated)",
     )
 
     # F19: forward-discovery engine daily at 23:00 UTC (07:00 Beijing). Runs
