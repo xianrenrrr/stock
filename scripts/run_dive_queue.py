@@ -10,11 +10,17 @@ research_reports table; this script just orchestrates the loop.
 from __future__ import annotations
 
 import argparse
+import io
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
+
+# Windows console default cp1252 chokes on Chinese chars in print(). Force
+# UTF-8 stdout so the queue runner doesn't crash mid-loop on a Chinese topic.
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
@@ -32,7 +38,13 @@ def main() -> int:
     data = yaml.safe_load(queue_path.read_text(encoding="utf-8")) or {}
     topics = data.get("topics") or []
 
-    enabled = [t for t in topics if t.get("enabled", True)]
+    # Filter: enabled AND last_run != today. Prevents re-running topics that
+    # were completed earlier today (the bug that caused HBM4/CoWoS duplicates).
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    enabled = [
+        t for t in topics
+        if t.get("enabled", True) and t.get("last_run") != today
+    ]
     if args.limit:
         enabled = enabled[:args.limit]
 
@@ -60,6 +72,13 @@ def main() -> int:
                   f"{elapsed:.0f}s")
             t["last_run"] = start.strftime("%Y-%m-%d")
             completed += 1
+            # Persist last_run AFTER EACH DIVE so a mid-loop crash doesn't
+            # lose the per-topic completion record.
+            queue_path.write_text(
+                yaml.safe_dump(data, sort_keys=False, allow_unicode=True,
+                               default_flow_style=False, width=200),
+                encoding="utf-8",
+            )
         else:
             print(f"  -> 0 rounds (likely cost ceiling or backend down); not persisted")
 
