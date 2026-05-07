@@ -1977,6 +1977,28 @@ def pdf_export_cmd(
         raise typer.Exit(code=1)
 
 
+@app.command("entry-zone")
+def entry_zone_cmd(ticker: str = typer.Argument(...)) -> None:
+    """Compute pullback entry zones (MA20, swing-low, ATR-based) for a ticker."""
+    from stock.stops import compute_entry_zone, format_entry_zone
+    try:
+        conn = get_conn()
+        zone = compute_entry_zone(ticker, conn)
+        # Write to file (Windows console can't print Chinese)
+        from pathlib import Path
+        out = Path("pipeline") / f"entry_zone_{ticker.upper().replace('.', '_')}.md"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(format_entry_zone(zone), encoding="utf-8")
+        typer.echo(f"Wrote {out}")
+        if zone.current_price is not None and zone.recommended_zone_low is not None:
+            typer.echo(f"\n{ticker.upper()} current ${zone.current_price:.2f}")
+            typer.echo(f"Entry zone: ${zone.recommended_zone_low:.2f} -- ${zone.recommended_zone_high:.2f}")
+            typer.echo(f"Note: {zone.note}")
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
 @app.command("earnings-review")
 def earnings_review_cmd(ticker: str = typer.Argument(...)) -> None:
     """Post-earnings 3-round structured review (free via claude_cli)."""

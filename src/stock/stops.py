@@ -140,6 +140,140 @@ def compute_stop_loss(
     )
 
 
+class EntryZone(BaseModel):
+    """Pullback entry zone analysis for a ticker."""
+
+    ticker: str
+    current_price: float | None
+    ma20: float | None
+    ma50: float | None
+    swing_low_30d: float | None
+    swing_low_60d: float | None
+    atr_20: float | None
+    atr_minus_1: float | None  # current - 1 ATR (shallow pullback)
+    atr_minus_2: float | None  # current - 2 ATR (deeper pullback)
+    pct_minus_5: float | None
+    pct_minus_10: float | None
+    recommended_zone_low: float | None
+    recommended_zone_high: float | None
+    note: str
+
+
+def compute_entry_zone(ticker: str, conn: sqlite3.Connection) -> EntryZone:
+    """Compute pullback entry zones for a ticker.
+
+    The 'recommended zone' is chosen as the OVERLAP of:
+      * MA20 vicinity (mid-trend support)
+      * 30-day swing-low cluster (structural support)
+      * -1 ATR from current (shallow pullback)
+    Returns the high/low of where to consider scaling in. Boss directive:
+    "等到回踩时建仓" -- size up on pullback, not on strength.
+    """
+    bars = _fetch_recent_bars(conn, ticker, days=80)
+    if not bars or len(bars) < 20:
+        return EntryZone(
+            ticker=ticker.upper(), current_price=None, ma20=None, ma50=None,
+            swing_low_30d=None, swing_low_60d=None, atr_20=None,
+            atr_minus_1=None, atr_minus_2=None, pct_minus_5=None,
+            pct_minus_10=None, recommended_zone_low=None,
+            recommended_zone_high=None, note="insufficient price history",
+        )
+
+    closes = [b[4] for b in bars]
+    current = closes[-1]
+    ma20 = sum(closes[-20:]) / 20 if len(closes) >= 20 else None
+    ma50 = sum(closes[-50:]) / 50 if len(closes) >= 50 else None
+    atr = _compute_atr(bars[-21:], n=20)  # most recent 20 daily bars
+    swing30 = _swing_low(bars, days=30)
+    swing60 = _swing_low(bars, days=60)
+
+    atr_minus_1 = (current - atr) if (atr and current) else None
+    atr_minus_2 = (current - 2 * atr) if (atr and current) else None
+    pct_minus_5 = current * 0.95 if current else None
+    pct_minus_10 = current * 0.90 if current else None
+
+    # Recommended zone: between MA20 and -1 ATR; floor with 30d swing-low when
+    # they conflict (so we don't recommend an entry above structural support
+    # the stock has already broken through).
+    # Filter candidates to "actionable pullback range" -- between -3% and -20%
+    # below current. Levels deeper than -20% are typically structural-break
+    # zones (flash crashes, prior bear markets) that aren't a swing-trade entry.
+    candidates: list[float] = []
+    cap_low = current * 0.80 if current else 0
+    cap_high = current * 0.97 if current else 0
+    for lvl in (ma20, atr_minus_1, atr_minus_2, swing30):
+        if lvl is None or current is None:
+            continue
+        if cap_low <= lvl <= cap_high:
+            candidates.append(lvl)
+
+    if not candidates:
+        # Fall back to a clean -3% to -10% band when nothing clusters
+        if current:
+            rec_low, rec_high = current * 0.90, current * 0.97
+            note = "no clean technical level in -3 to -20% range; using -3 to -10% default"
+        else:
+            rec_low = rec_high = None
+            note = "no clear pullback zone"
+    else:
+        rec_low = min(candidates)
+        rec_high = max(candidates)
+        if rec_low == rec_high:
+            rec_high = rec_low * 1.02
+        if current and rec_high > current * 0.99:
+            note = "near current; wait for pullback test"
+        elif current and (current - rec_low) / current > 0.15:
+            note = "deeper pullback zone -- scale in only on a confirmed turn"
+        else:
+            note = "moderate pullback zone -- scale in on test"
+
+    return EntryZone(
+        ticker=ticker.upper(), current_price=current,
+        ma20=ma20, ma50=ma50,
+        swing_low_30d=swing30, swing_low_60d=swing60,
+        atr_20=atr,
+        atr_minus_1=atr_minus_1, atr_minus_2=atr_minus_2,
+        pct_minus_5=pct_minus_5, pct_minus_10=pct_minus_10,
+        recommended_zone_low=rec_low, recommended_zone_high=rec_high,
+        note=note,
+    )
+
+
+def format_entry_zone(z: EntryZone) -> str:
+    """Render entry-zone analysis as markdown for terminal/APK display."""
+    if z.current_price is None:
+        return f"# {z.ticker} 入场区间 / Entry zone\n\n_(insufficient price data)_"
+
+    def _f(v: float | None) -> str:
+        return f"${v:.2f}" if v is not None else "N/A"
+
+    lines = [
+        f"# {z.ticker} 入场区间 / Entry zone",
+        "",
+        f"**当前价 / Current**: {_f(z.current_price)}",
+        "",
+        "## 关键技术位 / Key levels",
+        f"- 20日均线 MA20: {_f(z.ma20)}",
+        f"- 50日均线 MA50: {_f(z.ma50)}",
+        f"- 30日低点 / 30d swing-low: {_f(z.swing_low_30d)}",
+        f"- 60日低点 / 60d swing-low: {_f(z.swing_low_60d)}",
+        "",
+        "## ATR + 百分比回撤 / ATR + percent pullback",
+        f"- ATR(20): {_f(z.atr_20)}",
+        f"- -1 ATR (浅回撤 shallow): {_f(z.atr_minus_1)}",
+        f"- -2 ATR (深回撤 deeper): {_f(z.atr_minus_2)}",
+        f"- -5%: {_f(z.pct_minus_5)}",
+        f"- -10%: {_f(z.pct_minus_10)}",
+        "",
+        "## 推荐建仓区间 / Recommended entry zone",
+        f"- **{_f(z.recommended_zone_low)} -- {_f(z.recommended_zone_high)}**",
+        f"- {z.note}",
+        "",
+        "_Not financial advice._",
+    ]
+    return "\n".join(lines)
+
+
 def format_stop_loss_block(
     conn: sqlite3.Connection, tickers: list[str],
 ) -> str:

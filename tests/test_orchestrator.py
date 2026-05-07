@@ -450,13 +450,14 @@ def test_job_weekly_qa_dive_continues_on_per_ticker_failure(
 
 
 def test_create_scheduler_has_expected_jobs() -> None:
-    """Scheduler registers all F00-F43 pipeline jobs.
+    """Scheduler registers all F00-F44 pipeline jobs.
 
     19 + backup_db (F33) + uoa_scan (F36) + smallcap_scan (F38)
-    + ai_loop (F39) + weekly_qa_dive (F40) + daily_tech_dive (F43) = 25.
+    + ai_loop (F39) + weekly_qa_dive (F40) + daily_tech_dive (F43)
+    + company_dd_dive (F44) = 26.
     """
     scheduler = create_scheduler()
-    assert len(scheduler.get_jobs()) == 25
+    assert len(scheduler.get_jobs()) == 26
 
 
 def test_create_scheduler_job_ids() -> None:
@@ -490,6 +491,7 @@ def test_create_scheduler_job_ids() -> None:
         "ai_loop_measure",
         "weekly_qa_dive",
         "daily_tech_dive",
+        "company_dd_dive",
     }
     assert job_ids == expected
 
@@ -519,7 +521,7 @@ def test_get_schedule_info_format() -> None:
     info = get_schedule_info(scheduler)
 
     assert isinstance(info, ScheduleInfo)
-    assert len(info.jobs) == 25
+    assert len(info.jobs) == 26
 
     # Each entry has name and next_run keys
     for entry in info.jobs:

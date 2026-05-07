@@ -4,7 +4,7 @@ Per boss instruction 2026-05-06: maintained on every commit so the project
 state is always inspectable from one document. If a feature lands without
 a corresponding entry here, the commit is incomplete.
 
-Last updated: 2026-05-07 (F43 cron + topic queue + PDF export shipped)
+Last updated: 2026-05-07 evening (F44 analyst skills + company DD queue + 4.5h cron + entry-zone tool)
 
 ---
 
@@ -101,6 +101,7 @@ Grouped by responsibility:
 | `conviction_watchlist.yaml` (**F42**) | Deeply-tracked tickers, 1+ per trend | `stock conviction list/toggle/swap/add/remove` or edit text |
 | `smallcap_universe.yaml` | 33 small-caps across 3 sectors (F38) | edit text |
 | `topic_queue.yaml` | F43 daily-dive topic rotation (9 topics across 3 sectors) | edit text or `stock topic add` |
+| `company_dive_queue.yaml` | F44 company DD rotation (~28 companies, priority-tiered) | edit text |
 | `ai_supply_chain.yaml` | AI capex layered chain map | edit text |
 | `feedback_rules.yaml` | Boss-feedback derived response rules | self-rewriter updates |
 
@@ -176,6 +177,7 @@ Grouped by responsibility:
 - **`earnings-review <ticker>`** (F44, equity-research style)
 - **`dd-checklist <ticker>`** (F44, 12-item punch list)
 - **`morning-note`** (F44, overnight roll-up)
+- **`entry-zone <ticker>`** -- pullback entry-zone analysis (MA + swing-low + ATR + percent)
 - **`pdf-export research:<id> | file:<path> | recent-dives`** -- weasyprint or xhtml2pdf
 - `anomaly-run` (F12)
 - `backend show/set/test` (claude_cli vs minimax flip)
@@ -183,11 +185,16 @@ Grouped by responsibility:
 ### Reports
 - **`daily-zh`** (new) -- Chinese activity report for the day
 
-## Cron schedule (25 jobs)
+## Cron schedule (26 jobs)
 
 Run order on a typical Mon-Fri:
 ```
+03:15      company_dd_dive (F44 -- 1 company every 4.5h)
 04:30 UTC  daily_tech_dive (F43 -- sector rotates by weekday)
+07:45      company_dd_dive (F44)
+12:15      company_dd_dive (F44)
+16:45      company_dd_dive (F44)
+21:15      company_dd_dive (F44)
 06:00      daily_self_review
 06:30      ai_loop_measure (Mon only)
 07:00      weekly_qa_dive (Sat only)

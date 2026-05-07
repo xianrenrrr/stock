@@ -145,3 +145,68 @@ names:
   # -- no public ticker yet. Tracked qualitatively until parent SMIC (688981.SS /
   # 0981.HK) discloses or the JV gets spun out separately. If you find a different
   # interpretation of "盛合微晶", `stock conviction add ...` to register it.
+
+  # =====================================================================
+  # Boss directive 2026-05-07: high-growth A-share AI names + IDM PPT validation
+  # All from confirmed Q1 2026 high-growth list (>30% YoY net income growth)
+  # =====================================================================
+
+  - ticker: 300308.SZ
+    name: 中际旭创 Innolight (800G/1.6T optical module king)
+    trend_id: tfln_at_1p6t
+    why: "Q1 2026 +262%; NVIDIA/Google/Meta supplier; named in IDM PPT as Tier 1 customer"
+    enabled: true
+
+  - ticker: 300394.SZ
+    name: 天孚通信 T&S Communications (FAU + photonic engine assembly)
+    trend_id: photonic_rack_interconnect
+    why: "OCS dive Tier-1 'no regret' -- pan-photonics pure-play; Q1 +1153%"
+    enabled: true
+
+  - ticker: 002428.SZ
+    name: 云南锗业 Yunnan Germanium (InP substrate ONLY domestic supplier)
+    trend_id: tfln_at_1p6t
+    why: "Named in IDM PPT as China's only InP wafer player; 90% of InP is JP/US"
+    enabled: true
+
+  - ticker: 601138.SS
+    name: 工业富联 Foxconn Industrial (global #1 AI server)
+    trend_id: photonic_rack_interconnect
+    why: "Q1 2026 net +102% to ¥10.5B; global AI server share keeps rising"
+    enabled: true
+
+  - ticker: 688256.SH
+    name: 寒武纪 Cambricon (China AI chip leader)
+    trend_id: china_semi_domesticization
+    why: "Q1 2026 first profitable Q with +185%; thesis-confirmed inflection"
+    enabled: true
+
+  - ticker: 688041.SH
+    name: 海光信息 Hygon (state-aligned AI chip)
+    trend_id: china_semi_domesticization
+    why: "Q1 2026 +36%; embedded with state cloud + bank infrastructure"
+    enabled: true
+
+  - ticker: 603986.SS
+    name: 兆易创新 GigaDevice (NOR/MCU storage)
+    trend_id: hbm4_hybrid_bonding   # adjacent storage trend
+    why: "Q1 2026 +523% net income growth; AI-server NOR/MCU demand"
+    enabled: false   # toggle on if you want storage exposure
+
+  - ticker: 688072.SH
+    name: 拓荆科技 NAURA Tetech (CVD/ALD deposition equipment)
+    trend_id: china_semi_domesticization
+    why: "Q1 2026 +488% net; deposition for advanced node ramp at SMIC/CXMT"
+    enabled: true
+
+  - ticker: 002463.SZ
+    name: 沪电股份 WUS PCB (high-end AI server PCB)
+    trend_id: photonic_rack_interconnect
+    why: "Q1 2026 +63% net; NVDA/AMD direct supplier; AI-server PCB 3-5x usage"
+    enabled: true
+
+  - ticker: 002281.SZ
+    name: 光迅科技 Accelink (optical components, named in IDM PPT)
+    trend_id: tfln_at_1p6t
+    why: "Q1 2026 +60% net; in IDM PPT customer list; optical module + chip vertical"
+    enabled: false   # 4 optical names already enabled; toggle if you want more

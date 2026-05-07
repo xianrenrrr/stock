@@ -579,6 +579,70 @@ def _pop_next_topic(sector: str) -> tuple[str, str] | None:
     return (sector, topic)
 
 
+COMPANY_DIVE_QUEUE_PATH: str = "data/company_dive_queue.yaml"
+
+
+def _pop_next_company() -> str | None:
+    """Pick the longest-untouched enabled company from company_dive_queue.yaml.
+
+    Returns the ticker, or None if no enabled companies. Updates last_run
+    in the YAML file so the next call rotates to the next company.
+    """
+    from pathlib import Path
+    import yaml
+    p = Path(COMPANY_DIVE_QUEUE_PATH)
+    if not p.exists():
+        return None
+    data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    companies = data.get("companies") or []
+    enabled = [(i, c) for i, c in enumerate(companies) if c.get("enabled", True)]
+    if not enabled:
+        return None
+    # Sort by priority asc, then last_run asc (None first)
+    enabled.sort(key=lambda kv: (
+        kv[1].get("priority", 9), kv[1].get("last_run") or "",
+    ))
+    idx, picked = enabled[0]
+    ticker = str(picked.get("ticker", "")).strip()
+    if not ticker:
+        return None
+    picked["last_run"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M")
+    companies[idx] = picked
+    data["companies"] = companies
+    p.write_text(
+        yaml.safe_dump(data, sort_keys=False, allow_unicode=True, default_flow_style=False, width=200),
+        encoding="utf-8",
+    )
+    return ticker
+
+
+def _job_company_dd_dive() -> None:
+    """F44: every 4h30min, run dd_checklist on the next company in the queue.
+
+    Pops 1 company per fire (~5-min wall clock). Boss directive 2026-05-07:
+    iterate through the company queue at sub-session pace so each name gets
+    a fresh DD checklist on schedule. Free via claude_cli.
+    """
+    from stock import analyst_skills
+    ticker = _pop_next_company()
+    if not ticker:
+        logger.info("Company DD dive: no enabled companies in queue")
+        return
+    logger.info("Company DD dive starting: %s", ticker)
+    conn = get_conn()
+    try:
+        report = analyst_skills.dd_checklist(ticker=ticker, conn=conn)
+        if report.research_id:
+            logger.info(
+                "Company DD dive done: %s -> research_id=%s",
+                ticker, report.research_id,
+            )
+    except Exception:
+        logger.exception("Company DD dive failed for %s", ticker)
+    finally:
+        conn.close()
+
+
 def _job_daily_tech_dive() -> None:
     """F43 daily cron: rotate sector by day-of-year, pick next topic, dive.
 
@@ -1172,6 +1236,16 @@ def create_scheduler() -> BlockingScheduler:
         CronTrigger(hour=4, minute=30, timezone="UTC"),
         id="daily_tech_dive",
         name="F43 daily tech-trend deep-dive (sector-rotated)",
+    )
+
+    # F44 company DD dive every ~4.5 hours: 03:15, 07:45, 12:15, 16:45, 21:15.
+    # Spaced to (a) span boss's awake hours in Asia + US, (b) leave gaps
+    # for Claude Code subscription rate-limit refresh windows.
+    scheduler.add_job(
+        _job_company_dd_dive,
+        CronTrigger(hour="3,7,12,16,21", minute=15, timezone="UTC"),
+        id="company_dd_dive",
+        name="F44 company DD checklist (queue-rotated, ~4.5h cadence)",
     )
 
     # F19: forward-discovery engine daily at 23:00 UTC (07:00 Beijing). Runs
