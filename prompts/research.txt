@@ -38,6 +38,24 @@ Date (UTC): {now_utc}
 Session window: {session_label}
 Today's focus layer: {focus_layer_name} — {focus_layer_function}
 
+## 技术趋势雷达 / Tech trend radar (F41 -- LEAD WITH THIS)
+Boss directive 2026-05-06: don't be a news reporter. Lead with the technology
+trend, not a market summary. ONE specific tech shift per push (rotated by
+day-of-year across enabled trends in data/tech_trends.yaml). Treat the
+"为何当下" evidence as the load-bearing claim of today's note -- if any of
+those bullets has a fresh confirmation or contradiction in today's news,
+SAY SO and explain what it means for the vehicles. The "证伪信号" bullets
+are what would make us cut conviction on the names below.
+{trend_radar_block}
+
+## 重点跟踪 / Conviction watchlist (F42 -- 10 deeply-tracked names)
+These are the focused conviction names, one per tech trend, with live close
++ F24 recommended stop. **At least 3-4 of today's output sections must cite
+names from THIS table (not the broader 39-ticker watchlist).** If the trend
+radar above implies a directional view on one of these names, lead the
+relevant section with that name + concrete catalyst window + the stop price.
+{conviction_block}
+
 ## 异常波动 / Anomalies (last 24-48h)
 {anomaly_block}
 
@@ -137,14 +155,25 @@ levered names by one notch and call out hedge candidates.
 ## Cross-layer context (rotating sample)
 {cross_layer_block}
 
-## Recent news features
-{news_block}
-
-## Fresh web discovery (autonomous search + page extraction, last 12h)
-{web_discovery_block}
-
 ## Conversation context (last few turns per recipient)
 {conversation_context_block}
+
+---
+
+## 背景信息 / Background context (footer)
+The two blocks below are raw news + web-search results. Boss directive: do
+NOT lead the note with these -- they're the "regular news reporter" content
+the boss explicitly said to demote. Use them only to *confirm or
+contradict* the specific evidence in the trend radar above. If a news
+headline is interesting but doesn't speak to one of today's tech trend
+bullets or conviction names, ignore it -- "looks like an interesting
+headline" is exactly the noise we're cutting.
+
+### Recent news features
+{news_block}
+
+### Fresh web discovery (autonomous search + page extraction, last 12h)
+{web_discovery_block}
 
 ## Reader feedback (recent boss replies in WeChat)
 Use these to adapt the next note's tone, depth, and focus. If a reader asks for shorter

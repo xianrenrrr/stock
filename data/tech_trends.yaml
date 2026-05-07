@@ -1,0 +1,205 @@
+# F41 -- Technology trend atlas. Boss directive 2026-05-06:
+# "AI 一定要去挖掘技术趋势 ... 不是市场综述 ... 在技术爆发的前夜判断出来,
+# 不是已经涨了 20 倍才去买". This file is the conviction layer above
+# secular themes (broad narratives) and below conviction_watchlist.yaml
+# (the names we deeply track). Each trend names a specific technology
+# shift with a 2-5 year horizon, the SPECIFIC evidence why it's happening
+# now, the falsification signal, and the cleanest vehicles.
+#
+# Categories: ai_compute (4) | ai_biopharma (3) | energy (3) -- balanced
+# per boss's 3-sector framework with AI*biopharma intersection priority.
+#
+# The daily research note rotates 1-2 trends per push (deterministic by
+# day-of-year so each trend gets ~36 days/year of airtime). Operators
+# add/edit trends here; the system does not auto-discover them.
+
+trends:
+
+  # =====================================================================
+  # AI / compute (4)
+  # =====================================================================
+
+  - id: tfln_at_1p6t
+    name: TFLN modulator displacing PAM4-DSP at 1.6T+ optics
+    sector: ai_compute
+    horizon: "2-3y"
+    why_now:
+      - "1.6T port shipments inflect 2026H2 per AVGO/MRVL guidance commentary"
+      - "PAM4 hits 56 GHz physical bandwidth wall; TFLN >100 GHz"
+      - "002222.SZ 福晶 disclosed Q4 2025 sample shipments to 中际旭创/新易盛 (investor 交流)"
+      - "SerDes IP licensing community has flipped from PAM4-only to TFLN-aware in last 6 months"
+    falsification:
+      - "If 800G PAM4 holds >20% port share into 2027, TFLN ramp delayed 4q+"
+      - "If 中际旭创/新易盛 1.6T modules ship with PAM4 not TFLN through end of 2026"
+    vehicles_pure_play: [002222.SZ]
+    vehicles_diversified: [COHR, LITE]
+    ai_biopharma_combo: false
+    enabled: true   # toggle via `stock trend toggle <id>` or edit here directly
+
+  - id: euv_pellicle_yield
+    name: EUV pellicle yield breaking >70% (TSMC N2 enabler)
+    sector: ai_compute
+    horizon: "2-3y"
+    why_now:
+      - "TSMC N2 production ramp targets 2026Q3; pellicles are gating constraint"
+      - "Mitsui pellicle yield program targeting >70% sustained yield"
+      - "ASML callouts about pellicle bottleneck in 1Q/2Q 2025 earnings calls"
+      - "Without functional pellicles, EUV exposure cost per wafer stays prohibitive"
+    falsification:
+      - "If TSMC ships N2 production-only without pellicles, the bottleneck moves elsewhere"
+      - "If Mitsui yield improvement plateaus at <50% through 2026"
+    vehicles_pure_play: [ASML]
+    vehicles_diversified: [AMAT, LRCX, 002371.SZ]
+    ai_biopharma_combo: false
+    enabled: true   # toggle via `stock trend toggle <id>` or edit here directly
+
+  - id: photonic_rack_interconnect
+    name: Photonic interconnect at the rack level (NVLink-over-fiber, OCS)
+    sector: ai_compute
+    horizon: "2-3y"
+    why_now:
+      - "NVDA NVLink roadmap pushes per-GPU bandwidth past copper PCB limit"
+      - "GOOGL OCS deployment publicly disclosed; rumored at META/MSFT in 2026"
+      - "Rack-level bandwidth doubling every 18 months hits copper distance limit"
+      - "Per-port optics cost trending below copper TCO at 1.6T+"
+    falsification:
+      - "If 224G PAM4 SerDes extends copper viability through 2028"
+      - "If NVDA Blackwell-Ultra retains copper NVLink interconnect"
+    vehicles_pure_play: [COHR, LITE]
+    vehicles_diversified: [GOOGL]
+    ai_biopharma_combo: false
+    enabled: true   # toggle via `stock trend toggle <id>` or edit here directly
+
+  - id: china_semi_domesticization
+    name: China semi domesticization at the equipment+materials layer (Big Fund III)
+    sector: ai_compute
+    horizon: "3-5y"
+    why_now:
+      - "Big Fund Phase III RMB 344B (~$48B) deploying through 2030"
+      - "SMIC capex sustained ~$7.5B/yr through tightening cycles"
+      - "Entity list expansion FORCES domestic procurement (captive demand backstop)"
+      - "Wet-bench (盛美/ACMR), etch (中微), packaging (长电) at parity-minus-one node"
+    falsification:
+      - "If TSMC Foundry-2.0 includes meaningful China access (very unlikely)"
+      - "If SMIC capex drops >20% YoY for 2 consecutive quarters"
+      - "If Big Fund III deployment rate stalls below 15%/yr (per PBoC quarterly disclosure)"
+    vehicles_pure_play: [688082.SS, ACMR]
+    vehicles_diversified: [688012.SS, 002371.SZ, 600584.SS]
+    ai_biopharma_combo: false
+    enabled: true   # toggle via `stock trend toggle <id>` or edit here directly
+
+  # =====================================================================
+  # AI x biopharma (3 -- boss explicit priority)
+  # =====================================================================
+
+  - id: ai_drug_discovery_phase1
+    name: AI drug discovery cutting Phase 1 cost+timeline 50%+
+    sector: ai_biopharma
+    horizon: "3-5y"
+    why_now:
+      - "RXRX (Recursion) + NVDA partnership on multimodal cellular ML; first IND filings expected 2026"
+      - "SDGR (Schrödinger) physics-based + ML drug design SaaS revenue trajectory inflecting"
+      - "ABCL (AbCellera) AI antibody discovery has multiple partnered IND filings"
+      - "TEM (Tempus AI) clinical-AI revenue scaling on cancer molecular diagnostics"
+      - "Foundation models for molecular generation crossed wet-lab validation threshold in 2024-2025"
+    falsification:
+      - "If first AI-platform-derived drug fails Phase 1 with no efficacy advantage vs traditional discovery"
+      - "If SDGR / RXRX revenue stalls below 30% YoY for 2 consecutive quarters"
+    vehicles_pure_play: [RXRX]
+    vehicles_diversified: [SDGR, TEM, ABCL]
+    ai_biopharma_combo: true
+    enabled: true   # toggle via `stock trend toggle <id>` or edit here directly
+
+  - id: glp1_mechanism_extension
+    name: GLP-1 mechanism extending to MASH + CV + Alzheimer prevention
+    sector: ai_biopharma
+    horizon: "3-5y"
+    why_now:
+      - "VKTX (Viking) Phase 2 oral GLP-1 beat Wegovy on weight loss + tolerance"
+      - "LLY/NVO MASH Phase 3 readouts in 2026 (semaglutide + tirzepatide)"
+      - "AD prevention Phase 2 readouts targeted 2027"
+      - "Mechanism is GLP-1 receptor agonism with AI-derived next-gen molecules (Viking platform)"
+    falsification:
+      - "If MASH Phase 3 fails (semaglutide), the mechanism extension narrows back to obesity-only"
+      - "If oral GLP-1 bioavailability remains <30% through next-gen iterations"
+      - "If insurance coverage tightens to weight-loss-only indication"
+    vehicles_pure_play: [VKTX]
+    vehicles_diversified: [NVO, LLY]
+    ai_biopharma_combo: true
+    enabled: true   # toggle via `stock trend toggle <id>` or edit here directly
+
+  - id: gene_editing_commercial_scale
+    name: CRISPR + base editing reaching commercial scale post-Casgevy
+    sector: ai_biopharma
+    horizon: "3-5y"
+    why_now:
+      - "Casgevy (CRSP/Vertex) commercial sickle-cell rollout 2024-2026"
+      - "BEAM (base editing) first-in-class IND filings; cleaner safety profile vs Cas9"
+      - "NTLA in vivo trials advancing (no ex vivo cell extraction required)"
+      - "ML-driven guide RNA design + off-target prediction reduces failure rate"
+    falsification:
+      - "If Casgevy commercial uptake stalls below 100 patients/quarter through 2027"
+      - "If BEAM Phase 1 shows off-target editing rate >2%"
+      - "If insurance/Medicaid coverage decisions remain restrictive"
+    vehicles_pure_play: [BEAM]
+    vehicles_diversified: [CRSP, NTLA]
+    ai_biopharma_combo: true
+    enabled: true   # toggle via `stock trend toggle <id>` or edit here directly
+
+  # =====================================================================
+  # Energy (3) -- the AI-DC firm-power complex
+  # =====================================================================
+
+  - id: ai_dc_firm_power_gas
+    name: Behind-the-meter gas peakers + co-located generation for AI-DC
+    sector: energy
+    horizon: "2-3y"
+    why_now:
+      - "Hyperscaler PPAs already announced (BE/AEP/CEG) with delivery 2026-2028"
+      - "GE Vernova gas turbine backlog at multi-year highs; pricing power inflecting"
+      - "Solar+battery economics insufficient for 24/7 200MW+ AI-DC firm load"
+      - "Grid interconnect queue +6 years average -> behind-the-meter is the only fast path"
+    falsification:
+      - "If solar+battery LCOE drops >40% AND 24/7 reliability proven for >100MW AI-DC"
+      - "If gas turbine backlog declines QoQ (would signal overcapacity)"
+      - "If FERC fast-tracks interconnect approvals (removes the bottleneck)"
+    vehicles_pure_play: [BE]
+    vehicles_diversified: [GEV, CEG, VST]
+    ai_biopharma_combo: false
+    enabled: true   # toggle via `stock trend toggle <id>` or edit here directly
+
+  - id: smr_commercial_deployment
+    name: Small modular nuclear (SMR) NRC certification + first deployments
+    sector: energy
+    horizon: "4-5y"
+    why_now:
+      - "NRC SMR certification framework finalized 2024; first license decisions 2026-2027"
+      - "Constellation/AEP/Microsoft offtake commitments already announced"
+      - "Oklo (OKLO) DOE site approval + fuel sourcing in place"
+      - "First commercial deployment target 2029-2030 with critical-path items underway"
+    falsification:
+      - "If first commercial SMR slips to 2031+, sentiment crashes hard"
+      - "If Oklo NRC license rejected on safety grounds"
+      - "If lifecycle LCOE comes in >$80/MWh (above competing firm-power options)"
+    vehicles_pure_play: [OKLO]
+    vehicles_diversified: [BWXT, CEG, NNE]
+    ai_biopharma_combo: false
+    enabled: true   # toggle via `stock trend toggle <id>` or edit here directly
+
+  - id: allam_cycle_zero_emission
+    name: Allam-cycle gas + carbon capture as zero-emission firm baseload
+    sector: energy
+    horizon: "3-5y"
+    why_now:
+      - "NPWR (NET Power) first commercial plant Permian Basin online 2027"
+      - "Occidental (OXY) backing as carbon-capture EPC partner"
+      - "Constellation Energy offtake commitments in place"
+      - "ESG-mandated AI customers (MSFT, GOOGL) require zero-emission baseload"
+    falsification:
+      - "If Occidental walks back the carbon-capture commitment"
+      - "If first plant slips to 2028+ (project death spiral)"
+      - "If LCOE comes in >$90/MWh after carbon credits"
+    vehicles_pure_play: [NPWR]
+    vehicles_diversified: [OXY, CEG]
+    ai_biopharma_combo: false
+    enabled: true   # toggle via `stock trend toggle <id>` or edit here directly

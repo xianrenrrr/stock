@@ -1,0 +1,95 @@
+# F42 -- Conviction watchlist (~10 names we deeply track).
+#
+# Boss directive 2026-05-06: "我们要有中长期目标, 深入挖掘这几个目标就行了 ...
+# 一定要在技术爆发的前夜". This is the focused list above the 39-ticker
+# watchlist (which is for ingest universe / data coverage). Each entry
+# names ONE ticker per tech_trends.yaml trend -- the cleanest vehicle.
+# Daily research note leads with these.
+#
+# Each entry has `enabled` for swap/toggle without delete:
+#   stock conviction toggle <ticker>      flip enabled
+#   stock conviction swap <out> <in>      disable one, add another
+#   stock conviction add <ticker> --trend <trend_id> [--why "..."]
+#   stock conviction remove <ticker>      hard delete
+#   stock conviction list                 print all
+#
+# Or just edit this YAML in any editor. CLI is convenience.
+#
+# Sector mix per boss spec (10 names total):
+#   AI / compute        : 4
+#   AI x biopharma      : 3   (boss explicit priority)
+#   Energy (AI-DC pwr)  : 3
+
+names:
+
+  # =====================================================================
+  # AI / compute (4)
+  # =====================================================================
+
+  - ticker: NVDA
+    name: NVIDIA
+    trend_id: photonic_rack_interconnect
+    why: "AI compute foundation; rack-level photonic roadmap is the core BoM lever for 1.6T+"
+    enabled: true
+
+  - ticker: TSM
+    name: Taiwan Semiconductor
+    trend_id: euv_pellicle_yield
+    why: "N2 ramp 2026Q3 is the gate; pellicle bottleneck is THE constraint to track"
+    enabled: true
+
+  - ticker: 002222.SZ
+    name: 福晶科技 Fujian Castech
+    trend_id: tfln_at_1p6t
+    why: "TFLN crystal monopoly; LN single-crystal ~70% global share; 1.6T sample disclosure live"
+    enabled: true
+
+  - ticker: ACMR
+    name: ACM Research (US ADR of 盛美上海)
+    trend_id: china_semi_domesticization
+    why: "Wet-bench/SAPS clean monopoly at SMIC/YMTC; -65% from 2024 entity-list panic now priced in"
+    enabled: true
+
+  # =====================================================================
+  # AI x biopharma (3) -- boss priority
+  # =====================================================================
+
+  - ticker: RXRX
+    name: Recursion Pharmaceuticals
+    trend_id: ai_drug_discovery_phase1
+    why: "AI drug discovery + NVDA partnership; first IND filings 2026; pure-play platform"
+    enabled: true
+
+  - ticker: TEM
+    name: Tempus AI
+    trend_id: ai_drug_discovery_phase1
+    why: "Clinical AI + cancer molecular diagnostics; revenue scaling; second AI*biopharma vehicle"
+    enabled: true
+
+  - ticker: SDGR
+    name: Schrödinger
+    trend_id: ai_drug_discovery_phase1
+    why: "Physics-based + ML drug design SaaS; revenue inflection; third AI*biopharma vehicle"
+    enabled: true
+
+  # =====================================================================
+  # Energy (3) -- AI-DC firm power
+  # =====================================================================
+
+  - ticker: CEG
+    name: Constellation Energy
+    trend_id: ai_dc_firm_power_gas
+    why: "Largest US nuclear fleet + AI-DC PPA flow (Microsoft, Meta announced)"
+    enabled: true
+
+  - ticker: BE
+    name: Bloom Energy
+    trend_id: ai_dc_firm_power_gas
+    why: "SOFC fuel cells; behind-the-meter fast-deploy power; the original AI-DC energy template"
+    enabled: true
+
+  - ticker: OKLO
+    name: Oklo
+    trend_id: smr_commercial_deployment
+    why: "Lead SMR commercial timeline; DOE site approval + fuel sourcing in place"
+    enabled: true

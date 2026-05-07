@@ -48,6 +48,13 @@ from stock.stops import format_stop_loss_block
 from stock.ai_loop_monitor import format_loop_block
 from stock.options import format_uoa_block
 from stock.smallcap_scanner import format_smallcap_block
+from stock.tech_trends import (
+    format_conviction_watchlist_block,
+    format_trend_radar_block,
+    load_conviction,
+    load_trends,
+    pick_focus_trend,
+)
 from stock.thesis import compute_thesis_stats, format_thesis_block
 from stock.supply_chain import (
     Layer,
@@ -421,6 +428,16 @@ def generate_daily_research(
     # F39: AI commercial-loop closure-risk monitor. Headline + table of any
     # panel companies showing simultaneous deceleration + margin compression.
     ai_loop_block = format_loop_block(conn, days=120)
+    # F41: tech-trend radar (1 trend per push, day-rotated across enabled).
+    # Boss directive: lead with technology trends, not news summaries.
+    enabled_trends = load_trends(enabled_only=True)
+    focus_trend = pick_focus_trend(enabled_trends, now=now)
+    trend_radar_block = format_trend_radar_block(focus_trend)
+    # F42: conviction watchlist (~10 names) -- the deeply-tracked layer
+    # above the 39-ticker ingest universe. Live prices + F24 stops.
+    conviction_block = format_conviction_watchlist_block(
+        conn, load_conviction(enabled_only=True),
+    )
     feedback_block = recent_feedback_block()
     anomaly_block = format_anomaly_block(recent_anomalies(conn, days=2))
     previous_followups_block = action_queue.format_previous_followups(
@@ -463,6 +480,8 @@ def generate_daily_research(
         uoa_block=uoa_block or "(no unusual options activity in the last 3 sessions)",
         smallcap_block=smallcap_block or "(smallcap scan has not run yet today)",
         ai_loop_block=ai_loop_block or "(AI loop monitor not yet measured this cycle)",
+        trend_radar_block=trend_radar_block,
+        conviction_block=conviction_block or "(no conviction watchlist names enabled)",
         max_chars=max_chars,
     )
 

@@ -1782,6 +1782,172 @@ def weekly_qa_dive_cmd() -> None:
         raise typer.Exit(code=1)
 
 
+trend_app = typer.Typer(help="Manage tech_trends.yaml (F41).")
+conviction_app = typer.Typer(help="Manage conviction_watchlist.yaml (F42).")
+app.add_typer(trend_app, name="trend")
+app.add_typer(conviction_app, name="conviction")
+
+
+@trend_app.command("list")
+def trend_list_cmd(all: bool = typer.Option(False, "--all", help="Include disabled trends")) -> None:
+    """List tech trends (enabled-only by default)."""
+    from stock import tech_trends
+    rows = tech_trends.load_trends(enabled_only=not all)
+    raw_count = len(tech_trends._load_raw(tech_trends.TRENDS_PATH, "trends"))
+    typer.echo(f"\n{len(rows)} {'enabled' if not all else 'total'} of {raw_count} trends:\n")
+    for t in rows:
+        flag = "" if t.enabled else " [DISABLED]"
+        ai_bio = " [AI×bio]" if t.ai_biopharma_combo else ""
+        typer.echo(f"  [{t.sector:14}] {t.id:35} {t.horizon:5}{ai_bio}{flag}")
+        typer.echo(f"      {t.name}")
+
+
+@trend_app.command("show")
+def trend_show_cmd(trend_id: str) -> None:
+    """Print one trend in full."""
+    from stock import tech_trends
+    rows = tech_trends.load_trends(enabled_only=False)
+    found = next((t for t in rows if t.id == trend_id), None)
+    if not found:
+        typer.echo(f"trend id not found: {trend_id}", err=True)
+        raise typer.Exit(code=1)
+    typer.echo(tech_trends.format_trend_radar_block(found))
+
+
+@trend_app.command("toggle")
+def trend_toggle_cmd(trend_id: str) -> None:
+    """Flip the enabled flag on a trend."""
+    from stock import tech_trends
+    try:
+        new = tech_trends.toggle_trend(trend_id)
+        typer.echo(f"{trend_id}: enabled={new}")
+    except KeyError as e:
+        typer.echo(str(e), err=True); raise typer.Exit(code=1)
+
+
+@trend_app.command("swap")
+def trend_swap_cmd(disable_id: str, enable_id: str) -> None:
+    """Disable one trend and enable another in one shot."""
+    from stock import tech_trends
+    try:
+        tech_trends.swap_trends(disable_id, enable_id)
+        typer.echo(f"swapped: {disable_id} OFF -> {enable_id} ON")
+    except KeyError as e:
+        typer.echo(str(e), err=True); raise typer.Exit(code=1)
+
+
+@trend_app.command("remove")
+def trend_remove_cmd(trend_id: str) -> None:
+    """Hard-delete a trend (use toggle for non-destructive disable)."""
+    from stock import tech_trends
+    try:
+        tech_trends.remove_trend(trend_id)
+        typer.echo(f"removed: {trend_id}")
+    except KeyError as e:
+        typer.echo(str(e), err=True); raise typer.Exit(code=1)
+
+
+@trend_app.command("add")
+def trend_add_cmd(
+    trend_id: str = typer.Argument(...),
+    name: str = typer.Argument(...),
+    sector: str = typer.Argument(..., help="ai_compute | ai_biopharma | energy"),
+    horizon: str = typer.Argument(..., help="e.g. '2-3y'"),
+    why: list[str] = typer.Option(..., "--why", help="evidence bullet, repeatable"),
+    falsify: list[str] = typer.Option(..., "--falsify", help="falsification bullet, repeatable"),
+    pure_play: list[str] = typer.Option([], "--pure-play", help="ticker, repeatable"),
+    diversified: list[str] = typer.Option([], "--diversified", help="ticker, repeatable"),
+    ai_biopharma: bool = typer.Option(False, "--ai-biopharma"),
+) -> None:
+    """Add a new tech trend (lots of args -- editing the YAML is often easier)."""
+    from stock import tech_trends
+    trend = tech_trends.TechTrend(
+        id=trend_id, name=name, sector=sector, horizon=horizon,
+        why_now=why, falsification=falsify,
+        vehicles_pure_play=pure_play, vehicles_diversified=diversified,
+        ai_biopharma_combo=ai_biopharma, enabled=True,
+    )
+    try:
+        tech_trends.add_trend(trend)
+        typer.echo(f"added trend: {trend_id}")
+    except ValueError as e:
+        typer.echo(str(e), err=True); raise typer.Exit(code=1)
+
+
+@conviction_app.command("list")
+def conviction_list_cmd(all: bool = typer.Option(False, "--all", help="Include disabled")) -> None:
+    """List conviction watchlist (enabled-only by default), with live prices."""
+    from stock import tech_trends
+    from stock.stops import compute_stop_loss
+    conn = get_conn()
+    rows = tech_trends.load_conviction(enabled_only=not all)
+    raw = len(tech_trends._load_raw(tech_trends.CONVICTION_PATH, "names"))
+    typer.echo(f"\n{len(rows)} {'enabled' if not all else 'total'} of {raw} names:\n")
+    for n in rows:
+        flag = "" if n.enabled else " [DISABLED]"
+        last_row = conn.execute("SELECT c FROM prices WHERE ticker=? ORDER BY ts DESC LIMIT 1", (n.ticker,)).fetchone()
+        last = f"${last_row[0]:.2f}" if last_row else "?"
+        try:
+            stop = compute_stop_loss(n.ticker, conn).recommended or 0.0
+            stop_s = f"${stop:.2f}" if stop > 0 else "N/A"
+        except Exception:
+            stop_s = "N/A"
+        typer.echo(f"  {n.ticker:11} {last:>9}  stop={stop_s:>9}  trend={n.trend_id}{flag}")
+        typer.echo(f"      {n.name[:35]:35} -- {n.why[:80]}")
+
+
+@conviction_app.command("toggle")
+def conviction_toggle_cmd(ticker: str) -> None:
+    """Flip the enabled flag on a conviction-list ticker."""
+    from stock import tech_trends
+    try:
+        new = tech_trends.toggle_conviction(ticker)
+        typer.echo(f"{ticker.upper()}: enabled={new}")
+    except KeyError as e:
+        typer.echo(str(e), err=True); raise typer.Exit(code=1)
+
+
+@conviction_app.command("swap")
+def conviction_swap_cmd(disable_ticker: str, enable_ticker: str) -> None:
+    """Disable one ticker, enable another in one shot."""
+    from stock import tech_trends
+    try:
+        tech_trends.swap_conviction(disable_ticker, enable_ticker)
+        typer.echo(f"swapped: {disable_ticker} OFF -> {enable_ticker} ON")
+    except KeyError as e:
+        typer.echo(str(e), err=True); raise typer.Exit(code=1)
+
+
+@conviction_app.command("add")
+def conviction_add_cmd(
+    ticker: str = typer.Argument(...),
+    name: str = typer.Argument(...),
+    trend_id: str = typer.Argument(...),
+    why: str = typer.Argument(...),
+) -> None:
+    """Add a new ticker to the conviction watchlist."""
+    from stock import tech_trends
+    n = tech_trends.ConvictionName(
+        ticker=ticker.upper(), name=name, trend_id=trend_id, why=why, enabled=True,
+    )
+    try:
+        tech_trends.add_conviction(n)
+        typer.echo(f"added: {ticker.upper()}")
+    except ValueError as e:
+        typer.echo(str(e), err=True); raise typer.Exit(code=1)
+
+
+@conviction_app.command("remove")
+def conviction_remove_cmd(ticker: str) -> None:
+    """Hard-delete a conviction-list ticker."""
+    from stock import tech_trends
+    try:
+        tech_trends.remove_conviction(ticker)
+        typer.echo(f"removed: {ticker.upper()}")
+    except KeyError as e:
+        typer.echo(str(e), err=True); raise typer.Exit(code=1)
+
+
 @app.command("smallcap-scan")
 def smallcap_scan_cmd(
     sector: str = typer.Option(None, help="Filter to one sector (ai_semis_smallcap, biopharma_smallcap, ai_dc_energy_smallcap)"),
