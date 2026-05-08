@@ -210,3 +210,26 @@ names:
     trend_id: tfln_at_1p6t
     why: "Q1 2026 +60% net; in IDM PPT customer list; optical module + chip vertical"
     enabled: false   # 4 optical names already enabled; toggle if you want more
+
+  # =====================================================================
+  # Boss directive 2026-05-08: Bloom-analog candidates (small + beaten down +
+  # specific bottleneck consensus has stopped paying attention to)
+  # =====================================================================
+
+  - ticker: STEM
+    name: Stem Inc (AI battery storage software)
+    trend_id: ai_dc_firm_power_gas
+    why: "Cleanest Bloom-2024 analog: $90M micro-cap, -66% from high, AI-DC behind-the-meter storage SW"
+    enabled: true
+
+  - ticker: NPWR
+    name: NET Power (Allam-cycle zero-emission gas)
+    trend_id: allam_cycle_zero_emission
+    why: "Bloom-energy-template peer: $190M micro, -59% from high, first commercial plant Permian 2027"
+    enabled: true
+
+  - ticker: VOR
+    name: Vor Biopharma (engineered HSC for post-BMT AML)
+    trend_id: gene_editing_commercial_scale
+    why: "Biotech tail: $780M, -76% from high; Trem-cel + Mylotarg combo Phase 2 readout 2026-2027"
+    enabled: true

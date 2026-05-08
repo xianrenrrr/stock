@@ -1977,6 +1977,26 @@ def pdf_export_cmd(
         raise typer.Exit(code=1)
 
 
+@app.command("entry-scan")
+def entry_scan_cmd() -> None:
+    """Weekly entry-signal scan: which conviction + dive-queue names are NOW
+    in their recommended pullback zone? Persists as research_reports kind=
+    'entry_signals' for APK delivery. Free (no LLM call)."""
+    from stock import entry_signals
+    try:
+        conn = get_conn()
+        rid, signals = entry_signals.run_and_persist(conn)
+        in_zone = [s for s in signals if s.classification == "IN_ZONE"]
+        typer.echo(f"Wrote research_id={rid}; {len(signals)} scanned, "
+                   f"{len(in_zone)} IN_ZONE")
+        for s in in_zone:
+            typer.echo(f"  IN_ZONE: {s.ticker} ${s.current_price:.2f} "
+                       f"(zone ${s.zone_low:.2f}-${s.zone_high:.2f})")
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
 @app.command("entry-zone")
 def entry_zone_cmd(ticker: str = typer.Argument(...)) -> None:
     """Compute pullback entry zones (MA20, swing-low, ATR-based) for a ticker."""

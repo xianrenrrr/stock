@@ -1,51 +1,133 @@
-# Company-level DD dive queue. Boss directive 2026-05-07: "every 4h30min do
-# a deep dive for each company in the target list, 10 subsessions if needed".
-#
-# A scheduled cron pops the longest-untouched enabled company and runs
-# `dd_checklist(ticker)` from analyst_skills.py -- ~600-1000 word
-# 12-item punch list per company, persisted as research_reports kind='dd_checklist'.
-# Free via claude_cli.
-#
-# Triage: covers (a) high-growth Q1 2026 winners flagged in boss's analyst
-# article, (b) names from the 光通信高端晶体IDM PPT customer list, (c) names
-# already in our conviction watchlist worth re-DD'ing.
-#
-# Edit text or use `stock company-dive add <ticker>` (CLI not yet wired --
-# direct edit is fine).
-
 companies:
-
-  # ---- AI compute / semis (highest priority) ----
-  - {ticker: 300308.SZ, name: 中际旭创 Innolight,        priority: 1, enabled: true}
-  - {ticker: 300394.SZ, name: 天孚通信 T&S,              priority: 1, enabled: true}
-  - {ticker: 688256.SH, name: 寒武纪 Cambricon,           priority: 1, enabled: true}
-  - {ticker: 688041.SH, name: 海光信息 Hygon,             priority: 1, enabled: true}
-  - {ticker: 601138.SS, name: 工业富联 Foxconn Industrial, priority: 1, enabled: true}
-  - {ticker: 002463.SZ, name: 沪电股份 WUS PCB,           priority: 1, enabled: true}
-  - {ticker: 688072.SH, name: 拓荆科技 NAURA Tetech,      priority: 1, enabled: true}
-  - {ticker: 688498.SH, name: 源杰科技 Yuanjie,           priority: 1, enabled: true}
-  - {ticker: 002428.SZ, name: 云南锗业 InP substrate,    priority: 1, enabled: true}
-
-  # ---- Already in conviction; re-DD on schedule ----
-  - {ticker: 002222.SZ, name: 福晶科技 Fujian Castech,    priority: 2, enabled: true}
-  - {ticker: 300620.SZ, name: 光库科技 Bright-Vision,     priority: 2, enabled: true}
-  - {ticker: 300456.SZ, name: 赛微电子 SaiWei MEMS,       priority: 2, enabled: true}
-  - {ticker: ACMR,       name: ACM Research US ADR,       priority: 2, enabled: true}
-  - {ticker: AXTI,       name: AXT InP substrate,         priority: 2, enabled: true}
-  - {ticker: BE,         name: Bloom Energy,              priority: 2, enabled: true}
-  - {ticker: RXRX,       name: Recursion Pharmaceuticals, priority: 2, enabled: true}
-
-  # ---- Boss-directed but lower priority ----
-  - {ticker: 300408.SZ, name: 三环集团 CCTC,              priority: 3, enabled: true}
-  - {ticker: 002281.SZ, name: 光迅科技 Accelink,          priority: 3, enabled: true}
-  - {ticker: 300502.SZ, name: 新易盛 Eoptolink,           priority: 3, enabled: true}
-  - {ticker: 601869.SS, name: 长飞光纤 YOFC,              priority: 3, enabled: true}
-  - {ticker: 688008.SH, name: 澜起科技 Montage,           priority: 3, enabled: true}
-  - {ticker: 603986.SS, name: 兆易创新 GigaDevice,        priority: 3, enabled: true}
-  - {ticker: COHR,       name: Coherent,                  priority: 3, enabled: true}
-  - {ticker: LITE,       name: Lumentum,                  priority: 3, enabled: true}
-  - {ticker: VKTX,       name: Viking Therapeutics,       priority: 3, enabled: true}
-  - {ticker: BEAM,       name: Beam Therapeutics,         priority: 3, enabled: true}
-  - {ticker: NPWR,       name: NET Power,                 priority: 3, enabled: true}
-  - {ticker: CAMT,       name: Camtek,                    priority: 3, enabled: true}
-  - {ticker: BESI.AS,    name: Besi (hybrid bonding),     priority: 3, enabled: true}
+- ticker: 300308.SZ
+  name: 中际旭创 Innolight
+  priority: 1
+  enabled: true
+  last_run: 2026-05-07T21:15
+- ticker: 300394.SZ
+  name: 天孚通信 T&S
+  priority: 1
+  enabled: true
+  last_run: 2026-05-08T07:15
+- ticker: 688256.SH
+  name: 寒武纪 Cambricon
+  priority: 1
+  enabled: true
+  last_run: 2026-05-08T12:15
+- ticker: 688041.SH
+  name: 海光信息 Hygon
+  priority: 1
+  enabled: true
+- ticker: 601138.SS
+  name: 工业富联 Foxconn Industrial
+  priority: 1
+  enabled: true
+- ticker: 002463.SZ
+  name: 沪电股份 WUS PCB
+  priority: 1
+  enabled: true
+- ticker: 688072.SH
+  name: 拓荆科技 NAURA Tetech
+  priority: 1
+  enabled: true
+- ticker: 688498.SH
+  name: 源杰科技 Yuanjie
+  priority: 1
+  enabled: true
+- ticker: 002428.SZ
+  name: 云南锗业 InP substrate
+  priority: 1
+  enabled: true
+- ticker: 002222.SZ
+  name: 福晶科技 Fujian Castech
+  priority: 2
+  enabled: true
+- ticker: 300620.SZ
+  name: 光库科技 Bright-Vision
+  priority: 2
+  enabled: true
+- ticker: 300456.SZ
+  name: 赛微电子 SaiWei MEMS
+  priority: 2
+  enabled: true
+- ticker: ACMR
+  name: ACM Research US ADR
+  priority: 2
+  enabled: true
+- ticker: AXTI
+  name: AXT InP substrate
+  priority: 2
+  enabled: true
+- ticker: BE
+  name: Bloom Energy
+  priority: 2
+  enabled: true
+- ticker: RXRX
+  name: Recursion Pharmaceuticals
+  priority: 2
+  enabled: true
+- ticker: 300408.SZ
+  name: 三环集团 CCTC
+  priority: 3
+  enabled: true
+- ticker: 002281.SZ
+  name: 光迅科技 Accelink
+  priority: 3
+  enabled: true
+- ticker: 300502.SZ
+  name: 新易盛 Eoptolink
+  priority: 3
+  enabled: true
+- ticker: 601869.SS
+  name: 长飞光纤 YOFC
+  priority: 3
+  enabled: true
+- ticker: 688008.SH
+  name: 澜起科技 Montage
+  priority: 3
+  enabled: true
+- ticker: 603986.SS
+  name: 兆易创新 GigaDevice
+  priority: 3
+  enabled: true
+- ticker: COHR
+  name: Coherent
+  priority: 3
+  enabled: true
+- ticker: LITE
+  name: Lumentum
+  priority: 3
+  enabled: true
+- ticker: VKTX
+  name: Viking Therapeutics
+  priority: 3
+  enabled: true
+- ticker: BEAM
+  name: Beam Therapeutics
+  priority: 3
+  enabled: true
+- ticker: NPWR
+  name: NET Power
+  priority: 3
+  enabled: true
+- ticker: CAMT
+  name: Camtek
+  priority: 3
+  enabled: true
+- ticker: BESI.AS
+  name: Besi (hybrid bonding)
+  priority: 3
+  enabled: true
+# ---- 2026-05-08 Bloom-analog candidates (boss-flagged, priority 1) ----
+- ticker: STEM
+  name: Stem Inc (AI battery SW)
+  priority: 1
+  enabled: true
+- ticker: NPWR
+  name: NET Power (Allam-cycle)
+  priority: 1
+  enabled: true
+- ticker: VOR
+  name: Vor Biopharma (HSC for AML)
+  priority: 1
+  enabled: true

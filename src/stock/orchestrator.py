@@ -16,7 +16,7 @@ import time
 import httpx
 import openai
 
-from stock import action_queue, ai_loop_monitor, alerts, anomaly, backup, conversation, discovery_engine, events, grading, holdings, intent, options as options_module, prompt_rewriter, self_review, smallcap_scanner, tech_dive, thesis
+from stock import action_queue, ai_loop_monitor, alerts, anomaly, backup, conversation, discovery_engine, entry_signals, events, grading, holdings, intent, options as options_module, prompt_rewriter, self_review, smallcap_scanner, tech_dive, thesis
 from stock.cloud_sync import run_local_sync
 from stock.config import get_settings
 from stock.db import get_conn
@@ -684,6 +684,26 @@ def _job_daily_tech_dive() -> None:
         conn.close()
 
 
+def _job_weekly_entry_scan() -> None:
+    """F45: Sunday 06:00 UTC scan -- which tracked names are in pullback zone?
+
+    Pure price-table arithmetic, no LLM. Surfaces flagged names in a
+    research_reports kind='entry_signals' row that the APK picks up.
+    """
+    conn = get_conn()
+    try:
+        rid, signals = entry_signals.run_and_persist(conn)
+        in_zone = sum(1 for s in signals if s.classification == "IN_ZONE")
+        logger.info(
+            "Weekly entry scan: research_id=%s; %d scanned, %d in zone",
+            rid, len(signals), in_zone,
+        )
+    except Exception:
+        logger.exception("Weekly entry scan failed")
+    finally:
+        conn.close()
+
+
 def _job_weekly_qa_dive() -> None:
     """F40: weekly autonomous Q&A deep-dive on the top-5 FWP candidates.
 
@@ -1249,6 +1269,17 @@ def create_scheduler() -> BlockingScheduler:
         CronTrigger(day_of_week="wed", hour=9, minute=15, timezone="UTC"),
         id="company_dd_dive",
         name="F44 weekly company DD checklist (queue-rotated)",
+    )
+
+    # F45 weekly entry-signal scan: Sunday 06:00 UTC. Scans all conviction +
+    # dive-queue tickers, flags those in the recommended pullback zone. Free
+    # (price-table arithmetic only, no LLM). Surfaced on APK as kind=
+    # 'entry_signals'. Boss directive 2026-05-08: "flag good time to enter".
+    scheduler.add_job(
+        _job_weekly_entry_scan,
+        CronTrigger(day_of_week="sun", hour=6, minute=0, timezone="UTC"),
+        id="weekly_entry_scan",
+        name="F45 weekly entry-zone scan (conviction + DD queue)",
     )
 
     # F19: forward-discovery engine daily at 23:00 UTC (07:00 Beijing). Runs

@@ -77,3 +77,7 @@ tickers:
   - RXRX        # Recursion -- AI drug discovery
   - TEM         # Tempus AI -- clinical AI
   - SDGR        # Schrödinger -- physics+ML drug design
+  # ---- 2026-05-08 Bloom-analog candidates (boss-flagged) ----
+  - STEM        # Stem Inc -- AI battery storage SW; $90M micro-cap, -66% from high
+  - NPWR        # NET Power -- Allam-cycle gas zero-emission; $190M, -59% from high
+  - VOR         # Vor Biopharma -- engineered HSC for post-BMT; $780M, -76% from high
