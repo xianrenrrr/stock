@@ -197,7 +197,7 @@ _Total: **29 tables**._
 
 ## 6. Cron catalog (orchestrator.add_job blocks)
 
-_Total: **25 jobs registered**_
+_Total: **26 jobs registered**_
 
 | Job ID | Handler | Trigger |
 | --- | --- | --- |
@@ -222,6 +222,7 @@ _Total: **25 jobs registered**_
 | `weekly_qa_dive` | `_job_weekly_qa_dive` | `day_of_week="sat", hour=7, minute=0, timezone="UTC"` |
 | `company_dd_dive` | `_job_company_dd_dive` | `day_of_week="wed", hour=9, minute=15, timezone="UTC"` |
 | `weekly_entry_scan` | `_job_weekly_entry_scan` | `day_of_week="sun", hour=6, minute=0, timezone="UTC"` |
+| `post_close_snapshot` | `_job_post_close_snapshot` | `hour=20, minute=5, day_of_week="mon-fri", timezone="UTC"` |
 | `discovery_engine` | `_job_run_discovery_engine` | `hour=23, minute=0, day_of_week="mon-fri", timezone="UTC",` |
 | `thesis_verify` | `_job_verify_theses` | `hour=SCORE_HOUR, minute=SCORE_MINUTE + 10, day_of_week="mon-fri", timezone="UTC"` |
 | `grade_and_reply` | `_job_grade_and_reply` | `hour=SCORE_HOUR, minute=SCORE_MINUTE + 15, day_of_week="mon-fri", timezone="UTC"` |
@@ -260,16 +261,16 @@ Most-recently-edited files in tracked dirs. Useful for picking up where the last
 
 | File | Modified |
 | --- | --- |
-| `data/stock.db-shm` | 2026-05-08 11:44 |
-| `data/stock.db-wal` | 2026-05-08 11:44 |
-| `data/stock.db` | 2026-05-08 11:44 |
+| `data/stock.db-wal` | 2026-05-08 16:13 |
+| `tests/test_orchestrator.py` | 2026-05-08 16:13 |
+| `src/stock/orchestrator.py` | 2026-05-08 16:12 |
+| `scripts/post_close_snapshot.py` | 2026-05-08 16:10 |
+| `data/stock.db-shm` | 2026-05-08 16:00 |
+| `data/stock.db` | 2026-05-08 15:59 |
+| `src/stock/analyst_skills.py` | 2026-05-08 11:45 |
 | `scripts/build_ai_index.py` | 2026-05-08 11:39 |
-| `src/stock/orchestrator.py` | 2026-05-08 11:33 |
 | `src/stock/models.py` | 2026-05-08 11:33 |
-| `tests/test_orchestrator.py` | 2026-05-08 11:18 |
 | `src/stock/cli.py` | 2026-05-08 11:17 |
-| `src/stock/entry_signals.py` | 2026-05-08 11:17 |
-| `data/company_dive_queue.yaml` | 2026-05-08 11:16 |
 
 ---
 

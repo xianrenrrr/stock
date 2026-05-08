@@ -684,6 +684,30 @@ def _job_daily_tech_dive() -> None:
         conn.close()
 
 
+def _job_post_close_snapshot() -> None:
+    """F46: 20:05 UTC weekdays (4:05 PM ET) -- post-close volume + price snapshot.
+
+    Re-fetches today's daily bar from yfinance (now FINAL post-close), then
+    runs the conviction-list volume-vs-20d-avg scan from
+    scripts/post_close_snapshot.py. Surfaces spikes + quiets. Boss directive:
+    fresh real-time volume measured at the same time daily.
+    """
+    import subprocess
+    import sys as _sys
+    proc = subprocess.run(
+        [_sys.executable, "scripts/post_close_snapshot.py"],
+        capture_output=True, text=True, timeout=600,
+        cwd=str(__file__).rsplit("src", 1)[0] if "src" in __file__ else ".",
+    )
+    if proc.returncode == 0:
+        # Last line of stdout has 'Persisted research_id=N'
+        last_lines = (proc.stdout or "").strip().splitlines()[-3:]
+        logger.info("Post-close snapshot done: %s", " | ".join(last_lines))
+    else:
+        logger.error("Post-close snapshot failed (rc=%d): %s",
+                     proc.returncode, (proc.stderr or "")[:300])
+
+
 def _job_weekly_entry_scan() -> None:
     """F45: Sunday 06:00 UTC scan -- which tracked names are in pullback zone?
 
@@ -1276,6 +1300,18 @@ def create_scheduler() -> BlockingScheduler:
         CronTrigger(day_of_week="sun", hour=6, minute=0, timezone="UTC"),
         id="weekly_entry_scan",
         name="F45 weekly entry-zone scan (conviction + DD queue)",
+    )
+
+    # F46 post-close volume snapshot: 20:05 UTC weekdays (4:05 PM ET, 5 min
+    # after US close so yfinance has the FINAL settled bar). Boss directive
+    # 2026-05-08 EOD: "make sure when you check on volume you check real-time
+    # data ... or whenever we need volume we check at 4:01 PM Eastern Time."
+    # Refreshes today's bar then flags spikes (>=2x avg) + quiets (<=0.5x avg).
+    scheduler.add_job(
+        _job_post_close_snapshot,
+        CronTrigger(hour=20, minute=5, day_of_week="mon-fri", timezone="UTC"),
+        id="post_close_snapshot",
+        name="F46 post-close volume + price snapshot (4:05 PM ET)",
     )
 
     # F19: forward-discovery engine daily at 23:00 UTC (07:00 Beijing). Runs
