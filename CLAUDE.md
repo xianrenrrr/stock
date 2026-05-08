@@ -74,3 +74,16 @@ Never import `*`. Never import from `src.stock.*` — use `stock.*`.
 
 ## Daily self-review
 At the start of any session in this project, check `pipeline/daily_review_*.md`. If a packet from the last 48 hours exists, read the most recent one before proposing changes — it summarizes errors, boss feedback, drift, and pending items the operator may want addressed. Use the `/improve` slash command to drive a structured review.
+
+## AI session bootstrap (read this first)
+**Before grepping the codebase, read `AI_INDEX.md` at the repo root.** It's a single auto-generated file listing every feature, module, table, cron, CLI command, and data file with one-line descriptions. Saves 5-10 file-reads worth of tokens before you can find where to make a change.
+
+When you make a change that adds/removes any of:
+- A new module / file in `src/stock/`
+- A new cron job in `orchestrator.py`
+- A new CLI command
+- A new SQLite table in `db.py`
+- A new YAML in `data/`
+- A new feature entry in `feature_backlog.md`
+
+…regenerate the index with `python scripts/build_ai_index.py` and include it in the same commit. The index is small (~22 KB), regenerable in <1s, and keeps future sessions cheap.
