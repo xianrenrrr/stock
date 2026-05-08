@@ -29,6 +29,36 @@ pipeline/logs/
 pipeline/outputs/
 pipeline/firewall_test/firewall_test.apk
 
+# --- auto-generated pipeline artifacts (regenerable from DB / scripts) ---
+# 2026-05-08 cleanup: outputs from cron jobs / on-demand commands belong in
+# the local DB (research_reports table) + Render sync, not in git. Re-pull
+# anytime via `stock pdf-export research:<id>` or rerun the originating CLI.
+pipeline/pdf/
+pipeline/daily_review_*.md
+pipeline/research_*.md
+pipeline/qa_*.md
+pipeline/tech_dive_*.md
+pipeline/entry_zone_*.md
+pipeline/boss_report_*.md
+pipeline/backtest_winners_*.md
+pipeline/daily_zh_*.md
+pipeline/check_*.md
+pipeline/restart_*.md
+pipeline/session_log_*.md
+pipeline/idm_pptx_extract.md  # extracted intel; rebuild via python-pptx if needed
+
+# --- data caches + DB backups ---
+data/.cache/
+data/backups/
+
+# What STAYS in git under pipeline/:
+#   - dd/            (DD history per company -- durable, append-mode)
+#   - companies/     (cross-research aggregation per ticker)
+#   - MASTER_PLAN.md (curated)
+#   - plan_*.md      (curated planning docs)
+#   - system_overview_*.md (curated summary)
+#   - development.sh (5-agent pipeline runner)
+
 # --- OS noise ---
 .DS_Store
 Thumbs.db

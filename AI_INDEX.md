@@ -260,7 +260,9 @@ Most-recently-edited files in tracked dirs. Useful for picking up where the last
 
 | File | Modified |
 | --- | --- |
-| `data/stock.db` | 2026-05-08 11:39 |
+| `data/stock.db-shm` | 2026-05-08 11:44 |
+| `data/stock.db-wal` | 2026-05-08 11:44 |
+| `data/stock.db` | 2026-05-08 11:44 |
 | `scripts/build_ai_index.py` | 2026-05-08 11:39 |
 | `src/stock/orchestrator.py` | 2026-05-08 11:33 |
 | `src/stock/models.py` | 2026-05-08 11:33 |
@@ -268,8 +270,6 @@ Most-recently-edited files in tracked dirs. Useful for picking up where the last
 | `src/stock/cli.py` | 2026-05-08 11:17 |
 | `src/stock/entry_signals.py` | 2026-05-08 11:17 |
 | `data/company_dive_queue.yaml` | 2026-05-08 11:16 |
-| `data/conviction_watchlist.yaml` | 2026-05-08 11:16 |
-| `data/watchlist.yaml` | 2026-05-08 11:15 |
 
 ---
 
