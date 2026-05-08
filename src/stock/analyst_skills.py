@@ -222,6 +222,22 @@ def dd_checklist(
     # Boss directive 2026-05-08: don't keep creating new DD files; APPEND
     # each fresh run to a single per-company file at pipeline/dd/<TICKER>.md
     # so you can read the full DD history for one ticker in one place.
+    # Skip the file-write when running on an in-memory test DB so unit tests
+    # don't pollute the real pipeline/dd/ directory with fixture content.
+    is_memory_db = False
+    try:
+        for row in conn.execute("PRAGMA database_list").fetchall():
+            if row[2] == "" or ":memory:" in str(row[2]):
+                is_memory_db = True
+                break
+    except sqlite3.Error:
+        pass
+    if is_memory_db:
+        return SkillReport(
+            ticker=ticker.upper(), kind="dd_checklist", body=full_body,
+            research_id=int(cur.lastrowid), created_at=now,
+        )
+
     from pathlib import Path
     safe = ticker.upper().replace("/", "_").replace("\\", "_").replace(".", "_")
     dd_path = Path("pipeline") / "dd" / f"{safe}.md"

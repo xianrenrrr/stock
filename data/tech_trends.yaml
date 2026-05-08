@@ -70,6 +70,42 @@ trends:
     ai_biopharma_combo: false
     enabled: true   # toggle via `stock trend toggle <id>` or edit here directly
 
+  - id: hbm4_hybrid_bonding
+    name: HBM4 hybrid-bonding equipment ramp (BESI / Disco) -- pre-priced gap
+    sector: ai_compute
+    horizon: "2-3y"
+    why_now:
+      - "HBM4 12-Hi today is TCB-only; 16-Hi (2027 HBM4E) requires hybrid bonding"
+      - "BESI 2026 HBM bookings still <€50M today; TSMC roadmap implies €200M+ by late-2026"
+      - "Resonac NCF (non-conductive film) capacity expansion 2025-2027 is the materials chokepoint"
+      - "Cube-layer beneficiaries (SK hynix, Micron) already up 4x; equipment-layer is the residual asymmetry"
+    falsification:
+      - "BESI 2026 HBM bookings end below €100M cumulative -> 2027 HB thesis dead"
+      - "SK hynix CapEx Day pushes hybrid bonding to 2028+"
+      - "Samsung qualifies Blackwell-Ultra HBM4 with TCB-only at >70% yield through 2027"
+    vehicles_pure_play: [BESI.AS]
+    vehicles_diversified: [DISCO, ASMPT]
+    ai_biopharma_combo: false
+    enabled: false   # toggle on if you want HBM4 weight; default off (10-trend cap)
+
+  - id: cowos_l_capacity
+    name: TSMC CoWoS-L capacity bottleneck for AI accelerators 2026-2027
+    sector: ai_compute
+    horizon: "2-3y"
+    why_now:
+      - "TSMC advanced-packaging revenue $5B (2023) -> $10B (2024) -> ~$20B (2026 guided)"
+      - "NVIDIA + AMD = ~70-75% of CoWoS-L allocation in 2026"
+      - "Camtek (CAMT) inspection re-rated 22-28x fwd from 15-18x pre-AI but volume ramp ahead"
+      - "Ajinomoto ~100% of ABF film -- single most concentrated chokepoint in the chain"
+    falsification:
+      - "TSMC cuts 2027 CoWoS exit-rate guide >=20% (<=160kwpm) on next earnings call"
+      - "Hyperscaler 2026 aggregate capex prints below $320B"
+      - "Tier-1 hyperscaler 2027 production design-win on non-CoWoS-L glass core or CoWoS-R at >=1M units"
+    vehicles_pure_play: [CAMT]
+    vehicles_diversified: [TSM, ASMPT, IBIDF]
+    ai_biopharma_combo: false
+    enabled: false   # toggle on if you want explicit CoWoS-L weight
+
   - id: china_semi_domesticization
     name: China semi domesticization at the equipment+materials layer (Big Fund III)
     sector: ai_compute
