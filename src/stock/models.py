@@ -5,6 +5,8 @@ import json
 import logging
 import re
 import sqlite3
+import subprocess
+import sys
 import time
 from datetime import datetime, timezone
 from typing import Any, TypedDict
@@ -377,6 +379,14 @@ class ClaudeCliClient:
         # fail then fall back to MiniMax. `claude -p` reads from stdin when
         # the positional prompt arg is omitted.
         start = time.perf_counter()
+        # Windows: pass CREATE_NO_WINDOW so subprocess.run doesn't flash a
+        # cmd.exe / claude.exe console window for every call. The processes
+        # still run, just hidden. Boss observed flashing during high-frequency
+        # ingest cycles; this kills the visible noise without changing behavior.
+        creation_flags = 0
+        if sys.platform == "win32":
+            creation_flags = subprocess.CREATE_NO_WINDOW
+
         try:
             proc = subprocess.run(
                 [
@@ -390,6 +400,7 @@ class ClaudeCliClient:
                 text=True,
                 encoding="utf-8",
                 timeout=self._timeout,
+                creationflags=creation_flags,
             )
         except FileNotFoundError as exc:
             raise ClaudeCliUnavailable(

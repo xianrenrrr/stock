@@ -1018,30 +1018,26 @@ def create_scheduler() -> BlockingScheduler:
         )
         return scheduler
 
-    # News + prices + features every 15 min during market hours (Mon-Fri)
+    # Ingest news/prices/features TWICE DAILY -- right before each research
+    # push (02:00 UTC for the 02:30 morning push, 14:00 UTC for the 14:30
+    # evening push). Boss directive 2026-05-08: 15-min cadence was overkill
+    # because the boss-readable artifacts only fire 2x/day; running ingest
+    # 30+ times per day was just spawning subprocess flashes for no gain.
     scheduler.add_job(
         _job_ingest_and_extract,
-        CronTrigger(
-            minute="*/15",
-            hour=f"{MARKET_HOURS_START}-{MARKET_HOURS_END}",
-            day_of_week="mon-fri",
-            timezone="UTC",
-        ),
+        CronTrigger(hour="2,14", minute=0, timezone="UTC"),
         id="ingest_and_extract",
-        name="Ingest news/prices and extract features",
+        name="Ingest news/prices/features (2x daily, pre-push)",
     )
 
-    # Predictions every 60 min during market hours (Mon-Fri)
+    # Predictions twice daily, between ingest and research push, weekdays.
+    # Was: every hour during market hours (8 fires/day).
+    # Now: 2 fires/day matching the research-push cadence.
     scheduler.add_job(
         _job_run_predictions,
-        CronTrigger(
-            minute=0,
-            hour=f"{MARKET_HOURS_START}-{MARKET_HOURS_END}",
-            day_of_week="mon-fri",
-            timezone="UTC",
-        ),
+        CronTrigger(hour="2,14", minute=15, day_of_week="mon-fri", timezone="UTC"),
         id="run_predictions",
-        name="Run predictions on watchlist",
+        name="Run predictions on watchlist (2x daily)",
     )
 
     # Score end-of-day at 21:30 UTC (Mon-Fri)
