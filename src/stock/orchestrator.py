@@ -1228,15 +1228,16 @@ def create_scheduler() -> BlockingScheduler:
         name="F40 weekly Q&A deep-dive on top-FWP candidates",
     )
 
-    # F43 daily tech dive at 04:30 UTC -- after midnight UTC so the topic
-    # queue's last_run dates are clean. Sector rotates by weekday so each
-    # sector gets ~2 dives/week. Free via claude_cli, ~10 min runtime.
-    scheduler.add_job(
-        _job_daily_tech_dive,
-        CronTrigger(hour=4, minute=30, timezone="UTC"),
-        id="daily_tech_dive",
-        name="F43 daily tech-trend deep-dive (sector-rotated)",
-    )
+    # F43 daily tech dive -- DISABLED 2026-05-07 per boss "stop the tech dive
+    # deep into" instruction. The 10 topic queue covered the 3 sectors today;
+    # repeated daily firings would burn rate-limit + produce duplicate output.
+    # To re-enable: uncomment below + bump the F00-F44 expected job count.
+    # scheduler.add_job(
+    #     _job_daily_tech_dive,
+    #     CronTrigger(hour=4, minute=30, timezone="UTC"),
+    #     id="daily_tech_dive",
+    #     name="F43 daily tech-trend deep-dive (sector-rotated)",
+    # )
 
     # F44 company DD dive every ~4.5 hours: 03:15, 07:45, 12:15, 16:45, 21:15.
     # Spaced to (a) span boss's awake hours in Asia + US, (b) leave gaps

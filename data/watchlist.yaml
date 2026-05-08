@@ -51,3 +51,29 @@ tickers:
   - 688385.SS  # 复旦微电 -- mature-node MCU + FPGA
   - 002049.SZ  # 紫光国微 -- specialty IC + smart card
   - 688360.SS  # 德科立 -- optical components (AI DC interconnect)
+  # ---- 2026-05-07 boss-directed adds (high-growth Q1 2026 list + IDM PPT) ----
+  - 300308.SZ  # 中际旭创 Innolight -- 800G/1.6T optical module king (Q1 +262%)
+  - 300394.SZ  # 天孚通信 T&S -- FAU + photonic engine ('no-regret' OCS dive)
+  - 002428.SZ  # 云南锗业 -- China-only InP wafer (named in IDM PPT)
+  - 601138.SS  # 工业富联 Foxconn Industrial -- AI server #1 (Q1 +103%)
+  - 688256.SH  # 寒武纪 Cambricon -- China AI chip leader (Q1 +185%)
+  - 688041.SH  # 海光信息 Hygon -- state-aligned AI chip (Q1 +36%)
+  - 688072.SH  # 拓荆科技 NAURA Tetech -- CVD/ALD equipment (Q1 +488%)
+  - 002463.SZ  # 沪电股份 WUS PCB -- AI-server PCB (Q1 +63%)
+  - 002281.SZ  # 光迅科技 Accelink -- in IDM PPT customer list
+  - 300502.SZ  # 新易盛 Eoptolink -- 800G optical peer
+  - 300620.SZ  # 光库科技 Bright-Vision -- fiber optic components
+  - 300456.SZ  # 赛微电子 SaiWei -- MEMS foundry, OCS chain
+  - 300408.SZ  # 三环集团 CCTC -- MLCC/ceramic substrate
+  - 601869.SS  # 长飞光纤 YOFC -- AI fiber (Q1 +226%)
+  - 688008.SH  # 澜起科技 Montage -- memory interface (Q1 +61%)
+  - 603986.SS  # 兆易创新 GigaDevice -- NOR/MCU storage (Q1 +523%)
+  - 688498.SH  # 源杰科技 Yuanjie -- ELS laser chip
+  # US-listed adds
+  - ACMR        # ACM Research US ADR of 盛美上海
+  - AXTI        # AXT Inc -- InP substrate
+  - BE          # Bloom Energy -- SOFC
+  - OKLO        # Oklo -- SMR
+  - RXRX        # Recursion -- AI drug discovery
+  - TEM         # Tempus AI -- clinical AI
+  - SDGR        # Schrödinger -- physics+ML drug design

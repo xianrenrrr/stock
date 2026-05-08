@@ -4,7 +4,7 @@ Per boss instruction 2026-05-06: maintained on every commit so the project
 state is always inspectable from one document. If a feature lands without
 a corresponding entry here, the commit is incomplete.
 
-Last updated: 2026-05-07 evening (F44 analyst skills + company DD queue + 4.5h cron + entry-zone tool)
+Last updated: 2026-05-07 night (F43 daily cron disabled + 24-ticker watchlist expansion + per-company dense files + WORKFLOW.md canonical doc)
 
 ---
 
@@ -185,12 +185,11 @@ Grouped by responsibility:
 ### Reports
 - **`daily-zh`** (new) -- Chinese activity report for the day
 
-## Cron schedule (26 jobs)
+## Cron schedule (25 jobs -- F43 daily_tech_dive disabled 2026-05-07 evening)
 
 Run order on a typical Mon-Fri:
 ```
 03:15      company_dd_dive (F44 -- 1 company every 4.5h)
-04:30 UTC  daily_tech_dive (F43 -- sector rotates by weekday)
 07:45      company_dd_dive (F44)
 12:15      company_dd_dive (F44)
 16:45      company_dd_dive (F44)
