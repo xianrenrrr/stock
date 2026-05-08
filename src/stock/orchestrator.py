@@ -1239,14 +1239,16 @@ def create_scheduler() -> BlockingScheduler:
     #     name="F43 daily tech-trend deep-dive (sector-rotated)",
     # )
 
-    # F44 company DD dive every ~4.5 hours: 03:15, 07:45, 12:15, 16:45, 21:15.
-    # Spaced to (a) span boss's awake hours in Asia + US, (b) leave gaps
-    # for Claude Code subscription rate-limit refresh windows.
+    # F44 company DD dive: weekly Wednesday 09:00 UTC. Boss directive
+    # 2026-05-08: previous 5x/day cadence created too many duplicate
+    # artifacts; weekly is enough to keep one company per week refreshed.
+    # The DD output now appends to pipeline/dd/<TICKER>.md so each
+    # company file accumulates history across runs.
     scheduler.add_job(
         _job_company_dd_dive,
-        CronTrigger(hour="3,7,12,16,21", minute=15, timezone="UTC"),
+        CronTrigger(day_of_week="wed", hour=9, minute=15, timezone="UTC"),
         id="company_dd_dive",
-        name="F44 company DD checklist (queue-rotated, ~4.5h cadence)",
+        name="F44 weekly company DD checklist (queue-rotated)",
     )
 
     # F19: forward-discovery engine daily at 23:00 UTC (07:00 Beijing). Runs

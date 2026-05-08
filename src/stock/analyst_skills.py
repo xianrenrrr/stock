@@ -206,18 +206,43 @@ def dd_checklist(
             created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
         )
 
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     full_body = (
         f"# {ticker} 尽调清单 / DD checklist\n\n"
-        f"_Generated {datetime.now(timezone.utc).isoformat(timespec='seconds')}_\n\n"
+        f"_Generated {now}_\n\n"
         f"{(response.content or '').strip()}"
     )
-    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     cur = conn.execute(
         "INSERT INTO research_reports (kind, topic, body, created_at)"
         " VALUES ('dd_checklist', ?, ?, ?)",
         (f"{ticker} 尽调清单", full_body, now),
     )
     conn.commit()
+
+    # Boss directive 2026-05-08: don't keep creating new DD files; APPEND
+    # each fresh run to a single per-company file at pipeline/dd/<TICKER>.md
+    # so you can read the full DD history for one ticker in one place.
+    from pathlib import Path
+    safe = ticker.upper().replace("/", "_").replace("\\", "_").replace(".", "_")
+    dd_path = Path("pipeline") / "dd" / f"{safe}.md"
+    dd_path.parent.mkdir(parents=True, exist_ok=True)
+    section = (
+        f"\n\n---\n\n## DD run {now[:16]}  (research_id={cur.lastrowid})\n\n"
+        f"{(response.content or '').strip()}\n"
+    )
+    if dd_path.exists():
+        dd_path.write_text(
+            dd_path.read_text(encoding="utf-8") + section, encoding="utf-8",
+        )
+    else:
+        dd_path.write_text(
+            f"# {ticker.upper()} -- 尽调历史 / DD history\n\n"
+            f"_Cumulative DD checklist runs for this ticker. Each section is "
+            f"one F44 cron fire. Newest at the bottom._\n"
+            + section,
+            encoding="utf-8",
+        )
+
     return SkillReport(
         ticker=ticker.upper(), kind="dd_checklist", body=full_body,
         research_id=int(cur.lastrowid), created_at=now,
