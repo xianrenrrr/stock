@@ -106,22 +106,30 @@ def test_prices_written_to_db(
 
 
 @patch("stock.ingest.prices.yfinance.download")
-def test_prices_dedup_composite_pk(
+def test_prices_upserts_on_composite_pk(
     mock_download: object,
     mem_db: sqlite3.Connection,
     prices_dataframe_fixture: pd.DataFrame,
 ) -> None:
+    """Re-running fetch_prices for the same (ticker, ts) UPSERTs the row -- it
+    overwrites with the latest yfinance values. This is critical because the
+    morning ingest cron may insert a partial-day bar at 09:30 ET; the
+    post-close cron at 4:05 PM ET must be able to overwrite with the final
+    close + final volume. (Boss directive 2026-05-09 -- INSERT OR IGNORE
+    silently dropped post-close updates and broke the AMD volume signal.)"""
     mock_download.return_value = prices_dataframe_fixture  # type: ignore[union-attr]
 
     # First insert
     fetch_prices("AAPL", mem_db, days=30)
-    # Second insert with same data
+    # Second pass with SAME data -- still upserts (rowcount > 0)
     result = fetch_prices("AAPL", mem_db, days=30)
 
-    assert result.skipped == 5
-    assert result.inserted == 0
+    # Composite PK still prevents duplicate ROWS (only 5 stored, not 10)
     rows = mem_db.execute("SELECT COUNT(*) FROM prices WHERE ticker = 'AAPL'").fetchone()
     assert rows[0] == 5
+    # And the inserted-counter on the second pass reflects the upserts
+    assert result.inserted == 5
+    assert result.skipped == 0
 
 
 @patch("stock.ingest.prices.yfinance.download")

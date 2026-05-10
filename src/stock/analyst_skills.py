@@ -271,7 +271,16 @@ def dd_checklist(
 
 
 def _build_morning_context(conn: sqlite3.Connection) -> str:
-    """Pull last-24h signals from existing tables for the morning prompt."""
+    """Pull last-24h signals from existing tables for the morning prompt.
+
+    Volume convention (boss directive 2026-05-09, Option C): the volume
+    figures here are PREVIOUS-SESSION 4 PM ET FINAL volume only, never
+    today's not-yet-settled intraday partial. yfinance daily bars settle
+    after 4 PM ET; the post-close cron at 20:05 UTC writes the authoritative
+    row. Morning notes that fire BEFORE the next session opens reference
+    yesterday's 4 PM number, which is fully settled and apples-to-apples
+    with the trailing-20-day average.
+    """
     yesterday = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat(timespec="seconds")
     pieces: list[str] = []
 
@@ -280,6 +289,29 @@ def _build_morning_context(conn: sqlite3.Connection) -> str:
         "## Conviction watchlist (today's tracked names)\n"
         + ", ".join(n.ticker for n in conviction[:20])
     )
+
+    # PREVIOUS-SESSION close volume vs 20-day average, per conviction ticker.
+    # This is the AUTHORITATIVE volume signal -- yesterday's 4 PM ET final.
+    # Don't cite intraday volume in the morning note -- it's noise + bug-prone.
+    pieces.append("\n## 上一交易日收盘量 / Previous-session FINAL volume vs 20d avg (4 PM ET, settled)")
+    pieces.append("_Use these numbers ONLY when discussing volume. Do NOT mention 'today's volume' -- the next session may not have opened yet, and intraday partial-bars have been a source of bugs._")
+    for n in conviction[:15]:
+        rows = conn.execute(
+            "SELECT ts, c, v FROM prices WHERE ticker = ? ORDER BY ts DESC LIMIT 21",
+            (n.ticker,),
+        ).fetchall()
+        if len(rows) < 5:
+            continue
+        latest_ts, latest_c, latest_v = rows[0]
+        prior_v = [r[2] for r in rows[1:21]]
+        avg = sum(prior_v) / len(prior_v) if prior_v else 0
+        ratio = latest_v / avg if avg else 0
+        flag = " 🚨 SPIKE" if ratio >= 2.0 else (" 💤 quiet" if ratio <= 0.5 else "")
+        pct = (latest_c / rows[1][1] - 1) * 100 if len(rows) > 1 and rows[1][1] else 0
+        pieces.append(
+            f"- {n.ticker} [{latest_ts[:10]}]: ${latest_c:.2f} ({pct:+.2f}%) "
+            f"vol={int(latest_v):,} ({ratio:.2f}x avg){flag}"
+        )
 
     rows = conn.execute(
         "SELECT ticker, ts, pct_change, volume_ratio, flag_reason FROM price_anomalies"
@@ -331,6 +363,13 @@ _MORNING_NOTE_PROMPT: str = (
     "You are writing a TIGHT 1-page morning note for the boss. Output language: {language}.\n\n"
     "Use the structured signals below as INPUT (already pulled from our DB). "
     "Synthesize them into a 5-section markdown note. Be opinionated.\n\n"
+    "**VOLUME CONVENTION (boss directive 2026-05-09):** When you cite ANY "
+    "volume figure (vs 20-day avg, ratio, etc.), it MUST come from the "
+    "'Previous-session FINAL volume' block below -- this is yesterday's 4 PM ET "
+    "settled close, fully comparable to a 20-day average of same-time settled "
+    "closes. Do NOT cite 'today's volume' or 'intraday volume' -- if today's "
+    "session hasn't closed yet, you don't have apples-to-apples data, and "
+    "intraday-partial-bars have been a source of bad signals before.\n\n"
     "{context}\n\n"
     "## Required output sections (each ~3-5 bullets max)\n\n"
     "### 1. 头条 / Top call\n"

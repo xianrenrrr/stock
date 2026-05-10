@@ -140,12 +140,20 @@ def fetch_prices(
             ticker=ticker, source="prices", fetched=fetched, inserted=0, skipped=0
         )
 
-    # Insert with dedup via composite primary key
+    # UPSERT on composite primary key (ticker, ts). Boss directive 2026-05-09:
+    # the previous INSERT OR IGNORE silently dropped post-close updates --
+    # if an intraday partial-bar was already inserted by the morning ingest
+    # cron (14:00 UTC, pre-market), the 4 PM ET fetch couldn't overwrite it
+    # with the FINAL close volume. Result: AMD 5/8 row was stuck at a stale
+    # 10.5M volume instead of the real 57.7M, leading the morning-note's
+    # 'distribution / low conviction rally' thesis astray.
     inserted = 0
     for bar in bars:
         cursor = conn.execute(
-            "INSERT OR IGNORE INTO prices (ticker, ts, o, h, l, c, v)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO prices (ticker, ts, o, h, l, c, v) VALUES (?, ?, ?, ?, ?, ?, ?)"
+            " ON CONFLICT(ticker, ts) DO UPDATE SET"
+            " o = excluded.o, h = excluded.h, l = excluded.l,"
+            " c = excluded.c, v = excluded.v",
             (bar.ticker, bar.ts, bar.o, bar.h, bar.l, bar.c, bar.v),
         )
         if cursor.rowcount > 0:

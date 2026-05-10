@@ -261,16 +261,16 @@ Most-recently-edited files in tracked dirs. Useful for picking up where the last
 
 | File | Modified |
 | --- | --- |
-| `data/stock.db-wal` | 2026-05-08 16:13 |
+| `data/stock.db-wal` | 2026-05-09 21:19 |
+| `data/stock.db-shm` | 2026-05-09 21:19 |
+| `data/stock.db` | 2026-05-09 21:18 |
+| `src/stock/analyst_skills.py` | 2026-05-09 21:18 |
+| `tests/test_ingest_prices.py` | 2026-05-09 21:11 |
+| `src/stock/ingest/__init__.py` | 2026-05-09 21:10 |
+| `data/backups/stock.db.2026-05-09.bak` | 2026-05-09 16:30 |
+| `data/wechat_feedback.md` | 2026-05-09 14:40 |
+| `data/backups/stock.db.2026-05-08.bak` | 2026-05-08 16:30 |
 | `tests/test_orchestrator.py` | 2026-05-08 16:13 |
-| `src/stock/orchestrator.py` | 2026-05-08 16:12 |
-| `scripts/post_close_snapshot.py` | 2026-05-08 16:10 |
-| `data/stock.db-shm` | 2026-05-08 16:00 |
-| `data/stock.db` | 2026-05-08 15:59 |
-| `src/stock/analyst_skills.py` | 2026-05-08 11:45 |
-| `scripts/build_ai_index.py` | 2026-05-08 11:39 |
-| `src/stock/models.py` | 2026-05-08 11:33 |
-| `src/stock/cli.py` | 2026-05-08 11:17 |
 
 ---
 
