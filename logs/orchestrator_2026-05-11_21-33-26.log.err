@@ -98,3 +98,128 @@ INFO:     Uvicorn running on http://127.0.0.1:18790 (Press CTRL+C to quit)
 2026-05-11 21:35:05 apscheduler.scheduler WARNING Execution of job "Push state to Render free tier + pull boss replies (trigger: cron[second='*/5'], next run at: 2026-05-12 04:35:05 UTC)" skipped: maximum number of running instances reached (1)
 2026-05-11 21:35:10 apscheduler.scheduler WARNING Execution of job "Push state to Render free tier + pull boss replies (trigger: cron[second='*/5'], next run at: 2026-05-12 04:35:10 UTC)" skipped: maximum number of running instances reached (1)
 2026-05-11 21:35:15 apscheduler.scheduler WARNING Execution of job "Push state to Render free tier + pull boss replies (trigger: cron[second='*/5'], next run at: 2026-05-12 04:35:15 UTC)" skipped: maximum number of running instances reached (1)
+2026-05-11 21:35:20 apscheduler.scheduler WARNING Execution of job "Push state to Render free tier + pull boss replies (trigger: cron[second='*/5'], next run at: 2026-05-12 04:35:20 UTC)" skipped: maximum number of running instances reached (1)
+2026-05-11 21:35:25 apscheduler.scheduler WARNING Execution of job "Push state to Render free tier + pull boss replies (trigger: cron[second='*/5'], next run at: 2026-05-12 04:35:25 UTC)" skipped: maximum number of running instances reached (1)
+2026-05-11 21:35:30 apscheduler.scheduler WARNING Execution of job "Push state to Render free tier + pull boss replies (trigger: cron[second='*/5'], next run at: 2026-05-12 04:35:30 UTC)" skipped: maximum number of running instances reached (1)
+2026-05-11 21:35:35 apscheduler.scheduler WARNING Execution of job "Push state to Render free tier + pull boss replies (trigger: cron[second='*/5'], next run at: 2026-05-12 04:35:35 UTC)" skipped: maximum number of running instances reached (1)
+2026-05-11 21:35:35 stock.cloud_sync WARNING sync failed: The read operation timed out
+2026-05-11 21:35:35 stock.orchestrator WARNING Render sync error: sync failed: The read operation timed out
+2026-05-11 21:35:45 apscheduler.scheduler WARNING Execution of job "Push state to Render free tier + pull boss replies (trigger: cron[second='*/5'], next run at: 2026-05-12 04:35:45 UTC)" skipped: maximum number of running instances reached (1)
+2026-05-11 21:35:50 apscheduler.scheduler WARNING Execution of job "Push state to Render free tier + pull boss replies (trigger: cron[second='*/5'], next run at: 2026-05-12 04:35:50 UTC)" skipped: maximum number of running instances reached (1)
+2026-05-11 21:35:55 apscheduler.scheduler WARNING Execution of job "Push state to Render free tier + pull boss replies (trigger: cron[second='*/5'], next run at: 2026-05-12 04:35:55 UTC)" skipped: maximum number of running instances reached (1)
+2026-05-11 21:36:00 apscheduler.scheduler WARNING Execution of job "Push state to Render free tier + pull boss replies (trigger: cron[second='*/5'], next run at: 2026-05-12 04:36:00 UTC)" skipped: maximum number of running instances reached (1)
+2026-05-11 21:36:05 apscheduler.scheduler WARNING Execution of job "Push state to Render free tier + pull boss replies (trigger: cron[second='*/5'], next run at: 2026-05-12 04:36:05 UTC)" skipped: maximum number of running instances reached (1)
+2026-05-11 21:36:10 apscheduler.scheduler WARNING Execution of job "Push state to Render free tier + pull boss replies (trigger: cron[second='*/5'], next run at: 2026-05-12 04:36:10 UTC)" skipped: maximum number of running instances reached (1)
+2026-05-11 21:36:10 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:36:18 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:36:22 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:36:28 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:36:32 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:36:38 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:36:42 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:36:47 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:36:52 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:36:57 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:37:02 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:37:08 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:37:12 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:37:17 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:37:22 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:37:27 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:37:33 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:37:37 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:37:42 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:37:48 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:37:52 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:37:57 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:38:02 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:38:07 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:38:12 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:38:17 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:38:22 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:38:27 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:38:32 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:38:37 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:38:42 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:38:47 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:38:52 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:38:57 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:39:02 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:39:07 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:39:12 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:39:17 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:39:22 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:39:27 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:39:32 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:39:37 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:39:42 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:39:47 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:39:52 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:39:57 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:40:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-11 21:40:02 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:40:08 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:40:12 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:40:17 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:40:22 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:40:27 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:40:32 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:40:38 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:40:42 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:40:47 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:40:52 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:40:57 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:41:02 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:41:07 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:41:12 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:41:17 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:41:22 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:41:27 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:41:32 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:41:37 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:41:42 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:41:47 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:41:52 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:41:57 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:42:02 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:42:07 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:42:12 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:42:17 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:42:22 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:42:27 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:42:32 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:42:37 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:42:42 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:42:47 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:42:52 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:42:57 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:43:02 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:43:07 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:43:12 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:43:17 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:43:22 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:43:27 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:43:32 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:43:37 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:43:42 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:43:47 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:43:52 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:43:57 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:44:02 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:44:07 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:44:12 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:44:17 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:44:22 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:44:27 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:44:32 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:44:37 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:44:42 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:44:47 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:44:52 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:44:57 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:45:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-11 21:45:02 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:45:07 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:45:13 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:45:17 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
+2026-05-11 21:45:23 stock.orchestrator INFO Render sync: notes=68 tokens=2 replies=0
