@@ -1198,7 +1198,7 @@ def create_scheduler() -> BlockingScheduler:
     # tier. No-op when render_sync_url is unset.
     scheduler.add_job(
         _job_sync_to_render,
-        CronTrigger(second="*/5", timezone="UTC"),
+        CronTrigger(minute="*/5", timezone="UTC"),
         id="sync_to_render",
         name="Push state to Render free tier + pull boss replies",
     )

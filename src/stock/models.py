@@ -50,11 +50,12 @@ PRICING: dict[str, dict[str, float]] = {
     "MiniMax-M2.5-highspeed": {"input": 0.20, "output": 0.80},
     "claude-opus-4-6": {"input": 15.0, "output": 75.0},
     "claude-opus-4-7": {"input": 15.0, "output": 75.0},
-    # claude_cli backend = locally-spawned `claude -p` subprocess; cost is paid via
-    # the user's Claude Code subscription, not metered through our API key. We log
-    # cost_usd=0 so the daily ceiling doesn't block, but token counts (estimated)
-    # still flow into llm_calls for visibility.
+    # claude_cli + codex_cli backends = locally-spawned subprocesses; cost is paid via
+    # the user's Claude Code / ChatGPT subscriptions, not metered through our API
+    # keys. We log cost_usd=0 so the daily ceiling doesn't block, but token counts
+    # (estimated) still flow into llm_calls for visibility.
     "claude-code-session": {"input": 0.0, "output": 0.0},
+    "codex-cli-session": {"input": 0.0, "output": 0.0},
 }
 
 # F17: subprocess Claude Code session as a swappable core backend. Has built-in
@@ -65,6 +66,15 @@ CLAUDE_CLI_CORE_BIN: str = "claude"
 CLAUDE_CLI_CORE_DEFAULT_MODEL: str = "claude-opus-4-7"
 CLAUDE_CLI_CORE_TIMEOUT_SECS: int = 600
 CLAUDE_CLI_CORE_MODEL_NAME: str = "claude-code-session"  # the key in PRICING
+
+# F17b: subprocess Codex CLI session as the new default core backend. ChatGPT-
+# logged-in user pays via their subscription; we log cost=0. When this fails
+# (timeout / missing binary / non-zero exit) we fall back to the Claude CLI
+# subprocess transparently via CodexWithClaudeFallback below.
+CODEX_CLI_CORE_BIN: str = "codex"
+CODEX_CLI_CORE_DEFAULT_MODEL: str = ""  # blank = let codex pick its default
+CODEX_CLI_CORE_TIMEOUT_SECS: int = 600
+CODEX_CLI_CORE_MODEL_NAME: str = "codex-cli-session"  # the key in PRICING
 
 
 class ChatMessage(TypedDict):
@@ -453,25 +463,269 @@ class ClaudeCliClient:
         )
 
 
-def get_core_client() -> LLMClient | ClaudeCliClient:
+class CodexCliUnavailable(RuntimeError):
+    """Raised when the `codex` binary isn't installed or the subprocess fails non-recoverably."""
+
+
+class CodexCliClient:
+    """Subprocess-backed Codex CLI session. Same chat() shape as ClaudeCliClient.
+
+    Each chat() call spawns `codex exec --skip-git-repo-check
+    --dangerously-bypass-approvals-and-sandbox [-m model] -o <tmpfile>` with the
+    prompt piped through stdin. The final-assistant message is read back from
+    the `-o` file rather than parsed out of stdout -- codex stdout interleaves
+    a header, the echoed prompt, and a token-usage footer alongside the
+    response, so the dedicated `-o` channel is the only reliable extraction.
+
+    Subprocess inherits the user's `codex login` (ChatGPT plan), so cost is
+    logged as $0 against our daily ceiling -- same accounting model as
+    ClaudeCliClient.
+    """
+
+    def __init__(
+        self,
+        *,
+        bin_path: str = CODEX_CLI_CORE_BIN,
+        timeout_secs: int = CODEX_CLI_CORE_TIMEOUT_SECS,
+    ) -> None:
+        # Resolve absolute path so subprocess.run finds codex.cmd on Windows
+        # without shell=True (same .CMD trap as claude).
+        import shutil
+        resolved = shutil.which(bin_path)
+        self._bin = resolved or bin_path
+        self._timeout = timeout_secs
+
+    @property
+    def provider(self) -> str:
+        """Return the provider name (matches LLMClient API)."""
+        return "codex_cli"
+
+    def chat(
+        self,
+        messages: list[ChatMessage],
+        model: str,
+        max_tokens: int,
+        conn: sqlite3.Connection,
+        caller: str,
+        cached_system: str | None = None,
+    ) -> ChatResponse:
+        """Send a chat request to a `codex exec` subprocess; log usage; return response."""
+        import os
+        import subprocess
+        import tempfile
+
+        settings = get_settings()
+        check_cost_ceiling(conn, settings)
+
+        # Flatten the conversation the same way ClaudeCliClient does. codex exec
+        # is one-shot and doesn't carry a /system slot, so we prepend the cached
+        # system block as a delimited preamble.
+        parts: list[str] = []
+        if cached_system:
+            parts.append(cached_system.strip())
+            parts.append("---")
+        for m in messages:
+            role = m.get("role", "user")
+            content = m.get("content", "")
+            if not content:
+                continue
+            if role == "user":
+                parts.append(content)
+            else:
+                parts.append(f"[{role}]\n{content}")
+        prompt = "\n\n".join(parts).strip()
+
+        input_tokens_estimate = max(1, len(prompt) // 4)
+
+        # Allocate a temp file for codex's final-message output. We use
+        # delete=False because codex writes after we close our handle; we
+        # remove it ourselves in the finally block.
+        out_handle = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".txt", delete=False, encoding="utf-8",
+        )
+        out_path = out_handle.name
+        out_handle.close()
+
+        argv: list[str] = [
+            self._bin, "exec",
+            "--skip-git-repo-check",
+            "--dangerously-bypass-approvals-and-sandbox",
+            "-o", out_path,
+        ]
+        # Only pass -m if caller specified one; otherwise let codex pick its
+        # configured default (currently gpt-5.5 on this machine).
+        if model:
+            argv.extend(["-m", model])
+
+        creation_flags = 0
+        if sys.platform == "win32":
+            creation_flags = subprocess.CREATE_NO_WINDOW
+
+        start = time.perf_counter()
+        try:
+            try:
+                proc = subprocess.run(
+                    argv,
+                    input=prompt,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    timeout=self._timeout,
+                    creationflags=creation_flags,
+                )
+            except FileNotFoundError as exc:
+                raise CodexCliUnavailable(
+                    f"`{self._bin}` not on PATH; install Codex CLI and run `codex login`"
+                ) from exc
+            except subprocess.TimeoutExpired as exc:
+                raise CodexCliUnavailable(
+                    f"`codex exec` exceeded {self._timeout}s timeout for caller={caller}"
+                ) from exc
+
+            duration_ms = int((time.perf_counter() - start) * 1000)
+
+            if proc.returncode != 0:
+                raise CodexCliUnavailable(
+                    f"`codex exec` exit={proc.returncode}: {(proc.stderr or '').strip()[:500]}"
+                )
+
+            try:
+                with open(out_path, encoding="utf-8") as f:
+                    content = f.read().strip()
+            except OSError as exc:
+                raise CodexCliUnavailable(
+                    f"`codex exec` finished but output file missing: {exc}"
+                ) from exc
+
+            if "<think>" in content:
+                content = strip_thinking(content)
+
+            if not content:
+                raise CodexCliUnavailable(
+                    f"`codex exec` produced empty output for caller={caller}"
+                )
+
+            output_tokens_estimate = max(1, len(content) // 4)
+
+            conn.execute(
+                "INSERT INTO llm_calls"
+                " (model, provider, input_tokens, output_tokens,"
+                " cost_usd, duration_ms, caller, created_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    CODEX_CLI_CORE_MODEL_NAME,
+                    "codex_cli",
+                    input_tokens_estimate,
+                    output_tokens_estimate,
+                    0.0,
+                    duration_ms,
+                    caller,
+                    datetime.now(timezone.utc).isoformat(),
+                ),
+            )
+            conn.commit()
+
+            return ChatResponse(
+                content=content,
+                input_tokens=input_tokens_estimate,
+                output_tokens=output_tokens_estimate,
+                model=CODEX_CLI_CORE_MODEL_NAME,
+                cost_usd=0.0,
+            )
+        finally:
+            try:
+                os.unlink(out_path)
+            except OSError:
+                pass
+
+
+class CodexWithClaudeFallback:
+    """Try codex_cli first; on CodexCliUnavailable, fall back to claude_cli.
+
+    This is what `get_core_client()` returns when core_llm_backend == "codex_cli"
+    (the new default). It preserves the existing call-site contract: callers
+    catch `ClaudeCliUnavailable` and drop to MiniMax, so a both-subprocess-
+    failed scenario still degrades gracefully through the final MiniMax tier.
+    """
+
+    def __init__(self) -> None:
+        self._codex = CodexCliClient()
+        self._claude = ClaudeCliClient()
+
+    @property
+    def provider(self) -> str:
+        """Return the primary provider name; callers log this for visibility."""
+        return "codex_cli"
+
+    def chat(
+        self,
+        messages: list[ChatMessage],
+        model: str,
+        max_tokens: int,
+        conn: sqlite3.Connection,
+        caller: str,
+        cached_system: str | None = None,
+    ) -> ChatResponse:
+        """Try codex; on failure log + fall back to claude_cli.
+
+        The incoming `model` argument comes from `get_core_model()`, which for
+        codex_cli backend returns "" (let codex pick) or whatever
+        CORE_CODEX_MODEL was set to. That value is not a valid Claude model id,
+        so on fallback we ignore it and use the Claude default explicitly.
+        """
+        try:
+            return self._codex.chat(
+                messages=messages,
+                model=model,
+                max_tokens=max_tokens,
+                conn=conn,
+                caller=caller,
+                cached_system=cached_system,
+            )
+        except CodexCliUnavailable as exc:
+            logger.warning(
+                "codex_cli unavailable (%s); falling back to claude_cli for caller=%s",
+                exc, caller,
+            )
+            return self._claude.chat(
+                messages=messages,
+                model=CLAUDE_CLI_CORE_DEFAULT_MODEL,
+                max_tokens=max_tokens,
+                conn=conn,
+                caller=f"{caller}.codex_fallback_claude",
+                cached_system=cached_system,
+            )
+
+
+def get_core_client() -> LLMClient | ClaudeCliClient | CodexCliClient | CodexWithClaudeFallback:
     """Return the active backend selected by Settings.core_llm_backend.
 
-    All LLM-touching modules now route through this helper -- core flows
+    All LLM-touching modules route through this helper -- core flows
     (research, reply, grading, deep-dive, qa-dive) AND utility flows
-    (features, intent, thesis, discover, events, self_review). One env var
-    (`CORE_LLM_BACKEND=claude_cli|minimax`, set via `stock backend set ...`)
-    swaps the entire system between Opus-class via the local Claude Code
-    subprocess (free under the user's subscription) and MiniMax via the
-    OpenAI-compatible endpoint (metered, faster, but balance-dependent).
+    (features, intent, thesis, discover, events, self_review).
 
-    Falls back to MiniMax if claude_cli is configured but the binary is
-    missing -- that lets the system keep running through a partial
-    misconfiguration rather than failing all calls.
+    Backend values:
+      "codex_cli"  (default): codex exec via ChatGPT login, with claude_cli
+                              as an automatic fallback on timeout / missing
+                              binary / non-zero exit. Free under the user's
+                              ChatGPT + Claude Code subscriptions.
+      "claude_cli"          : pure Claude Code CLI (no codex layer).
+      "minimax"             : MiniMax via OpenAI-compatible endpoint
+                              (metered, faster, balance-dependent).
+      anything else         : treated as minimax (defensive default).
+
+    A both-subprocess-failed scenario propagates `ClaudeCliUnavailable` to
+    the caller, which existing call sites catch and downgrade to MiniMax.
     """
     settings = get_settings()
-    backend = (settings.core_llm_backend or "minimax").strip().lower()
+    backend = (settings.core_llm_backend or "codex_cli").strip().lower()
+    if backend == "codex_cli":
+        return CodexWithClaudeFallback()
     if backend == "claude_cli":
         return ClaudeCliClient()
+    if backend == "minimax":
+        return get_client("minimax")
+    logger.warning("Unknown CORE_LLM_BACKEND=%s; using minimax", backend)
     return get_client("minimax")
 
 
@@ -482,7 +736,11 @@ def get_core_model() -> str:
     without knowing which backend is live.
     """
     settings = get_settings()
-    backend = (settings.core_llm_backend or "minimax").strip().lower()
+    backend = (settings.core_llm_backend or "codex_cli").strip().lower()
+    if backend == "codex_cli":
+        # Blank -> CodexCliClient honors codex's own default. Callers that
+        # really need a specific model can set CORE_CODEX_MODEL in .env.
+        return (getattr(settings, "core_codex_model", "") or CODEX_CLI_CORE_DEFAULT_MODEL).strip()
     if backend == "claude_cli":
         return (settings.core_claude_model or CLAUDE_CLI_CORE_DEFAULT_MODEL).strip()
     return MINIMAX_DEFAULT_MODEL

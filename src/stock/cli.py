@@ -1251,34 +1251,55 @@ def backend_show_cmd() -> None:
         from stock.config import get_settings as _get_settings
         from stock.models import (
             CLAUDE_CLI_CORE_BIN,
+            CODEX_CLI_CORE_BIN,
             ClaudeCliClient,
             ClaudeCliUnavailable,
+            CodexCliClient,
+            CodexCliUnavailable,
+            CodexWithClaudeFallback,
             get_core_client,
             get_core_model,
         )
 
         settings = _get_settings()
         typer.echo(f"core_llm_backend = {settings.core_llm_backend}")
-        typer.echo(f"core model       = {get_core_model()}")
+        typer.echo(f"core model       = {get_core_model() or '(codex default)'}")
         client = get_core_client()
         typer.echo(f"client provider  = {client.provider}")
         typer.echo(f"minimax key set  = {bool(settings.minimax_api_key)}")
+        typer.echo(f"codex_cli bin    = {CODEX_CLI_CORE_BIN}")
         typer.echo(f"claude_cli bin   = {CLAUDE_CLI_CORE_BIN}")
 
-        # Probe the binary if claude_cli is selected
-        if isinstance(client, ClaudeCliClient):
-            import shutil
+        # Probe binaries that are part of the active path
+        import shutil
 
+        needs_codex = isinstance(client, (CodexCliClient, CodexWithClaudeFallback))
+        needs_claude = isinstance(client, (ClaudeCliClient, CodexWithClaudeFallback))
+        any_missing = False
+        if needs_codex:
+            found = shutil.which(CODEX_CLI_CORE_BIN)
+            if found:
+                typer.echo(f"codex found at   = {found}")
+            else:
+                typer.echo(
+                    f"WARNING: `{CODEX_CLI_CORE_BIN}` not on PATH;"
+                    f" codex layer will raise CodexCliUnavailable and fall back."
+                )
+                any_missing = True
+        if needs_claude:
             found = shutil.which(CLAUDE_CLI_CORE_BIN)
             if found:
                 typer.echo(f"claude found at  = {found}")
             else:
                 typer.echo(
                     f"WARNING: `{CLAUDE_CLI_CORE_BIN}` not on PATH;"
-                    f" core calls will fall back to MiniMax."
+                    f" claude fallback unavailable -- core calls will drop to MiniMax."
                 )
-                raise typer.Exit(code=2)
+                any_missing = True
+        if any_missing:
+            raise typer.Exit(code=2)
         _ = ClaudeCliUnavailable  # silence unused-import linter
+        _ = CodexCliUnavailable
     except typer.Exit:
         raise
     except Exception:
@@ -1289,7 +1310,7 @@ def backend_show_cmd() -> None:
 @backend_app.command("set")
 def backend_set_cmd(
     backend: Annotated[
-        str, typer.Argument(help="Backend name: minimax | claude_cli"),
+        str, typer.Argument(help="Backend name: codex_cli | claude_cli | minimax"),
     ],
 ) -> None:
     """Update CORE_LLM_BACKEND in .env (creates the file if missing).
@@ -1299,9 +1320,10 @@ def backend_set_cmd(
     using the previous backend.
     """
     backend = backend.strip().lower()
-    if backend not in ("minimax", "claude_cli"):
+    if backend not in ("minimax", "claude_cli", "codex_cli"):
         typer.echo(
-            f"Backend must be 'minimax' or 'claude_cli', got '{backend}'.", err=True,
+            f"Backend must be one of 'codex_cli', 'claude_cli', 'minimax'; got '{backend}'.",
+            err=True,
         )
         raise typer.Exit(code=1)
 
@@ -1338,6 +1360,7 @@ def backend_test_cmd(
         from stock.models import (
             ChatMessage,
             ClaudeCliUnavailable,
+            CodexCliUnavailable,
             get_core_client,
             get_core_model,
         )
@@ -1353,8 +1376,8 @@ def backend_test_cmd(
                 conn=conn,
                 caller="cli.backend_test",
             )
-        except ClaudeCliUnavailable as exc:
-            typer.echo(f"claude_cli unavailable: {exc}", err=True)
+        except (CodexCliUnavailable, ClaudeCliUnavailable) as exc:
+            typer.echo(f"backend unavailable: {exc}", err=True)
             raise typer.Exit(code=2)
         typer.echo(
             f"provider={client.provider} model={response.model}"

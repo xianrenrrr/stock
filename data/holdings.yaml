@@ -4,33 +4,34 @@
 # this file manually and the next startup syncs it.
 
 holdings: []
+
 # SMCI -- CLOSED 2026-05-05 AH at $32.50 from $28 cost (~$20k position,
 # +16.07% realized in 1 trading day on the Q3 fiscal 26 earnings pop).
 # Marked inactive in holdings table; trade_log persisted as research_id=29.
 # When you re-enter SMCI or open any new position, add a block back here.
-
-      === SELL TRIGGERS (any one = re-evaluate; multiple = exit) ===
-      1. Q3 print: margin stuck < 11% -> thesis broken, cut.
-      2. Hyperscaler 5月 capex guidance NOT upgraded by MSFT/META/GOOGL/
-         AMZN -> integration layer pre-priced; trim half.
-      3. GB200 NVL72 shipment cadence delay (NVDA earnings or channel
-         check) -> entire integration thesis pushes out -> exit.
-      4. Auditor / 10-K compliance event reignites -> unconditional exit.
-      5. DELL liquid-cooling rack price war disclosed -> SMCI first-mover
-         premium evaporates -> trim 50%.
-      6. Single-day pct_change <= -8% on volume_ratio >= 2.0 -> stop-loss
-         check (F12 anomaly flagger fires automatically).
-
-      === TAKE-PROFIT TRIGGERS ===
-      7. +30% from cost_basis with no new catalyst -> trim 1/3.
-      8. META or xAI announces SMCI as DLC vendor of record -> trim 1/2
-         + raise stop to entry.
-
-      === RECOMMENDED MAX POSITION SIZE: 5% of portfolio. ===
-      One bad quarter = potential 30%+ drawdown.
-
-      UPDATE qty + cost_basis as soon as you have them:
-        stock holding add SMCI <real_qty> <real_cost> --notes "..."
+#
+#       === SELL TRIGGERS (any one = re-evaluate; multiple = exit) ===
+#       1. Q3 print: margin stuck < 11% -> thesis broken, cut.
+#       2. Hyperscaler 5月 capex guidance NOT upgraded by MSFT/META/GOOGL/
+#          AMZN -> integration layer pre-priced; trim half.
+#       3. GB200 NVL72 shipment cadence delay (NVDA earnings or channel
+#          check) -> entire integration thesis pushes out -> exit.
+#       4. Auditor / 10-K compliance event reignites -> unconditional exit.
+#       5. DELL liquid-cooling rack price war disclosed -> SMCI first-mover
+#          premium evaporates -> trim 50%.
+#       6. Single-day pct_change <= -8% on volume_ratio >= 2.0 -> stop-loss
+#          check (F12 anomaly flagger fires automatically).
+#
+#       === TAKE-PROFIT TRIGGERS ===
+#       7. +30% from cost_basis with no new catalyst -> trim 1/3.
+#       8. META or xAI announces SMCI as DLC vendor of record -> trim 1/2
+#          + raise stop to entry.
+#
+#       === RECOMMENDED MAX POSITION SIZE: 5% of portfolio. ===
+#       One bad quarter = potential 30%+ drawdown.
+#
+#       UPDATE qty + cost_basis as soon as you have them:
+#         stock holding add SMCI <real_qty> <real_cost> --notes "..."
 
 # Example template (add more holdings here):
 # holdings:

@@ -30,11 +30,23 @@ SELF_REVIEW_MAX_TOKENS: int = 4000
 LOOKBACK_HOURS: int = 24
 PROMPT_REWRITES_LOOKBACK_DAYS: int = 7
 ALLOWED_BACKENDS: tuple[str, ...] = (
-    "claude_code", "minimax", "both", "claude_cli", "off",
+    "claude_code", "minimax", "both", "claude_cli", "codex_cli", "off",
 )
 CLAUDE_CLI_TIMEOUT_SECS: int = 1800
 CLAUDE_CLI_MODEL: str = "claude-opus-4-7"
+CODEX_CLI_TIMEOUT_SECS: int = 1800
+CODEX_CLI_MODEL: str = ""  # blank = let codex pick its default (currently gpt-5.5)
 PYTEST_TIMEOUT_SECS: int = 600
+
+
+class AutopilotUnavailable(RuntimeError):
+    """Raised by an autopilot runner when its underlying CLI can't even start
+    (binary missing, timeout before any work). Signals 'try the next runner'.
+
+    Distinct from a False return, which means the runner DID execute but
+    produced no commits / failed tests -- in that case we accept the outcome
+    rather than overwriting it with a fallback runner on the same branch.
+    """
 
 
 class ReviewProposal(BaseModel):
@@ -520,29 +532,13 @@ def _git(*args: str, capture: bool = True) -> tuple[int, str, str]:
     return proc.returncode, proc.stdout or "", proc.stderr or ""
 
 
-def run_via_claude_cli_autopilot(packet: ReviewPacketResult) -> bool:
-    """Spawn `claude -p` to make daily improvements; auto-merge + push if tests pass.
+def _build_autopilot_instruction(packet: ReviewPacketResult) -> str:
+    """Build the daily auto-review instruction handed to the agent CLI.
 
-    Returns True when changes were committed to main and pushed; False otherwise.
+    Shared by both claude_cli and codex_cli autopilots so behavior is identical
+    regardless of which runner picks it up.
     """
-    import subprocess
-
-    branch = f"auto-review-{packet.date}"
-
-    # Capture starting commit so we can detect whether claude actually committed
-    rc, start_head, _ = _git("rev-parse", "HEAD")
-    if rc != 0:
-        logger.warning("auto-review: not in a git repo; skipping")
-        return False
-    start_head = start_head.strip()
-
-    # Carve out a feature branch off main so claude can't accidentally dirty main
-    rc, _, err = _git("checkout", "-B", branch)
-    if rc != 0:
-        logger.warning("auto-review: failed to create branch %s: %s", branch, err)
-        return False
-
-    instruction = (
+    return (
         f"You are doing the daily STOCK auto-review on {packet.date}.\n\n"
         f"Read the operational packet at: {packet.path}\n\n"
         "**MOST IMPORTANT RULE: doing nothing is the correct answer most days.**\n"
@@ -581,11 +577,178 @@ def run_via_claude_cli_autopilot(packet: ReviewPacketResult) -> bool:
         "The wrapper detects 'no commits made' and cleans up the branch silently."
     )
 
+
+def _finalize_autopilot_branch(
+    *, branch: str, start_head: str, runner: str,
+) -> bool:
+    """After the agent CLI returns, check whether it committed; if so, test + merge.
+
+    Returns True only when tests pass and main has been fast-forwarded + pushed.
+    Returns False on a clean no-op exit, or when tests fail (branch is preserved
+    in that case so the operator can inspect).
+    """
+    import subprocess
+
+    rc, head, _ = _git("rev-parse", "HEAD")
+    head = head.strip()
+    if head == start_head:
+        logger.info("auto-review[%s]: no commits (clean exit)", runner)
+        _git("checkout", "main")
+        _git("branch", "-D", branch)
+        return False
+
+    test_proc = subprocess.run(
+        ["python", "-m", "pytest", "-q", "--tb=line"],
+        cwd=str(Path.cwd()),
+        capture_output=True,
+        text=True,
+        timeout=PYTEST_TIMEOUT_SECS,
+        encoding="utf-8",
+    )
+    if test_proc.returncode != 0:
+        logger.warning(
+            "auto-review[%s]: pytest failed (exit=%d); leaving branch %s for review",
+            runner, test_proc.returncode, branch,
+        )
+        return False
+
+    rc, _, err = _git("checkout", "main")
+    if rc != 0:
+        logger.warning("auto-review[%s]: checkout main failed: %s", runner, err)
+        return False
+    rc, _, err = _git("merge", "--ff-only", branch)
+    if rc != 0:
+        logger.warning(
+            "auto-review[%s]: ff-merge of %s into main failed: %s", runner, branch, err,
+        )
+        _git("checkout", branch)
+        return False
+    rc, _, err = _git("push", "origin", "main")
+    if rc != 0:
+        logger.warning("auto-review[%s]: push failed: %s", runner, err)
+        return False
+    _git("branch", "-D", branch)
+    logger.info("auto-review[%s]: merged + pushed; Render will auto-deploy", runner)
+    return True
+
+
+def run_via_codex_cli_autopilot(packet: ReviewPacketResult) -> bool:
+    """Spawn `codex exec` for daily improvements; auto-merge + push if tests pass.
+
+    Returns True when changes were committed to main and pushed; False on a
+    clean no-op or a test-fail-on-branch. Raises AutopilotUnavailable when the
+    `codex` binary is missing or the subprocess times out before doing any
+    work -- callers use that signal to fall back to a different runner.
+    """
+    import shutil as _shutil_cli
+    import subprocess
+
+    branch = f"auto-review-{packet.date}"
+
+    rc, start_head, _ = _git("rev-parse", "HEAD")
+    if rc != 0:
+        logger.warning("auto-review[codex]: not in a git repo; skipping")
+        return False
+    start_head = start_head.strip()
+
+    rc, _, err = _git("checkout", "-B", branch)
+    if rc != 0:
+        logger.warning(
+            "auto-review[codex]: failed to create branch %s: %s", branch, err,
+        )
+        return False
+
+    instruction = _build_autopilot_instruction(packet)
+
+    _codex_bin = _shutil_cli.which("codex") or "codex"
+    argv: list[str] = [
+        _codex_bin, "exec",
+        "--skip-git-repo-check",
+        "--dangerously-bypass-approvals-and-sandbox",
+    ]
+    if CODEX_CLI_MODEL:
+        argv.extend(["-m", CODEX_CLI_MODEL])
+
+    try:
+        proc = subprocess.run(
+            argv,
+            input=instruction,
+            cwd=str(Path.cwd()),
+            timeout=CODEX_CLI_TIMEOUT_SECS,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        logger.info(
+            "auto-review[codex] exit=%d stdout_len=%d stderr_len=%d",
+            proc.returncode, len(proc.stdout or ""), len(proc.stderr or ""),
+        )
+    except subprocess.TimeoutExpired as exc:
+        logger.warning(
+            "auto-review[codex]: timed out after %ds", CODEX_CLI_TIMEOUT_SECS,
+        )
+        _git("checkout", "main")
+        _git("branch", "-D", branch)
+        raise AutopilotUnavailable(
+            f"codex exec timed out after {CODEX_CLI_TIMEOUT_SECS}s"
+        ) from exc
+    except FileNotFoundError as exc:
+        logger.warning("auto-review[codex]: 'codex' CLI not on PATH")
+        _git("checkout", "main")
+        _git("branch", "-D", branch)
+        raise AutopilotUnavailable("codex binary not on PATH") from exc
+
+    if proc.returncode != 0:
+        # A non-zero exit when codex was reachable usually means the model
+        # produced no useful work. Check whether it committed anything -- if
+        # not, treat as 'unavailable' so the fallback runner can try, since
+        # codex didn't dirty the branch.
+        rc_head, head_after, _ = _git("rev-parse", "HEAD")
+        if head_after.strip() == start_head:
+            _git("checkout", "main")
+            _git("branch", "-D", branch)
+            raise AutopilotUnavailable(
+                f"codex exec exit={proc.returncode} with no commits: "
+                f"{(proc.stderr or '').strip()[:300]}"
+            )
+
+    return _finalize_autopilot_branch(
+        branch=branch, start_head=start_head, runner="codex",
+    )
+
+
+def run_via_claude_cli_autopilot(packet: ReviewPacketResult) -> bool:
+    """Spawn `claude -p` to make daily improvements; auto-merge + push if tests pass.
+
+    Returns True when changes were committed to main and pushed; False on a
+    clean no-op or test-fail-on-branch. Raises AutopilotUnavailable when the
+    `claude` binary is missing or the subprocess times out before doing any
+    work -- so a dispatcher can fall back further if needed.
+    """
+    import shutil as _shutil_cli
+    import subprocess
+
+    branch = f"auto-review-{packet.date}"
+
+    rc, start_head, _ = _git("rev-parse", "HEAD")
+    if rc != 0:
+        logger.warning("auto-review[claude]: not in a git repo; skipping")
+        return False
+    start_head = start_head.strip()
+
+    rc, _, err = _git("checkout", "-B", branch)
+    if rc != 0:
+        logger.warning(
+            "auto-review[claude]: failed to create branch %s: %s", branch, err,
+        )
+        return False
+
+    instruction = _build_autopilot_instruction(packet)
+
     # Invoke claude headless. Inherits env (incl. login) and cwd. Pass the
     # instruction via stdin (NOT argv) because Windows CreateProcess has a
     # 32 KB command-line limit and the autopilot instruction is bumping that
     # ceiling -- argv-truncation would silently break the run.
-    import shutil as _shutil_cli
     _claude_bin = _shutil_cli.which("claude") or "claude"
     try:
         proc = subprocess.run(
@@ -602,61 +765,50 @@ def run_via_claude_cli_autopilot(packet: ReviewPacketResult) -> bool:
             encoding="utf-8",
         )
         logger.info(
-            "auto-review claude exit=%d stdout_len=%d stderr_len=%d",
+            "auto-review[claude] exit=%d stdout_len=%d stderr_len=%d",
             proc.returncode, len(proc.stdout or ""), len(proc.stderr or ""),
         )
-    except subprocess.TimeoutExpired:
-        logger.warning("auto-review: claude timed out after %ds", CLAUDE_CLI_TIMEOUT_SECS)
-        _git("checkout", "main")
-        return False
-    except FileNotFoundError:
-        logger.warning("auto-review: 'claude' CLI not on PATH; install Claude Code")
-        _git("checkout", "main")
-        return False
-
-    # Did claude actually commit anything?
-    rc, head, _ = _git("rev-parse", "HEAD")
-    head = head.strip()
-    if head == start_head:
-        logger.info("auto-review: claude made no commits (clean exit)")
+    except subprocess.TimeoutExpired as exc:
+        logger.warning(
+            "auto-review[claude]: timed out after %ds", CLAUDE_CLI_TIMEOUT_SECS,
+        )
         _git("checkout", "main")
         _git("branch", "-D", branch)
-        return False
-
-    # Run pytest before pushing so a regression doesn't ride straight to Render
-    test_proc = subprocess.run(
-        ["python", "-m", "pytest", "-q", "--tb=line"],
-        cwd=str(Path.cwd()),
-        capture_output=True,
-        text=True,
-        timeout=PYTEST_TIMEOUT_SECS,
-        encoding="utf-8",
-    )
-    if test_proc.returncode != 0:
+        raise AutopilotUnavailable(
+            f"claude -p timed out after {CLAUDE_CLI_TIMEOUT_SECS}s"
+        ) from exc
+    except FileNotFoundError as exc:
         logger.warning(
-            "auto-review: pytest failed (exit=%d); leaving branch %s for review",
-            test_proc.returncode, branch,
+            "auto-review[claude]: 'claude' CLI not on PATH; install Claude Code",
         )
-        # Stay on branch so user can inspect
-        return False
+        _git("checkout", "main")
+        _git("branch", "-D", branch)
+        raise AutopilotUnavailable("claude binary not on PATH") from exc
 
-    # Tests pass: fast-forward main, push, delete the branch
-    rc, _, err = _git("checkout", "main")
-    if rc != 0:
-        logger.warning("auto-review: checkout main failed: %s", err)
-        return False
-    rc, _, err = _git("merge", "--ff-only", branch)
-    if rc != 0:
-        logger.warning("auto-review: ff-merge of %s into main failed: %s", branch, err)
-        _git("checkout", branch)
-        return False
-    rc, _, err = _git("push", "origin", "main")
-    if rc != 0:
-        logger.warning("auto-review: push failed: %s", err)
-        return False
-    _git("branch", "-D", branch)
-    logger.info("auto-review: merged + pushed; Render will auto-deploy")
-    return True
+    return _finalize_autopilot_branch(
+        branch=branch, start_head=start_head, runner="claude",
+    )
+
+
+def run_autopilot_codex_then_claude(packet: ReviewPacketResult) -> bool:
+    """Try codex first; on AutopilotUnavailable, fall back to claude_cli.
+
+    Wrapper used by the daily-review dispatcher when self_review_backend ==
+    "codex_cli". Returns the same bool contract as either underlying runner.
+    """
+    try:
+        return run_via_codex_cli_autopilot(packet)
+    except AutopilotUnavailable as exc:
+        logger.warning(
+            "auto-review: codex unavailable (%s); falling back to claude_cli", exc,
+        )
+        try:
+            return run_via_claude_cli_autopilot(packet)
+        except AutopilotUnavailable:
+            logger.exception(
+                "auto-review: claude_cli fallback also unavailable; aborting",
+            )
+            return False
 
 
 def run_daily_review(conn: sqlite3.Connection) -> ReviewPacketResult:
@@ -695,10 +847,19 @@ def run_daily_review(conn: sqlite3.Connection) -> ReviewPacketResult:
         else:
             logger.info("self_review minimax: no proposals returned")
 
-    # Route to Claude Code CLI autopilot when requested
+    # Route to Codex autopilot (with claude_cli fallback) when requested
+    if backend == "codex_cli":
+        try:
+            run_autopilot_codex_then_claude(packet)
+        except Exception:
+            logger.exception("auto-review wrapper raised unexpectedly")
+
+    # Route to Claude Code CLI autopilot when requested (no codex layer)
     if backend == "claude_cli":
         try:
             run_via_claude_cli_autopilot(packet)
+        except AutopilotUnavailable as exc:
+            logger.warning("auto-review[claude] unavailable: %s", exc)
         except Exception:
             logger.exception("auto-review wrapper raised unexpectedly")
 

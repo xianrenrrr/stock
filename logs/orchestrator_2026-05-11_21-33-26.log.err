@@ -1,0 +1,100 @@
+2026-05-11 21:33:33 stock.orchestrator INFO Log file: pipeline\logs\orchestrator.log (daily rotation, 14 days kept)
+2026-05-11 21:33:33 stock.orchestrator ERROR Holdings YAML sync failed (non-fatal)
+Traceback (most recent call last):
+  File "C:\Users\claw\Desktop\Project\STOCK\src\stock\orchestrator.py", line 1449, in run_orchestrator
+    synced = holdings.sync_from_yaml(conn)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\claw\Desktop\Project\STOCK\src\stock\holdings.py", line 125, in sync_from_yaml
+    raw = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\claw\AppData\Local\Programs\Python\Python312\Lib\site-packages\yaml\__init__.py", line 125, in safe_load
+    return load(stream, SafeLoader)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\claw\AppData\Local\Programs\Python\Python312\Lib\site-packages\yaml\__init__.py", line 81, in load
+    return loader.get_single_data()
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\claw\AppData\Local\Programs\Python\Python312\Lib\site-packages\yaml\constructor.py", line 49, in get_single_data
+    node = self.get_single_node()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\claw\AppData\Local\Programs\Python\Python312\Lib\site-packages\yaml\composer.py", line 36, in get_single_node
+    document = self.compose_document()
+               ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\claw\AppData\Local\Programs\Python\Python312\Lib\site-packages\yaml\composer.py", line 55, in compose_document
+    node = self.compose_node(None, None)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\claw\AppData\Local\Programs\Python\Python312\Lib\site-packages\yaml\composer.py", line 84, in compose_node
+    node = self.compose_mapping_node(anchor)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\claw\AppData\Local\Programs\Python\Python312\Lib\site-packages\yaml\composer.py", line 127, in compose_mapping_node
+    while not self.check_event(MappingEndEvent):
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\claw\AppData\Local\Programs\Python\Python312\Lib\site-packages\yaml\parser.py", line 98, in check_event
+    self.current_event = self.state()
+                         ^^^^^^^^^^^^
+  File "C:\Users\claw\AppData\Local\Programs\Python\Python312\Lib\site-packages\yaml\parser.py", line 438, in parse_block_mapping_key
+    raise ParserError("while parsing a block mapping", self.marks[-1],
+yaml.parser.ParserError: while parsing a block mapping
+  in "<unicode string>", line 6, column 1:
+    holdings: []
+    ^
+expected <block end>, but found '<scalar>'
+  in "<unicode string>", line 12, column 7:
+          === SELL TRIGGERS (any one = re- ... 
+          ^
+2026-05-11 21:33:33 stock.orchestrator INFO Watchlist: 26 tickers (AMAT, AMD, ASML, AVGO, CEG, COHR, CRDO, DELL, ETN, GOOGL, KLAC, LITE, LRCX, META, MRVL, MSFT, MTSI, MU, MXL, NVDA, ORCL, SMCI, SMTC, TSM, VRT, VST)
+2026-05-11 21:33:33 stock.orchestrator INFO Scheduled: Ingest news/prices/features (2x daily, pre-push) -> 2026-05-12T14:00:00+00:00
+2026-05-11 21:33:33 stock.orchestrator INFO Scheduled: Run predictions on watchlist (2x daily) -> 2026-05-12T14:15:00+00:00
+2026-05-11 21:33:33 stock.orchestrator INFO Scheduled: Score due predictions -> 2026-05-12T21:30:00+00:00
+2026-05-11 21:33:33 stock.orchestrator INFO Scheduled: Weekly reflection -> 2026-05-16T06:00:00+00:00
+2026-05-11 21:33:33 stock.orchestrator INFO Scheduled: Morning web discovery -> 2026-05-13T02:00:00+00:00
+2026-05-11 21:33:33 stock.orchestrator INFO Scheduled: Evening web discovery -> 2026-05-12T14:00:00+00:00
+2026-05-11 21:33:33 stock.orchestrator INFO Scheduled: Daily price/volume anomaly computation -> 2026-05-12T21:35:00+00:00
+2026-05-11 21:33:33 stock.orchestrator INFO Scheduled: Weekly EDGAR Form 4 pull -> 2026-05-17T05:00:00+00:00
+2026-05-11 21:33:33 stock.orchestrator INFO Scheduled: Per-holding weekly health-check deep-dive -> 2026-05-16T07:00:00+00:00
+2026-05-11 21:33:33 stock.orchestrator INFO Scheduled: Classify replies, queue follow-ups, auto-rewrite prompt -> 2026-05-12T04:35:00+00:00
+2026-05-11 21:33:33 stock.orchestrator INFO Scheduled: Run pending auto-queued action items -> 2026-05-12T12:00:00+00:00
+2026-05-11 21:33:33 stock.orchestrator INFO Scheduled: Morning research + WeChat push -> 2026-05-13T02:30:00+00:00
+2026-05-11 21:33:33 stock.orchestrator INFO Scheduled: Evening research + WeChat push -> 2026-05-12T14:30:00+00:00
+2026-05-11 21:33:33 stock.orchestrator INFO Scheduled: Push state to Render free tier + pull boss replies -> 2026-05-12T04:33:35+00:00
+2026-05-11 21:33:33 stock.orchestrator INFO Scheduled: F26 nightly tracked-event verification -> 2026-05-12T21:50:00+00:00
+2026-05-11 21:33:33 stock.orchestrator INFO Scheduled: F33 nightly SQLite online backup -> 2026-05-12T23:30:00+00:00
+2026-05-11 21:33:33 stock.orchestrator INFO Scheduled: F36 unusual options activity scan -> 2026-05-12T21:55:00+00:00
+2026-05-11 21:33:33 stock.orchestrator INFO Scheduled: F38 three-sector smallcap forward-discovery scan -> 2026-05-12T22:15:00+00:00
+2026-05-11 21:33:33 stock.orchestrator INFO Scheduled: F39 weekly AI commercial-loop closure-risk measurement -> 2026-05-18T06:30:00+00:00
+2026-05-11 21:33:33 stock.orchestrator INFO Scheduled: F40 weekly Q&A deep-dive on top-FWP candidates -> 2026-05-16T07:00:00+00:00
+2026-05-11 21:33:33 stock.orchestrator INFO Scheduled: F44 weekly company DD checklist (queue-rotated) -> 2026-05-13T09:15:00+00:00
+2026-05-11 21:33:33 stock.orchestrator INFO Scheduled: F45 weekly entry-zone scan (conviction + DD queue) -> 2026-05-17T06:00:00+00:00
+2026-05-11 21:33:33 stock.orchestrator INFO Scheduled: F46 post-close volume + price snapshot (4:05 PM ET) -> 2026-05-12T20:05:00+00:00
+2026-05-11 21:33:33 stock.orchestrator INFO Scheduled: F19 forward-looking candidate scoring + auto-promote -> 2026-05-12T23:00:00+00:00
+2026-05-11 21:33:33 stock.orchestrator INFO Scheduled: Verify scored theses against post-window evidence -> 2026-05-12T21:40:00+00:00
+2026-05-11 21:33:33 stock.orchestrator INFO Scheduled: Daily grade-and-reply note + follow-ups -> 2026-05-12T21:45:00+00:00
+2026-05-11 21:33:33 stock.orchestrator INFO Scheduled: Daily self-review packet + optional MiniMax proposals -> 2026-05-12T06:00:00+00:00
+2026-05-11 21:33:33 stock.orchestrator INFO Orchestrator running (27 jobs). Press Ctrl+C to stop.
+INFO:     Started server process [4384]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:18790 (Press CTRL+C to quit)
+2026-05-11 21:33:40 apscheduler.scheduler WARNING Execution of job "Push state to Render free tier + pull boss replies (trigger: cron[second='*/5'], next run at: 2026-05-12 04:33:40 UTC)" skipped: maximum number of running instances reached (1)
+2026-05-11 21:33:45 apscheduler.scheduler WARNING Execution of job "Push state to Render free tier + pull boss replies (trigger: cron[second='*/5'], next run at: 2026-05-12 04:33:45 UTC)" skipped: maximum number of running instances reached (1)
+2026-05-11 21:33:50 apscheduler.scheduler WARNING Execution of job "Push state to Render free tier + pull boss replies (trigger: cron[second='*/5'], next run at: 2026-05-12 04:33:50 UTC)" skipped: maximum number of running instances reached (1)
+2026-05-11 21:33:55 apscheduler.scheduler WARNING Execution of job "Push state to Render free tier + pull boss replies (trigger: cron[second='*/5'], next run at: 2026-05-12 04:33:55 UTC)" skipped: maximum number of running instances reached (1)
+2026-05-11 21:34:00 apscheduler.scheduler WARNING Execution of job "Push state to Render free tier + pull boss replies (trigger: cron[second='*/5'], next run at: 2026-05-12 04:34:00 UTC)" skipped: maximum number of running instances reached (1)
+2026-05-11 21:34:05 apscheduler.scheduler WARNING Execution of job "Push state to Render free tier + pull boss replies (trigger: cron[second='*/5'], next run at: 2026-05-12 04:34:05 UTC)" skipped: maximum number of running instances reached (1)
+2026-05-11 21:34:07 stock.api WARNING GET /health -> 404
+2026-05-11 21:34:10 apscheduler.scheduler WARNING Execution of job "Push state to Render free tier + pull boss replies (trigger: cron[second='*/5'], next run at: 2026-05-12 04:34:10 UTC)" skipped: maximum number of running instances reached (1)
+2026-05-11 21:34:15 apscheduler.scheduler WARNING Execution of job "Push state to Render free tier + pull boss replies (trigger: cron[second='*/5'], next run at: 2026-05-12 04:34:15 UTC)" skipped: maximum number of running instances reached (1)
+2026-05-11 21:34:20 apscheduler.scheduler WARNING Execution of job "Push state to Render free tier + pull boss replies (trigger: cron[second='*/5'], next run at: 2026-05-12 04:34:20 UTC)" skipped: maximum number of running instances reached (1)
+2026-05-11 21:34:25 apscheduler.scheduler WARNING Execution of job "Push state to Render free tier + pull boss replies (trigger: cron[second='*/5'], next run at: 2026-05-12 04:34:25 UTC)" skipped: maximum number of running instances reached (1)
+2026-05-11 21:34:30 apscheduler.scheduler WARNING Execution of job "Push state to Render free tier + pull boss replies (trigger: cron[second='*/5'], next run at: 2026-05-12 04:34:30 UTC)" skipped: maximum number of running instances reached (1)
+2026-05-11 21:34:35 apscheduler.scheduler WARNING Execution of job "Push state to Render free tier + pull boss replies (trigger: cron[second='*/5'], next run at: 2026-05-12 04:34:35 UTC)" skipped: maximum number of running instances reached (1)
+2026-05-11 21:34:36 stock.api WARNING GET / -> 404
+2026-05-11 21:34:36 stock.api INFO GET /openapi.json -> 200
+2026-05-11 21:34:40 apscheduler.scheduler WARNING Execution of job "Push state to Render free tier + pull boss replies (trigger: cron[second='*/5'], next run at: 2026-05-12 04:34:40 UTC)" skipped: maximum number of running instances reached (1)
+2026-05-11 21:34:45 apscheduler.scheduler WARNING Execution of job "Push state to Render free tier + pull boss replies (trigger: cron[second='*/5'], next run at: 2026-05-12 04:34:45 UTC)" skipped: maximum number of running instances reached (1)
+2026-05-11 21:34:50 apscheduler.scheduler WARNING Execution of job "Push state to Render free tier + pull boss replies (trigger: cron[second='*/5'], next run at: 2026-05-12 04:34:50 UTC)" skipped: maximum number of running instances reached (1)
+2026-05-11 21:34:55 apscheduler.scheduler WARNING Execution of job "Push state to Render free tier + pull boss replies (trigger: cron[second='*/5'], next run at: 2026-05-12 04:34:55 UTC)" skipped: maximum number of running instances reached (1)
+2026-05-11 21:35:00 apscheduler.scheduler WARNING Execution of job "Push state to Render free tier + pull boss replies (trigger: cron[second='*/5'], next run at: 2026-05-12 04:35:00 UTC)" skipped: maximum number of running instances reached (1)
+2026-05-11 21:35:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-11 21:35:05 apscheduler.scheduler WARNING Execution of job "Push state to Render free tier + pull boss replies (trigger: cron[second='*/5'], next run at: 2026-05-12 04:35:05 UTC)" skipped: maximum number of running instances reached (1)
+2026-05-11 21:35:10 apscheduler.scheduler WARNING Execution of job "Push state to Render free tier + pull boss replies (trigger: cron[second='*/5'], next run at: 2026-05-12 04:35:10 UTC)" skipped: maximum number of running instances reached (1)
+2026-05-11 21:35:15 apscheduler.scheduler WARNING Execution of job "Push state to Render free tier + pull boss replies (trigger: cron[second='*/5'], next run at: 2026-05-12 04:35:15 UTC)" skipped: maximum number of running instances reached (1)

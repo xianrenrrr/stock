@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import datetime, timezone
 from unittest.mock import patch
 
 import pytest
@@ -134,10 +135,14 @@ def test_persist_writes_both_tables(conn: sqlite3.Connection) -> None:
 
 
 def test_recent_dives_returns_within_window(conn: sqlite3.Connection) -> None:
+    # Use a live timestamp so the SQL `datetime('now', '-N days')` window
+    # in recent_dives() always includes this row. A hard-coded date drifts
+    # out of the window once wall-clock time moves past it.
+    now_iso = datetime.now(timezone.utc).isoformat()
     dive = TechDive(
         topic="t", sector="energy", language="zh-en",
         rounds=[TechDiveRound(round_num=1, label="x", output="x")],
-        created_at="2026-05-06T22:00:00+00:00",
+        created_at=now_iso,
     )
     persist(conn, dive)
     rows = recent_dives(conn, days=1, limit=5)

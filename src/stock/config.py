@@ -55,26 +55,31 @@ class Settings(BaseSettings):
     render_sync_url: str = ""
 
     # Daily self-review backend. Switches who reads the daily packet:
-    #   "claude_code" (default): only write pipeline/daily_review_*.md, you run /improve
+    #   "codex_cli" (default): full autopilot -- spawn `codex exec` to make 1-3 code
+    #     changes on a branch, run pytest, auto-merge to main + git push if green.
+    #     Falls back to `claude -p` automatically if codex is unavailable / times out.
+    #     Requires `codex login` (and `claude login` for the fallback) on this machine.
+    #   "claude_cli": same autopilot but skip the codex layer; use claude directly.
     #   "minimax": auto-call MiniMax with the packet, log proposals to self_review_proposals
     #   "both": write the packet AND auto-call MiniMax
-    #   "claude_cli": full autopilot -- spawn `claude -p` to make 1-3 code changes on a
-    #     branch, run pytest, and if green auto-merge to main + git push. Render
-    #     auto-deploys. Requires `claude login` on this machine.
+    #   "claude_code": only write pipeline/daily_review_*.md, you run /improve manually
     #   "off": skip the daily-review job entirely
-    self_review_backend: str = "claude_code"
+    self_review_backend: str = "codex_cli"
 
     # F17: core "thinking" backend for the user-facing flows (research, reply,
-    # grading, deep-dive, health-check). Toggle to swap between MiniMax (cheap,
-    # metered) and a local `claude -p` subprocess (Opus-class, has built-in
-    # WebSearch, billed via the user's Claude Code subscription so $0 against
-    # our daily ceiling). Utility classifiers (intent, prompt_rewriter, thesis,
-    # discover, features) keep talking to MiniMax regardless -- they're high-
-    # frequency and don't need the upgrade.
-    #   "minimax"    (default): every core call goes to MiniMax-M2.5-highspeed
-    #   "claude_cli"          : every core call spawns `claude -p` locally
-    core_llm_backend: str = "minimax"
+    # grading, deep-dive, health-check). Utility classifiers (intent,
+    # prompt_rewriter, thesis, discover, features) keep talking to MiniMax
+    # regardless -- they're high-frequency and don't need the upgrade.
+    #   "codex_cli" (default): every core call spawns `codex exec` locally,
+    #                          with claude_cli as automatic fallback on
+    #                          timeout / missing binary. $0 metered.
+    #   "claude_cli"         : every core call spawns `claude -p` locally only.
+    #   "minimax"            : every core call goes to MiniMax-M2.5-highspeed.
+    core_llm_backend: str = "codex_cli"
     core_claude_model: str = "claude-opus-4-7"
+    # Blank lets codex pick its own configured default (currently gpt-5.5).
+    # Override in .env if you want to pin a specific codex-supported model.
+    core_codex_model: str = ""
 
 
 @lru_cache(maxsize=1)
