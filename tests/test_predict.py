@@ -82,9 +82,11 @@ def _seed_data(conn: sqlite3.Connection) -> None:
 @patch("stock.predict.embed", return_value=[0.0] * 384)
 @patch("stock.predict.load_predict_prompt")
 @patch("stock.predict.extract_features", return_value=[])
-@patch("stock.predict.get_client")
+@patch("stock.predict.get_core_model", return_value="codex-cli-session")
+@patch("stock.predict.get_core_client")
 def test_predict_ticker_inserts_prediction(
     mock_get: MagicMock,
+    mock_model: MagicMock,
     _mock_extract: MagicMock,
     mock_prompt: MagicMock,
     _mock_embed: MagicMock,
@@ -129,9 +131,11 @@ def test_predict_ticker_raises_no_prices(
 
 @patch("stock.predict.load_predict_prompt")
 @patch("stock.predict.extract_features", return_value=[])
-@patch("stock.predict.get_client")
+@patch("stock.predict.get_core_model", return_value="codex-cli-session")
+@patch("stock.predict.get_core_client")
 def test_predict_ticker_raises_no_features(
     mock_get: MagicMock,
+    mock_model: MagicMock,
     _mock_extract: MagicMock,
     mock_prompt: MagicMock,
     env_settings: Settings,
@@ -155,9 +159,11 @@ def test_predict_ticker_raises_no_features(
 @patch("stock.predict.embed", return_value=[0.0] * 384)
 @patch("stock.predict.load_predict_prompt")
 @patch("stock.predict.extract_features", return_value=[])
-@patch("stock.predict.get_client")
+@patch("stock.predict.get_core_model", return_value="codex-cli-session")
+@patch("stock.predict.get_core_client")
 def test_predict_ticker_handles_code_fences(
     mock_get: MagicMock,
+    mock_model: MagicMock,
     _mock_extract: MagicMock,
     mock_prompt: MagicMock,
     _mock_embed: MagicMock,
@@ -189,9 +195,11 @@ def test_predict_ticker_handles_code_fences(
 @patch("stock.predict.embed", return_value=[0.0] * 384)
 @patch("stock.predict.load_predict_prompt")
 @patch("stock.predict.extract_features", return_value=[])
-@patch("stock.predict.get_client")
+@patch("stock.predict.get_core_model", return_value="codex-cli-session")
+@patch("stock.predict.get_core_client")
 def test_predict_ticker_clamps_prob_up(
     mock_get: MagicMock,
+    mock_model: MagicMock,
     _mock_extract: MagicMock,
     mock_prompt: MagicMock,
     _mock_embed: MagicMock,
@@ -230,9 +238,11 @@ def test_predict_ticker_clamps_prob_up(
 @patch("stock.predict.embed", return_value=[0.0] * 384)
 @patch("stock.predict.load_predict_prompt")
 @patch("stock.predict.extract_features", return_value=[])
-@patch("stock.predict.get_client")
+@patch("stock.predict.get_core_model", return_value="codex-cli-session")
+@patch("stock.predict.get_core_client")
 def test_predict_ticker_cost_ceiling(
     mock_get: MagicMock,
+    mock_model: MagicMock,
     _mock_extract: MagicMock,
     mock_prompt: MagicMock,
     _mock_embed: MagicMock,
@@ -277,9 +287,11 @@ def test_compute_due_at_friday_evening() -> None:
 @patch("stock.predict.embed", return_value=[0.0] * 384)
 @patch("stock.predict.load_predict_prompt")
 @patch("stock.predict.extract_features", return_value=[])
-@patch("stock.predict.get_client")
+@patch("stock.predict.get_core_model", return_value="codex-cli-session")
+@patch("stock.predict.get_core_client")
 def test_prediction_row_structure(
     mock_get: MagicMock,
+    mock_model: MagicMock,
     _mock_extract: MagicMock,
     mock_prompt: MagicMock,
     _mock_embed: MagicMock,

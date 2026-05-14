@@ -17,7 +17,8 @@ from stock.features import extract_features
 from stock.memory import embed, format_retrieved_cases, retrieve
 from stock.models import (
     ChatMessage,
-    get_client,
+    get_core_client,
+    get_core_model,
     parse_llm_json,
 )
 
@@ -229,15 +230,22 @@ def predict_ticker(
         retrieved_cases=retrieved_text,
     )
 
-    # Select strategy arm via Thompson sampling bandit
+    # Select strategy arm via Thompson sampling bandit. The arm's `name` is
+    # still recorded on the prediction row (so future bandit work can attribute
+    # reward), but the provider/model fields are ignored: every core LLM call
+    # routes through get_core_client() per the AI_INDEX convention, which
+    # honors the operator's CORE_LLM_BACKEND selection (codex_cli with
+    # claude_cli fallback). The hardcoded REGISTERED_ARMS pointed at a retired
+    # MiniMax model and was 400'ing every prediction.
     arm = select_arm(ticker, conn)
 
-    # Call LLM for prediction using bandit-selected arm
+    # Call LLM via the active core backend (codex_cli + claude_cli fallback)
     messages: list[ChatMessage] = [{"role": "user", "content": user_message}]
-    client = get_client(arm.provider)
+    client = get_core_client()
+    chosen_model = get_core_model()
     response = client.chat(
         messages=messages,
-        model=arm.model,
+        model=chosen_model,
         max_tokens=500,
         conn=conn,
         caller="predict.predict_ticker",
@@ -298,7 +306,7 @@ def predict_ticker(
             output.confidence,
             output.rationale,
             json.dumps(output.key_factors),
-            arm.model,
+            response.model,
             arm.strategy_arm,
             rules_version,
             json.dumps(retrieved_ids) if retrieved_ids else None,

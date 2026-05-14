@@ -265,3 +265,35 @@ def test_load_feeds_from_yaml(sample_feeds_yaml: Path) -> None:
     assert feeds[0].source == "test_source"
     assert feeds[0].per_ticker is True
     assert feeds[1].per_ticker is False
+
+
+def test_fetch_rss_news_skips_sec_edgar_for_non_us_tickers(
+    rss_feed_fixture: MagicMock,
+) -> None:
+    """SEC EDGAR doesn't resolve Shanghai/Shenzhen/Hong Kong tickers, so the
+    sec_edgar feed must be skipped for any ticker containing a dot. Other
+    feeds (Yahoo, custom RSS) are unaffected."""
+    sec_feed = FeedConfig(
+        url="https://www.sec.gov/cgi-bin/browse-edgar?CIK={ticker}&type=8-K",
+        source="sec_edgar",
+        per_ticker=True,
+    )
+    yahoo_feed = FeedConfig(
+        url="https://news.example.com/rss?ticker={ticker}",
+        source="yahoo_rss",
+        per_ticker=True,
+    )
+
+    # With a Chinese ticker, only the yahoo feed should be hit (1 call to
+    # feedparser, not 2).
+    with patch("stock.ingest.news_rss.feedparser.parse", return_value=rss_feed_fixture) as mock:
+        items = fetch_rss_news("600276.SS", [sec_feed, yahoo_feed])
+    assert mock.call_count == 1
+    assert mock.call_args.args[0].startswith("https://news.example.com")
+    # All resulting items came from yahoo_rss, not sec_edgar
+    assert all(item.source == "yahoo_rss" for item in items)
+
+    # With a US ticker, both feeds run -- 2 calls.
+    with patch("stock.ingest.news_rss.feedparser.parse", return_value=rss_feed_fixture) as mock:
+        fetch_rss_news("NVDA", [sec_feed, yahoo_feed])
+    assert mock.call_count == 2

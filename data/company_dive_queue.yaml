@@ -18,6 +18,7 @@ companies:
   name: 海光信息 Hygon
   priority: 1
   enabled: true
+  last_run: 2026-05-13T09:15
 - ticker: 601138.SS
   name: 工业富联 Foxconn Industrial
   priority: 1
@@ -118,7 +119,6 @@ companies:
   name: Besi (hybrid bonding)
   priority: 3
   enabled: true
-# ---- 2026-05-08 Bloom-analog candidates (boss-flagged, priority 1) ----
 - ticker: STEM
   name: Stem Inc (AI battery SW)
   priority: 1

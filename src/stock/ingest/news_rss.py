@@ -23,6 +23,16 @@ def fetch_rss_news(ticker: str, feeds: list[FeedConfig]) -> list[NewsItem]:
     """Fetch news from configured RSS feeds, filter for ticker relevance."""
     items: list[NewsItem] = []
     for feed in feeds:
+        # SEC EDGAR only resolves US-listed CIKs. Tickers from non-US
+        # exchanges (Shanghai .SS, Shenzhen .SZ, Hong Kong .HK, etc.) flow
+        # in via secular_themes.yaml and trigger a 404 + warning on every
+        # ingest cycle. A dot in the ticker is a reliable non-US signal
+        # for this codebase -- no US class-share tickers (BRK.B style) are
+        # in any watchlist or theme file. If one is ever added, it can be
+        # carried as e.g. BRK-B (yfinance's dash form) or this filter can
+        # be tightened to an explicit suffix denylist.
+        if feed.source == "sec_edgar" and "." in ticker:
+            continue
         url = feed.url.replace("{ticker}", ticker) if feed.per_ticker else feed.url
         parsed = _parse_feed(url, feed.source, ticker, feed.per_ticker)
         items.extend(parsed)

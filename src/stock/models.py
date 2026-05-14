@@ -7,7 +7,9 @@ import re
 import sqlite3
 import subprocess
 import sys
+import threading
 import time
+from collections import deque
 from datetime import datetime, timezone
 from typing import Any, TypedDict
 
@@ -75,6 +77,85 @@ CODEX_CLI_CORE_BIN: str = "codex"
 CODEX_CLI_CORE_DEFAULT_MODEL: str = ""  # blank = let codex pick its default
 CODEX_CLI_CORE_TIMEOUT_SECS: int = 600
 CODEX_CLI_CORE_MODEL_NAME: str = "codex-cli-session"  # the key in PRICING
+
+# F17c: credit/usage-limit detection + circuit breaker. When codex hits a
+# ChatGPT-plan quota it may EITHER exit non-zero with a limit message in
+# stderr (already caught) OR exit 0 and emit a "rate-limited" apology into
+# the response file (would pass through silently otherwise). We scan both
+# channels for known signatures, record a hit, and after a small threshold
+# in a short window we open the circuit -- routing every subsequent core
+# call straight to claude_cli for a cooldown period rather than hammering
+# a known-capped backend (e.g. 26 watchlist predictions back-to-back).
+#
+# Patterns are conservative: clearly part of an error/refusal message, not
+# generic content. Tighten if false positives appear in production.
+_CODEX_CREDIT_LIMIT_RE = re.compile(
+    r"rate[\s_-]?limit"
+    r"|quota[ ]?exceeded"
+    r"|usage[ ]?limit"
+    r"|credit[ ]?limit"
+    r"|plan[ ]?(limit|quota)"
+    r"|weekly[ ]?limit"
+    r"|HTTP[ ]?429"
+    r"|too[ ]many[ ]requests"
+    r"|exceeded[ ]your",
+    re.IGNORECASE,
+)
+
+CODEX_CIRCUIT_HITS_THRESHOLD: int = 2          # this many hits ...
+CODEX_CIRCUIT_WINDOW_SECS: float = 300.0       # ... within this window ...
+CODEX_CIRCUIT_COOLDOWN_SECS: float = 1800.0    # ... opens the breaker for this long
+
+_codex_circuit_lock = threading.Lock()
+_codex_circuit_hits: deque[float] = deque(maxlen=CODEX_CIRCUIT_HITS_THRESHOLD * 4)
+_codex_circuit_open_until: float = 0.0  # epoch seconds when circuit re-arms
+
+
+def _record_codex_credit_hit() -> None:
+    """Record a credit-limit hit; open the breaker if threshold reached within window."""
+    global _codex_circuit_open_until
+    now = time.time()
+    with _codex_circuit_lock:
+        _codex_circuit_hits.append(now)
+        # Drop entries outside the window so old hits don't keep triggering opens
+        cutoff = now - CODEX_CIRCUIT_WINDOW_SECS
+        while _codex_circuit_hits and _codex_circuit_hits[0] < cutoff:
+            _codex_circuit_hits.popleft()
+        if (
+            len(_codex_circuit_hits) >= CODEX_CIRCUIT_HITS_THRESHOLD
+            and now >= _codex_circuit_open_until
+        ):
+            _codex_circuit_open_until = now + CODEX_CIRCUIT_COOLDOWN_SECS
+            logger.warning(
+                "codex credit-limit breaker OPEN until %s -- routing core calls"
+                " to claude_cli for the next %d minutes",
+                datetime.fromtimestamp(
+                    _codex_circuit_open_until, tz=timezone.utc,
+                ).isoformat(),
+                int(CODEX_CIRCUIT_COOLDOWN_SECS / 60),
+            )
+
+
+def _is_codex_circuit_open() -> bool:
+    """Return True if the codex circuit is currently open (skip codex entirely)."""
+    with _codex_circuit_lock:
+        return time.time() < _codex_circuit_open_until
+
+
+def _codex_circuit_reset() -> None:
+    """Manually clear circuit state. Used by tests; can also be exposed via CLI later."""
+    global _codex_circuit_open_until
+    with _codex_circuit_lock:
+        _codex_circuit_hits.clear()
+        _codex_circuit_open_until = 0.0
+
+
+def _looks_like_codex_credit_limit(*chunks: str) -> bool:
+    """Return True if any of `chunks` matches a known credit/limit signature."""
+    for chunk in chunks:
+        if chunk and _CODEX_CREDIT_LIMIT_RE.search(chunk):
+            return True
+    return False
 
 
 class ChatMessage(TypedDict):
@@ -584,11 +665,8 @@ class CodexCliClient:
 
             duration_ms = int((time.perf_counter() - start) * 1000)
 
-            if proc.returncode != 0:
-                raise CodexCliUnavailable(
-                    f"`codex exec` exit={proc.returncode}: {(proc.stderr or '').strip()[:500]}"
-                )
-
+            # Read out-file early -- both exit paths (success / non-zero) may
+            # need to inspect it for the credit-limit signature.
             try:
                 with open(out_path, encoding="utf-8") as f:
                     content = f.read().strip()
@@ -599,6 +677,24 @@ class CodexCliClient:
 
             if "<think>" in content:
                 content = strip_thinking(content)
+
+            # Credit/usage limit detection. Codex may EITHER exit non-zero with
+            # the limit message in stderr, OR exit 0 with a "rate-limited"
+            # apology in the response file. Treat both as CodexCliUnavailable
+            # so the fallback wrapper drops to claude_cli, and record the hit
+            # against the circuit breaker so we stop hammering a capped
+            # backend across a 26-ticker fan-out.
+            if _looks_like_codex_credit_limit(proc.stderr or "", content):
+                _record_codex_credit_hit()
+                raise CodexCliUnavailable(
+                    f"codex hit credit/usage limit for caller={caller}: "
+                    f"{((proc.stderr or '') or content)[:300].strip()}"
+                )
+
+            if proc.returncode != 0:
+                raise CodexCliUnavailable(
+                    f"`codex exec` exit={proc.returncode}: {(proc.stderr or '').strip()[:500]}"
+                )
 
             if not content:
                 raise CodexCliUnavailable(
@@ -672,7 +768,27 @@ class CodexWithClaudeFallback:
         codex_cli backend returns "" (let codex pick) or whatever
         CORE_CODEX_MODEL was set to. That value is not a valid Claude model id,
         so on fallback we ignore it and use the Claude default explicitly.
+
+        Circuit-breaker behavior: once enough credit-limit hits have accrued in
+        a short window, we route every call directly to claude_cli for the
+        cooldown period without touching codex at all. Avoids burning 26
+        watchlist predictions each banging on a known-capped backend before
+        falling back individually.
         """
+        # Short-circuit when the breaker is open: skip codex, log distinctly
+        if _is_codex_circuit_open():
+            logger.info(
+                "codex circuit open -- routing %s directly to claude_cli", caller,
+            )
+            return self._claude.chat(
+                messages=messages,
+                model=CLAUDE_CLI_CORE_DEFAULT_MODEL,
+                max_tokens=max_tokens,
+                conn=conn,
+                caller=f"{caller}.codex_circuit_open_claude",
+                cached_system=cached_system,
+            )
+
         try:
             return self._codex.chat(
                 messages=messages,

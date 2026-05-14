@@ -455,6 +455,15 @@ def get_conn(db_path: str | None = None) -> sqlite3.Connection:
     # WAL mode is ignored for :memory: databases
     if db_path != ":memory:":
         conn.execute("PRAGMA journal_mode = WAL")
+        # WAL alone permits concurrent readers during a write but still
+        # serializes writers. Without busy_timeout, a second writer raises
+        # `database is locked` immediately. Codex/claude_cli core calls can
+        # take 10-30s each and hold the connection open; during a fan-out
+        # ingest cycle (~26 tickers concurrent) the 5s ceiling we shipped
+        # initially burst-failed 30 writes in 4 min. 30s comfortably absorbs
+        # the worst-case codex round-trip while staying short enough to
+        # surface a truly stuck writer.
+        conn.execute("PRAGMA busy_timeout = 30000")
 
     _ensure_schema(conn)
     return conn

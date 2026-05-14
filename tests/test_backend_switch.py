@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import sqlite3
 import subprocess
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -10,6 +11,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from stock.config import get_settings
+from stock import models as stock_models
 from stock.models import (
     CLAUDE_CLI_CORE_MODEL_NAME,
     CODEX_CLI_CORE_MODEL_NAME,
@@ -20,9 +22,31 @@ from stock.models import (
     CodexCliUnavailable,
     CodexWithClaudeFallback,
     LLMClient,
+    _codex_circuit_reset,
+    _is_codex_circuit_open,
     get_core_client,
     get_core_model,
 )
+
+
+@pytest.fixture(autouse=True)
+def _clear_codex_circuit() -> None:
+    """Every test starts with a clean circuit-breaker so prior hits don't leak."""
+    _codex_circuit_reset()
+    yield
+    _codex_circuit_reset()
+
+
+def _fake_codex_subprocess_with_stderr(
+    payload: str, stderr: str = "", returncode: int = 0,
+):
+    """Like _fake_codex_subprocess but with configurable stderr + exit code so
+    tests can simulate codex's credit-limit emissions on either channel."""
+    def _side_effect(argv, **kwargs):
+        out_idx = argv.index("-o") + 1
+        Path(argv[out_idx]).write_text(payload, encoding="utf-8")
+        return MagicMock(returncode=returncode, stdout="header noise", stderr=stderr)
+    return _side_effect
 
 
 def _fake_codex_subprocess(payload: str):
@@ -499,3 +523,126 @@ def test_research_core_chat_helper_falls_back(
     cli_client.chat.assert_called_once()
     minimax_client.chat.assert_called_once()
     assert "fallback" in minimax_client.chat.call_args.kwargs["caller"]
+
+
+# ---------------------------------------------------------------------------
+# F17c: credit-limit detection + circuit breaker
+# ---------------------------------------------------------------------------
+
+
+def test_codex_credit_limit_in_stderr_raises_unavailable(
+    mem_db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """codex exits non-zero with 'rate limit' in stderr -> CodexCliUnavailable
+    AND the breaker records a hit."""
+    _seed_settings(monkeypatch)
+    side = _fake_codex_subprocess_with_stderr(
+        payload="",
+        stderr="Error: rate limit reached on your ChatGPT plan",
+        returncode=1,
+    )
+    with patch("subprocess.run", side_effect=side):
+        client = CodexCliClient()
+        msgs: list[ChatMessage] = [{"role": "user", "content": "x"}]
+        with pytest.raises(CodexCliUnavailable) as excinfo:
+            client.chat(
+                messages=msgs, model="", max_tokens=10,
+                conn=mem_db, caller="test.credit_stderr",
+            )
+        assert "credit/usage limit" in str(excinfo.value)
+    # One hit recorded -> breaker stays closed (threshold is 2)
+    assert _is_codex_circuit_open() is False
+
+
+def test_codex_credit_limit_in_content_raises_unavailable(
+    mem_db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """codex exits 0 but writes a rate-limit apology to the -o file ->
+    still detected as credit-limit, raises CodexCliUnavailable."""
+    _seed_settings(monkeypatch)
+    side = _fake_codex_subprocess_with_stderr(
+        payload="I'm sorry, you have exceeded your weekly limit on this plan.",
+        stderr="",
+        returncode=0,
+    )
+    with patch("subprocess.run", side_effect=side):
+        client = CodexCliClient()
+        msgs: list[ChatMessage] = [{"role": "user", "content": "x"}]
+        with pytest.raises(CodexCliUnavailable) as excinfo:
+            client.chat(
+                messages=msgs, model="", max_tokens=10,
+                conn=mem_db, caller="test.credit_content",
+            )
+        assert "credit/usage limit" in str(excinfo.value)
+
+
+def test_codex_circuit_opens_after_threshold_hits(
+    mem_db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Two credit-limit hits within the window open the breaker."""
+    _seed_settings(monkeypatch)
+    side = _fake_codex_subprocess_with_stderr(
+        payload="", stderr="rate limit exceeded", returncode=1,
+    )
+    client = CodexCliClient()
+    msgs: list[ChatMessage] = [{"role": "user", "content": "x"}]
+    with patch("subprocess.run", side_effect=side):
+        for i in range(stock_models.CODEX_CIRCUIT_HITS_THRESHOLD):
+            with pytest.raises(CodexCliUnavailable):
+                client.chat(
+                    messages=msgs, model="", max_tokens=10,
+                    conn=mem_db, caller=f"test.threshold_{i}",
+                )
+    assert _is_codex_circuit_open() is True
+
+
+def test_codex_circuit_open_routes_directly_to_claude(
+    mem_db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When the breaker is open, the wrapper bypasses codex entirely and goes
+    straight to claude_cli with a distinguishable caller suffix."""
+    _seed_settings(monkeypatch)
+    # Force the circuit open by setting the deadline in the future
+    stock_models._codex_circuit_open_until = time.time() + 60.0
+
+    wrapper = CodexWithClaudeFallback()
+    claude_resp = MagicMock(content="claude rescue", cost_usd=0.0)
+    with (
+        patch.object(wrapper._codex, "chat") as codex_chat,
+        patch.object(wrapper._claude, "chat", return_value=claude_resp) as claude_chat,
+    ):
+        msgs: list[ChatMessage] = [{"role": "user", "content": "hi"}]
+        response = wrapper.chat(
+            messages=msgs, model="", max_tokens=10,
+            conn=mem_db, caller="test.circuit_open",
+        )
+    codex_chat.assert_not_called()
+    claude_chat.assert_called_once()
+    assert claude_chat.call_args.kwargs["caller"].endswith(".codex_circuit_open_claude")
+    assert response.content == "claude rescue"
+
+
+def test_codex_circuit_closes_after_cooldown(
+    mem_db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Once the cooldown elapses, the wrapper attempts codex again."""
+    _seed_settings(monkeypatch)
+    # Open the circuit, then advance time past the cooldown
+    stock_models._codex_circuit_open_until = time.time() + 0.001
+    time.sleep(0.005)
+    assert _is_codex_circuit_open() is False
+
+    wrapper = CodexWithClaudeFallback()
+    codex_resp = MagicMock(content="codex back online", cost_usd=0.0)
+    with (
+        patch.object(wrapper._codex, "chat", return_value=codex_resp) as codex_chat,
+        patch.object(wrapper._claude, "chat") as claude_chat,
+    ):
+        msgs: list[ChatMessage] = [{"role": "user", "content": "hi"}]
+        response = wrapper.chat(
+            messages=msgs, model="", max_tokens=10,
+            conn=mem_db, caller="test.circuit_closed",
+        )
+    codex_chat.assert_called_once()
+    claude_chat.assert_not_called()
+    assert response.content == "codex back online"
