@@ -16,16 +16,14 @@ from stock.models import (
     ChatResponse,
     CostCeilingError,
     check_cost_ceiling,
-    get_client,
+    get_core_client,
+    get_core_model,
 )
 
 logger = logging.getLogger(__name__)
 
 REWRITE_PROMPT_PATH: str = "prompts/rewrite_prompt.txt"
 REWRITE_MAX_TOKENS: int = 1500
-OPUS_BUDGET_THRESHOLD: float = 1.0
-OPUS_MODEL: str = "claude-opus-4-7"
-MINIMAX_FALLBACK_MODEL: str = "MiniMax-M1-80k"
 ALLOWED_TARGETS: tuple[str, ...] = (
     "prompts/research.txt",
     "data/rules/current.md",
@@ -100,28 +98,6 @@ def _gather_instruction_excerpt(
     return summary, excerpt
 
 
-def _choose_provider_and_model(conn: sqlite3.Connection) -> tuple[str, str]:
-    """Pick claude-opus when headroom permits, else MiniMax fallback."""
-    settings = get_settings()
-    if not settings.anthropic_api_key:
-        return ("minimax", MINIMAX_FALLBACK_MODEL)
-
-    today_midnight = (
-        datetime.now(timezone.utc)
-        .replace(hour=0, minute=0, second=0, microsecond=0)
-        .isoformat()
-    )
-    row = conn.execute(
-        "SELECT COALESCE(SUM(cost_usd), 0.0) FROM llm_calls WHERE created_at >= ?",
-        (today_midnight,),
-    ).fetchone()
-    today_spend: float = row[0] if row else 0.0
-    remaining = settings.daily_cost_ceiling_usd - today_spend
-    if remaining >= OPUS_BUDGET_THRESHOLD:
-        return ("claude", OPUS_MODEL)
-    return ("minimax", MINIMAX_FALLBACK_MODEL)
-
-
 _PATCH_RE = re.compile(r"<patch>(.*?)</patch>", re.DOTALL | re.IGNORECASE)
 _TARGET_RE = re.compile(r"<target>\s*(.*?)\s*</target>", re.DOTALL | re.IGNORECASE)
 _BEFORE_RE = re.compile(
@@ -184,10 +160,12 @@ def propose_rewrite(
         current_rules=current_rules,
     )
 
-    provider, model = _choose_provider_and_model(conn)
+    # Route through the active core backend (codex_cli -> claude_cli fallback).
+    client = get_core_client()
+    model = get_core_model()
+    provider = client.provider
     messages: list[ChatMessage] = [{"role": "user", "content": user_message}]
     try:
-        client = get_client(provider)
         response: ChatResponse = client.chat(
             messages=messages,
             model=model,

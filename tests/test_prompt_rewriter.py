@@ -191,8 +191,10 @@ def test_propose_rewrite_filters_disallowed(
 </patch>
 """)
     fake_client = MagicMock()
+    fake_client.provider = "codex_cli"
     fake_client.chat = MagicMock(return_value=bad_response)
-    monkeypatch.setattr("stock.prompt_rewriter.get_client", lambda p: fake_client)
+    monkeypatch.setattr("stock.prompt_rewriter.get_core_client", lambda: fake_client)
+    monkeypatch.setattr("stock.prompt_rewriter.get_core_model", lambda: "codex-cli-session")
 
     out = propose_rewrite([cid], mem_db)
     assert out == []
@@ -223,8 +225,10 @@ def test_propose_rewrite_diff_size_cap(
 </patch>
 """)
     fake_client = MagicMock()
+    fake_client.provider = "codex_cli"
     fake_client.chat = MagicMock(return_value=response)
-    monkeypatch.setattr("stock.prompt_rewriter.get_client", lambda p: fake_client)
+    monkeypatch.setattr("stock.prompt_rewriter.get_core_client", lambda: fake_client)
+    monkeypatch.setattr("stock.prompt_rewriter.get_core_model", lambda: "codex-cli-session")
 
     out = propose_rewrite([cid], mem_db)
     assert out == []

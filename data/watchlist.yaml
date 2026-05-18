@@ -34,6 +34,15 @@ tickers:
   - GOOGL
   - META
   - ORCL
+  # ---- Layer 2/3/Edge per 三层接力 framework (boss directive 2026-05-17) ----
+  # The article's thesis: Layer 1 has moved; the next 10x is in
+  # gateway/compressor/edge. These are the public-market proxies.
+  - CRM    # L3 enterprise AI scheduler (Agentforce); article cites Salesforce lineage
+  - GTLB   # L3 AI dev gateway (Duo) — sits between codegen models + dev workflow
+  - TWLO   # L3 comms layer for AI agents — agent↔human routing
+  - AMBA   # L2/Edge generative-AI-at-edge SoCs (CV3); cameras, auto, robotics
+  - HIMX   # Edge micro-cap: display drivers + AI vision (smart glasses / AR)
+  - CRUS   # Edge: Apple supplier — on-device Apple Intelligence direct beneficiary
   # ---- 中国半导体 / Chinese semiconductor (boss directive 2026-05-05) ----
   # Focus: equipment + materials + foundry, less downstream IC design.
   # The "find before it explodes" angle = small-mid caps with niche

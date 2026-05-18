@@ -14,7 +14,13 @@ from pydantic import BaseModel
 from stock.bandit import get_ticker_bucket, update_arm_posterior
 from stock.calibrate import fit_calibration
 from stock.config import get_settings
-from stock.models import ChatMessage, ChatResponse, check_cost_ceiling, get_client
+from stock.models import (
+    ChatMessage,
+    ChatResponse,
+    check_cost_ceiling,
+    get_core_client,
+    get_core_model,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -66,8 +72,6 @@ def refit_calibration(conn: sqlite3.Connection) -> int | None:
 
 RULES_DIR: str = "data/rules"
 REFLECT_PROMPT_PATH: str = "prompts/reflect.txt"
-OPUS_BUDGET_THRESHOLD: float = 1.0
-OPUS_MODEL: str = "claude-opus-4-7"
 REFLECT_MAX_TOKENS: int = 2000
 
 
@@ -96,32 +100,6 @@ def _load_reflect_prompt() -> tuple[str, str]:
     system_part = parts[0].replace("[SYSTEM]", "").strip()
     user_part = parts[1].strip() if len(parts) > 1 else ""
     return system_part, user_part
-
-
-def _choose_reflect_provider(conn: sqlite3.Connection) -> tuple[str, str]:
-    """Pick provider and model for reflection based on budget and API key availability."""
-    settings = get_settings()
-
-    # No Anthropic key means MiniMax only
-    if not settings.anthropic_api_key:
-        return ("minimax", "MiniMax-M1-80k")
-
-    # Check remaining daily budget
-    today_midnight = (
-        datetime.now(timezone.utc)
-        .replace(hour=0, minute=0, second=0, microsecond=0)
-        .isoformat()
-    )
-    row = conn.execute(
-        "SELECT COALESCE(SUM(cost_usd), 0.0) FROM llm_calls WHERE created_at >= ?",
-        (today_midnight,),
-    ).fetchone()
-    today_spend: float = row[0] if row else 0.0
-    remaining = settings.daily_cost_ceiling_usd - today_spend
-
-    if remaining >= OPUS_BUDGET_THRESHOLD:
-        return ("claude", OPUS_MODEL)
-    return ("minimax", "MiniMax-M1-80k")
 
 
 def _get_recent_prediction_outcomes(
@@ -303,8 +281,10 @@ def reflect_weekly(
     # Read current rules from disk
     current_rules = _get_current_rules_text()
 
-    # Choose provider and model based on budget
-    provider, model = _choose_reflect_provider(conn)
+    # Route through the active core backend; record provider/model for ReflectResult.
+    client = get_core_client()
+    model = get_core_model()
+    provider = client.provider
 
     # Load and format the reflection prompt
     system_template, user_template = _load_reflect_prompt()
@@ -321,7 +301,6 @@ def reflect_weekly(
 
     # Call LLM for reflection
     messages: list[ChatMessage] = [{"role": "user", "content": user_message}]
-    client = get_client(provider)
     response: ChatResponse = client.chat(
         messages=messages,
         model=model,

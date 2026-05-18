@@ -11,7 +11,6 @@ import pytest
 
 from stock.config import Settings
 from stock.learn import (
-    _choose_reflect_provider,
     _ensure_seed_rules,
     _extract_rules_text,
     _format_prediction_outcomes,
@@ -240,69 +239,19 @@ def test_get_next_version_existing(mem_db: sqlite3.Connection) -> None:
 
 
 # ---------------------------------------------------------------------------
-# _choose_reflect_provider tests
-# ---------------------------------------------------------------------------
-
-
-def test_choose_reflect_provider_claude(
-    mem_db: sqlite3.Connection, env_settings: Settings, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """With Anthropic key and sufficient budget, returns claude."""
-    monkeypatch.setattr(env_settings, "anthropic_api_key", "sk-test")
-    monkeypatch.setattr(env_settings, "daily_cost_ceiling_usd", 5.0)
-    monkeypatch.setattr("stock.learn.get_settings", lambda: env_settings)
-
-    provider, model = _choose_reflect_provider(mem_db)
-    assert provider == "claude"
-    assert model == "claude-opus-4-7"
-
-
-def test_choose_reflect_provider_minimax_no_key(
-    mem_db: sqlite3.Connection, env_settings: Settings, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Empty Anthropic key falls back to minimax."""
-    monkeypatch.setattr(env_settings, "anthropic_api_key", "")
-    monkeypatch.setattr("stock.learn.get_settings", lambda: env_settings)
-
-    provider, model = _choose_reflect_provider(mem_db)
-    assert provider == "minimax"
-    assert model == "MiniMax-M1-80k"
-
-
-def test_choose_reflect_provider_minimax_low_budget(
-    mem_db: sqlite3.Connection, env_settings: Settings, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Remaining budget below threshold falls back to minimax."""
-    monkeypatch.setattr(env_settings, "anthropic_api_key", "sk-test")
-    monkeypatch.setattr(env_settings, "daily_cost_ceiling_usd", 1.00)
-    monkeypatch.setattr("stock.learn.get_settings", lambda: env_settings)
-
-    # Insert enough spend to leave remaining < $1
-    mem_db.execute(
-        "INSERT INTO llm_calls (model, provider, input_tokens, output_tokens,"
-        " cost_usd, duration_ms, caller, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        ("test", "test", 100, 100, 0.50, 100, "test",
-         datetime.now(timezone.utc).isoformat()),
-    )
-    mem_db.commit()
-
-    provider, model = _choose_reflect_provider(mem_db)
-    assert provider == "minimax"
-    assert model == "MiniMax-M1-80k"
-
-
-# ---------------------------------------------------------------------------
 # reflect_weekly tests
 # ---------------------------------------------------------------------------
 
 
-@patch("stock.learn.get_client")
+@patch("stock.learn.get_core_model", return_value="codex-cli-session")
+@patch("stock.learn.get_core_client")
 @patch("stock.learn.check_cost_ceiling")
 @patch("stock.learn.get_settings")
 def test_reflect_weekly_writes_version(
     mock_settings: MagicMock,
     mock_ceiling: MagicMock,
     mock_get_client: MagicMock,
+    mock_model: MagicMock,
     mem_db: sqlite3.Connection,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -330,6 +279,7 @@ def test_reflect_weekly_writes_version(
     mock_client.chat.return_value = _make_chat_response(
         "<rules>\n# Updated rules\n- New rule A.\n</rules>"
     )
+    mock_client.provider = "codex_cli"
     mock_get_client.return_value = mock_client
 
     result = reflect_weekly(mem_db)
@@ -354,13 +304,15 @@ def test_reflect_weekly_writes_version(
     _load_reflect_prompt.cache_clear()
 
 
-@patch("stock.learn.get_client")
+@patch("stock.learn.get_core_model", return_value="codex-cli-session")
+@patch("stock.learn.get_core_client")
 @patch("stock.learn.check_cost_ceiling")
 @patch("stock.learn.get_settings")
 def test_reflect_weekly_dry_run(
     mock_settings: MagicMock,
     mock_ceiling: MagicMock,
     mock_get_client: MagicMock,
+    mock_model: MagicMock,
     mem_db: sqlite3.Connection,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -385,6 +337,7 @@ def test_reflect_weekly_dry_run(
     mock_client.chat.return_value = _make_chat_response(
         "<rules>\n# Dry run rules\n- Rule X.\n</rules>"
     )
+    mock_client.provider = "codex_cli"
     mock_get_client.return_value = mock_client
 
     result = reflect_weekly(mem_db, dry_run=True)
@@ -404,13 +357,15 @@ def test_reflect_weekly_dry_run(
     _load_reflect_prompt.cache_clear()
 
 
-@patch("stock.learn.get_client")
+@patch("stock.learn.get_core_model", return_value="codex-cli-session")
+@patch("stock.learn.get_core_client")
 @patch("stock.learn.check_cost_ceiling")
 @patch("stock.learn.get_settings")
 def test_reflect_weekly_version_increment(
     mock_settings: MagicMock,
     mock_ceiling: MagicMock,
     mock_get_client: MagicMock,
+    mock_model: MagicMock,
     mem_db: sqlite3.Connection,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -443,6 +398,7 @@ def test_reflect_weekly_version_increment(
     mock_client.chat.return_value = _make_chat_response(
         "<rules>\n# V4 rules\n- Rule V4.\n</rules>"
     )
+    mock_client.provider = "codex_cli"
     mock_get_client.return_value = mock_client
 
     result = reflect_weekly(mem_db)
@@ -453,13 +409,15 @@ def test_reflect_weekly_version_increment(
     _load_reflect_prompt.cache_clear()
 
 
-@patch("stock.learn.get_client")
+@patch("stock.learn.get_core_model", return_value="codex-cli-session")
+@patch("stock.learn.get_core_client")
 @patch("stock.learn.check_cost_ceiling")
 @patch("stock.learn.get_settings")
 def test_reflect_weekly_no_outcomes(
     mock_settings: MagicMock,
     mock_ceiling: MagicMock,
     mock_get_client: MagicMock,
+    mock_model: MagicMock,
     mem_db: sqlite3.Connection,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -484,6 +442,7 @@ def test_reflect_weekly_no_outcomes(
     mock_client.chat.return_value = _make_chat_response(
         "<rules>\n# Rules from empty.\n</rules>"
     )
+    mock_client.provider = "codex_cli"
     mock_get_client.return_value = mock_client
 
     result = reflect_weekly(mem_db)
@@ -499,13 +458,15 @@ def test_reflect_weekly_no_outcomes(
     _load_reflect_prompt.cache_clear()
 
 
-@patch("stock.learn.get_client")
+@patch("stock.learn.get_core_model", return_value="codex-cli-session")
+@patch("stock.learn.get_core_client")
 @patch("stock.learn.check_cost_ceiling")
 @patch("stock.learn.get_settings")
 def test_reflect_weekly_cost_ceiling(
     mock_settings: MagicMock,
     mock_ceiling: MagicMock,
     mock_get_client: MagicMock,
+    mock_model: MagicMock,
     mem_db: sqlite3.Connection,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -532,13 +493,15 @@ def test_reflect_weekly_cost_ceiling(
     _load_reflect_prompt.cache_clear()
 
 
-@patch("stock.learn.get_client")
+@patch("stock.learn.get_core_model", return_value="codex-cli-session")
+@patch("stock.learn.get_core_client")
 @patch("stock.learn.check_cost_ceiling")
 @patch("stock.learn.get_settings")
 def test_reflect_weekly_empty_response(
     mock_settings: MagicMock,
     mock_ceiling: MagicMock,
     mock_get_client: MagicMock,
+    mock_model: MagicMock,
     mem_db: sqlite3.Connection,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -561,6 +524,7 @@ def test_reflect_weekly_empty_response(
 
     mock_client = MagicMock()
     mock_client.chat.return_value = _make_chat_response("")
+    mock_client.provider = "codex_cli"
     mock_get_client.return_value = mock_client
 
     with pytest.raises(RuntimeError, match="empty rules"):
