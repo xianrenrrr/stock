@@ -28,7 +28,7 @@ from stock.research import _core_chat
 logger = logging.getLogger(__name__)
 
 ROUND_MAX_TOKENS: int = 1500
-DEFAULT_LANGUAGE: str = "zh-en"
+DEFAULT_LANGUAGE: str = "zh"  # boss-facing -- pure Chinese per 2026-05-18 directive
 
 # Canonical 4-round structured prompts. Boss explicitly wants closed-loop
 # on tech AND business plus a company chain -- not a summary.
@@ -140,6 +140,13 @@ def _build_round_prompt(
         f"**Topic:** {topic}\n"
         f"**Sector:** {sector} (information / biopharma_ai / energy)\n"
         f"**Output language:** {language}\n\n"
+        f"**Research workflow:** Search and reason in **English** — English "
+        f"sources (papers, IEEE, SemiAnalysis, IR pages, sell-side, FT/WSJ) are "
+        f"far richer for tech-trend analysis. **Only translate the FINAL "
+        f"deliverable body into {language}.** Keep technical terms, company "
+        f"names, paper titles, model names, dates, and URLs in canonical form. "
+        f"Exception: A-share / HK Chinese names — Chinese disclosures are "
+        f"primary source.\n\n"
         f"## Prior rounds in this dive\n\n{history}\n\n"
         f"{instructions.format(language=language)}"
     )

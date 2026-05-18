@@ -671,7 +671,7 @@ def _job_daily_tech_dive() -> None:
     conn = get_conn()
     try:
         dive = tech_dive.run_and_persist(
-            topic=topic, sector=sector, conn=conn, language="zh-en",
+            topic=topic, sector=sector, conn=conn, language="zh",
         )
         if dive.rounds:
             logger.info(

@@ -96,12 +96,17 @@ def _build_round_prompt(
     transcript_so_far: list[QARound],
     next_question: str,
     is_final: bool,
+    language: str = "zh",
 ) -> str:
     """Compose the prompt for one round.
 
     Includes the full transcript so the LLM can see what's been established
     and avoid repeating itself; ends with the new question and instructions
     for shape (length, citation discipline, follow-up generation).
+
+    The language directive at the top binds output to Chinese by default --
+    F37 dives are boss-facing artifacts; English seed theses (e.g. operator-
+    written) must not change the answer language.
     """
     history_blocks: list[str] = []
     for r in transcript_so_far:
@@ -123,12 +128,23 @@ def _build_round_prompt(
     )
 
     return (
+        f"**Research workflow:** Conduct ALL web searches, source-gathering, and "
+        f"analytical reasoning in **English** — English-language sources (SEC "
+        f"filings, Bloomberg, FactSet, company IR pages, sell-side notes) are "
+        f"dramatically richer than Chinese-language sources for US and global "
+        f"equities. Reason in English internally. **Only translate the FINAL "
+        f"answer body and the NEXT_QUESTION line into {language}.** Keep ticker "
+        f"symbols, company names, model names, dates, numbers, and URLs in "
+        f"their canonical English/numeric form. Translate only the prose and "
+        f"section headings. Exception: {ticker} is an A-share or HK-listed "
+        f"Chinese name — search Chinese-language disclosures (Eastmoney, "
+        f"巨潮资讯) as the primary source for those.\n\n"
         f"You are doing a deep-dive Q&A research session on {ticker}. The boss's "
         f"explicit instruction: dig deep, see what most people don't see, build "
         f"self-consistent logic, and after each answer ask yourself the next "
         f"follow-up question. Each answer should be 150-300 words, cite specific "
-        f"numbers/filings/dates when possible, and be willing to say 'I don't "
-        f"know' rather than fill space.\n\n"
+        f"numbers/filings/dates when possible, and be willing to say '我不知道' "
+        f"rather than fill space.\n\n"
         f"## Transcript so far\n\n{history}\n\n"
         f"## Now answer this question\n\n"
         f"### Q{len(transcript_so_far) + 1}: {next_question}\n\n"
@@ -156,6 +172,7 @@ def _parse_answer_and_followup(text: str) -> tuple[str, str | None]:
 def run_qa_deepdive(
     *, ticker: str, seed_thesis: str, conn: sqlite3.Connection,
     rounds: int = DEFAULT_ROUNDS,
+    language: str | None = None,
 ) -> QADeepDive:
     """Run a Q&A chain; return the full transcript.
 
@@ -163,9 +180,14 @@ def run_qa_deepdive(
     question (except the final round, which asks for invalidation criteria).
     If the LLM fails to produce a NEXT_QUESTION line, we substitute a generic
     drill-down question rather than abort -- some progress is better than none.
+
+    `language` defaults to settings.research_language (zh). F37 dives are
+    boss-facing; we bind output language explicitly so operator-written
+    English seed theses don't flip the answer language.
     """
     rounds = max(2, min(int(rounds), MAX_ROUNDS))
     settings = get_settings()
+    lang = (language or settings.research_language or "zh").strip() or "zh"
     transcript: list[QARound] = []
     current_q = _opening_question(ticker, seed_thesis)
 
@@ -173,7 +195,9 @@ def run_qa_deepdive(
         is_final = i == rounds
         try:
             check_cost_ceiling(conn, settings)
-            prompt = _build_round_prompt(ticker, transcript, current_q, is_final=is_final)
+            prompt = _build_round_prompt(
+                ticker, transcript, current_q, is_final=is_final, language=lang,
+            )
             response = _core_chat(
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=ANSWER_MAX_TOKENS,

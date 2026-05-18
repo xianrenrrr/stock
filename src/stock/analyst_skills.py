@@ -103,13 +103,19 @@ def _build_skill_prompt(
     return (
         f"{ticker_line}\n"
         f"**Output language:** {language}\n\n"
+        f"**Research workflow:** Search and reason in **English** — English "
+        f"sources (SEC, Bloomberg, FactSet, IR, sell-side) are far richer for "
+        f"US equities. **Only translate the FINAL deliverable body into "
+        f"{language}.** Keep tickers, company names, dates, numbers, and URLs "
+        f"in canonical English/numeric form. Exception: A-share / HK names — "
+        f"Chinese disclosures primary.\n\n"
         f"## Prior rounds in this analysis\n\n{history}\n\n"
         f"{instructions.format(ticker=ticker or 'the ticker', language=language)}"
     )
 
 
 def earnings_review(
-    *, ticker: str, conn: sqlite3.Connection, language: str = "zh-en",
+    *, ticker: str, conn: sqlite3.Connection, language: str = "zh",
 ) -> SkillReport:
     """Run the 3-round earnings review; persist as research_reports."""
     settings = get_settings()
@@ -163,6 +169,13 @@ def earnings_review(
 
 _DD_CHECKLIST_PROMPT: str = (
     "## 尽调清单 / Due-diligence checklist for {ticker}\n\n"
+    "**Research workflow:** Search and reason in **English** — English sources "
+    "(SEC filings, Bloomberg, FactSet, company IR, sell-side) are far richer "
+    "for US/global equities. **Only translate the FINAL checklist body into "
+    "{language}.** Keep tickers, company names, dates, numbers, currency, and "
+    "URLs in canonical English/numeric form. Exception: {ticker} is an "
+    "A-share / HK Chinese name — Chinese disclosures (Eastmoney, 巨潮资讯) "
+    "are primary source.\n\n"
     "Produce a 12-item checklist for {ticker}, organized for a forward-looking "
     "long thesis. In {language}:\n\n"
     "Cover EXACTLY these categories, with concrete numbers / dates / sources "
@@ -186,7 +199,7 @@ _DD_CHECKLIST_PROMPT: str = (
 
 
 def dd_checklist(
-    *, ticker: str, conn: sqlite3.Connection, language: str = "zh-en",
+    *, ticker: str, conn: sqlite3.Connection, language: str = "zh",
 ) -> SkillReport:
     """Run a single-shot DD checklist; persist as research_reports."""
     settings = get_settings()
@@ -361,6 +374,12 @@ def _build_morning_context(conn: sqlite3.Connection) -> str:
 _MORNING_NOTE_PROMPT: str = (
     "## 今日晨会笔记 / Morning note\n\n"
     "You are writing a TIGHT 1-page morning note for the boss. Output language: {language}.\n\n"
+    "**Research workflow:** Search and reason in **English** — English sources "
+    "(SEC, Bloomberg, FactSet, IR, sell-side, English-language news) are far "
+    "richer for US/global equities. **Only translate the FINAL note body into "
+    "{language}.** Keep tickers, company names, dates, numbers, and URLs in "
+    "canonical English/numeric form. Translate prose and section headings. "
+    "Exception: A-share / HK names — Chinese disclosures primary.\n\n"
     "Use the structured signals below as INPUT (already pulled from our DB). "
     "Synthesize them into a 5-section markdown note. Be opinionated.\n\n"
     "**VOLUME CONVENTION (boss directive 2026-05-09):** When you cite ANY "

@@ -1,0 +1,342 @@
+2026-05-17 23:16:16 stock.orchestrator INFO Log file: pipeline\logs\orchestrator.log (daily rotation, 14 days kept)
+2026-05-17 23:16:17 stock.orchestrator INFO Watchlist: 26 tickers (AMAT, AMD, ASML, AVGO, CEG, COHR, CRDO, DELL, ETN, GOOGL, KLAC, LITE, LRCX, META, MRVL, MSFT, MTSI, MU, MXL, NVDA, ORCL, SMCI, SMTC, TSM, VRT, VST)
+2026-05-17 23:16:17 stock.orchestrator INFO Scheduled: Ingest news/prices/features (2x daily, pre-push) -> 2026-05-18T14:00:00+00:00
+2026-05-17 23:16:17 stock.orchestrator INFO Scheduled: Run predictions on watchlist (2x daily) -> 2026-05-18T14:15:00+00:00
+2026-05-17 23:16:17 stock.orchestrator INFO Scheduled: Score due predictions -> 2026-05-18T21:30:00+00:00
+2026-05-17 23:16:17 stock.orchestrator INFO Scheduled: Weekly reflection -> 2026-05-23T06:00:00+00:00
+2026-05-17 23:16:17 stock.orchestrator INFO Scheduled: Morning web discovery -> 2026-05-19T02:00:00+00:00
+2026-05-17 23:16:17 stock.orchestrator INFO Scheduled: Evening web discovery -> 2026-05-18T14:00:00+00:00
+2026-05-17 23:16:17 stock.orchestrator INFO Scheduled: Daily price/volume anomaly computation -> 2026-05-18T21:35:00+00:00
+2026-05-17 23:16:17 stock.orchestrator INFO Scheduled: Weekly EDGAR Form 4 pull -> 2026-05-24T05:00:00+00:00
+2026-05-17 23:16:17 stock.orchestrator INFO Scheduled: Per-holding weekly health-check deep-dive -> 2026-05-23T07:00:00+00:00
+2026-05-17 23:16:17 stock.orchestrator INFO Scheduled: Classify replies, queue follow-ups, auto-rewrite prompt -> 2026-05-18T06:20:00+00:00
+2026-05-17 23:16:17 stock.orchestrator INFO Scheduled: Run pending auto-queued action items -> 2026-05-18T12:00:00+00:00
+2026-05-17 23:16:17 stock.orchestrator INFO Scheduled: Morning research + WeChat push -> 2026-05-19T02:30:00+00:00
+2026-05-17 23:16:17 stock.orchestrator INFO Scheduled: Evening research + WeChat push -> 2026-05-18T14:30:00+00:00
+2026-05-17 23:16:17 stock.orchestrator INFO Scheduled: Push state to Render free tier + pull boss replies -> 2026-05-18T06:20:00+00:00
+2026-05-17 23:16:17 stock.orchestrator INFO Scheduled: F26 nightly tracked-event verification -> 2026-05-18T21:50:00+00:00
+2026-05-17 23:16:17 stock.orchestrator INFO Scheduled: F33 nightly SQLite online backup -> 2026-05-18T23:30:00+00:00
+2026-05-17 23:16:17 stock.orchestrator INFO Scheduled: F36 unusual options activity scan -> 2026-05-18T21:55:00+00:00
+2026-05-17 23:16:17 stock.orchestrator INFO Scheduled: F38 three-sector smallcap forward-discovery scan -> 2026-05-18T22:15:00+00:00
+2026-05-17 23:16:17 stock.orchestrator INFO Scheduled: F39 weekly AI commercial-loop closure-risk measurement -> 2026-05-18T06:30:00+00:00
+2026-05-17 23:16:17 stock.orchestrator INFO Scheduled: F40 weekly Q&A deep-dive on top-FWP candidates -> 2026-05-23T07:00:00+00:00
+2026-05-17 23:16:17 stock.orchestrator INFO Scheduled: F44 weekly company DD checklist (queue-rotated) -> 2026-05-20T09:15:00+00:00
+2026-05-17 23:16:17 stock.orchestrator INFO Scheduled: F45 weekly entry-zone scan (conviction + DD queue) -> 2026-05-24T06:00:00+00:00
+2026-05-17 23:16:17 stock.orchestrator INFO Scheduled: F46 post-close volume + price snapshot (4:05 PM ET) -> 2026-05-18T20:05:00+00:00
+2026-05-17 23:16:17 stock.orchestrator INFO Scheduled: F19 forward-looking candidate scoring + auto-promote -> 2026-05-18T23:00:00+00:00
+2026-05-17 23:16:17 stock.orchestrator INFO Scheduled: Verify scored theses against post-window evidence -> 2026-05-18T21:40:00+00:00
+2026-05-17 23:16:17 stock.orchestrator INFO Scheduled: Daily grade-and-reply note + follow-ups -> 2026-05-18T21:45:00+00:00
+2026-05-17 23:16:17 stock.orchestrator INFO Scheduled: Daily self-review packet + optional MiniMax proposals -> 2026-05-19T06:00:00+00:00
+2026-05-17 23:16:17 stock.orchestrator INFO Orchestrator running (27 jobs). Press Ctrl+C to stop.
+INFO:     Started server process [18584]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:18790 (Press CTRL+C to quit)
+2026-05-17 23:20:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-17 23:20:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-17 23:25:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-17 23:25:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-17 23:30:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-17 23:30:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-17 23:30:04 stock.orchestrator INFO AI loop measurement: 15 new rows; status=ok; flags={'ok': 13, 'mild': 2}
+2026-05-17 23:35:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-17 23:35:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-17 23:40:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-17 23:40:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-17 23:45:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-17 23:45:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-17 23:50:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-17 23:50:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-17 23:55:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-17 23:55:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 00:00:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 00:00:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 00:05:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 00:05:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 00:10:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 00:10:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 00:15:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 00:15:02 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 00:20:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 00:20:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 00:25:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 00:25:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 00:30:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 00:30:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 00:35:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 00:35:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 00:40:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 00:40:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 00:45:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 00:45:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 00:50:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 00:50:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 00:55:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 00:55:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 01:00:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 01:00:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 01:05:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 01:05:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 01:10:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 01:10:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 01:15:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 01:15:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 01:20:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 01:20:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 01:25:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 01:25:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 01:30:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 01:30:02 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 01:35:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 01:35:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 01:40:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 01:40:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 01:45:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 01:45:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 01:50:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 01:50:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 01:55:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 01:55:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 02:00:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 02:00:04 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 02:05:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 02:05:04 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 02:10:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 02:10:04 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 02:15:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 02:15:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 02:20:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 02:20:02 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 02:25:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 02:25:04 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 02:30:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 02:30:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 02:35:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 02:35:04 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 02:40:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 02:40:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 02:45:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 02:45:02 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 02:50:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 02:50:04 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 02:55:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 02:55:04 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 03:00:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 03:00:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 03:05:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 03:05:04 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 03:10:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 03:10:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 03:15:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 03:15:04 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 03:20:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 03:20:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 03:25:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 03:25:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 03:30:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 03:30:04 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 03:35:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 03:35:04 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 03:40:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 03:40:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 03:45:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 03:45:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 03:50:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 03:50:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 03:55:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 03:55:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 04:00:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 04:00:04 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 04:05:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 04:05:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 04:10:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 04:10:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 04:15:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 04:15:04 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 04:20:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 04:20:04 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 04:25:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 04:25:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 04:30:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 04:30:04 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 04:35:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 04:35:05 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 04:40:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 04:40:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 04:45:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 04:45:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 04:50:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 04:50:04 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 04:55:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 04:55:04 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 05:00:00 stock.orchestrator INFO action_queue runner drained=0
+2026-05-18 05:00:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 05:00:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 05:05:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 05:05:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 05:10:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 05:10:02 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 05:15:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 05:15:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 05:20:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 05:20:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 05:25:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 05:25:04 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 05:30:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 05:30:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 05:35:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 05:35:04 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 05:40:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 05:40:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 05:45:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 05:45:04 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 05:50:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 05:50:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 05:55:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 05:55:04 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 06:00:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 06:00:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 06:05:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 06:05:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 06:10:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 06:10:02 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 06:15:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 06:15:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 06:20:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 06:20:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 06:25:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 06:25:02 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 06:30:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 06:30:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 06:35:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 06:35:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 06:40:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 06:40:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 06:45:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 06:45:02 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 06:50:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 06:50:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 06:55:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 06:55:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 07:00:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 07:00:02 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 07:00:29 stock.discover INFO Discovery searches: queries=14 hits=70
+2026-05-18 07:00:38 stock.discover INFO Discovery fetches: ok=3 failed=3
+2026-05-18 07:01:00 stock.orchestrator INFO Discovery id=28 label=morning_2026-05-18 layer=components queries=14 mentions=3 themes=2 cost=$0.0000
+2026-05-18 07:05:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 07:05:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 07:10:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 07:10:02 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 07:13:45 yfinance ERROR HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: 600600.SH"}}}
+2026-05-18 07:13:45 yfinance ERROR $600600.SH: possibly delisted; no timezone found
+2026-05-18 07:13:45 yfinance ERROR 
+1 Failed download:
+2026-05-18 07:13:45 yfinance ERROR ['600600.SH']: possibly delisted; no timezone found
+2026-05-18 07:14:33 stock.ingest.news_rss WARNING Feed https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=INDA&type=8-K&dateb=&owner=include&count=10&output=atom returned error: <unknown>:18:42: not well-formed (invalid token)
+2026-05-18 07:14:34 stock.ingest.news_rss WARNING Feed https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=SMIN&type=8-K&dateb=&owner=include&count=10&output=atom returned error: <unknown>:18:42: not well-formed (invalid token)
+2026-05-18 07:14:35 stock.ingest.news_rss WARNING Feed https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=MCHI&type=8-K&dateb=&owner=include&count=10&output=atom returned error: <unknown>:18:42: not well-formed (invalid token)
+2026-05-18 07:15:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 07:15:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 07:16:00 sentence_transformers.base.model INFO No device provided, using cpu
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-05-18 07:16:02 huggingface_hub.utils._http WARNING Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-05-18 07:16:02 sentence_transformers.base.model INFO Loading SentenceTransformer model from sentence-transformers/all-MiniLM-L6-v2.
+Loading weights:   0%|          | 0/103 [00:00<?, ?it/s]Loading weights: 100%|##########| 103/103 [00:00<00:00, 6709.01it/s]
+[1mBertModel LOAD REPORT[0m from: sentence-transformers/all-MiniLM-L6-v2
+Key                     | Status     |  | 
+------------------------+------------+--+-
+embeddings.position_ids | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED:	can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  7.75it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  7.63it/s]
+2026-05-18 07:16:29 stock.orchestrator INFO Predicted AMAT down (prob_up=0.46, cal=0.31)
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  7.57it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  7.57it/s]
+2026-05-18 07:16:52 stock.orchestrator INFO Predicted AMD down (prob_up=0.47, cal=0.31)
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  9.35it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  9.18it/s]
+2026-05-18 07:17:11 stock.orchestrator INFO Predicted ASML down (prob_up=0.46, cal=0.31)
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  9.19it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  9.19it/s]
+2026-05-18 07:17:36 stock.orchestrator INFO Predicted AVGO down (prob_up=0.47, cal=0.31)
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  8.03it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  8.03it/s]
+2026-05-18 07:17:52 stock.orchestrator INFO Predicted CEG down (prob_up=0.42, cal=0.31)
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|##########| 1/1 [00:00<00:00, 10.11it/s]
+2026-05-18 07:18:17 stock.orchestrator INFO Predicted COHR down (prob_up=0.47, cal=0.31)
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|##########| 1/1 [00:00<00:00, 10.49it/s]
+2026-05-18 07:18:33 stock.orchestrator INFO Predicted CRDO down (prob_up=0.44, cal=0.31)
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|##########| 1/1 [00:00<00:00, 10.16it/s]
+2026-05-18 07:18:50 stock.orchestrator INFO Predicted DELL down (prob_up=0.47, cal=0.31)
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  9.54it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  9.54it/s]
+2026-05-18 07:19:36 stock.orchestrator INFO Predicted ETN down (prob_up=0.45, cal=0.31)
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  8.88it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  8.72it/s]
+2026-05-18 07:19:58 stock.orchestrator INFO Predicted GOOGL up (prob_up=0.56, cal=0.31)
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  8.46it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  8.46it/s]
+2026-05-18 07:20:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 07:20:11 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 07:20:19 stock.orchestrator INFO Predicted KLAC down (prob_up=0.47, cal=0.31)
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  8.98it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  8.98it/s]
+2026-05-18 07:20:53 stock.orchestrator INFO Predicted LITE down (prob_up=0.47, cal=0.31)
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  9.42it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  9.42it/s]
+2026-05-18 07:21:11 stock.orchestrator INFO Predicted LRCX down (prob_up=0.47, cal=0.31)
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  7.84it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  7.84it/s]
+2026-05-18 07:21:30 stock.orchestrator INFO Predicted META down (prob_up=0.46, cal=0.31)
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  6.62it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  6.62it/s]
+2026-05-18 07:21:53 stock.orchestrator INFO Predicted MRVL down (prob_up=0.46, cal=0.31)
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  6.03it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  6.03it/s]
+2026-05-18 07:22:13 stock.orchestrator INFO Predicted MSFT up (prob_up=0.55, cal=0.31)
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  6.79it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  6.70it/s]
+2026-05-18 07:22:34 stock.orchestrator INFO Predicted MTSI down (prob_up=0.46, cal=0.31)
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  5.21it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  5.16it/s]
+2026-05-18 07:22:58 stock.orchestrator INFO Predicted MU down (prob_up=0.47, cal=0.31)
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  5.33it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  5.33it/s]
+2026-05-18 07:23:17 stock.orchestrator INFO Predicted MXL down (prob_up=0.45, cal=0.31)
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  5.60it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  5.60it/s]
+2026-05-18 07:23:35 stock.orchestrator INFO Predicted NVDA down (prob_up=0.48, cal=0.31)
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  5.89it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  5.89it/s]
+2026-05-18 07:23:52 stock.orchestrator INFO Predicted ORCL down (prob_up=0.46, cal=0.31)
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  6.61it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  6.61it/s]
+2026-05-18 07:24:12 stock.orchestrator INFO Predicted SMCI down (prob_up=0.46, cal=0.31)
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  6.63it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  6.54it/s]
+2026-05-18 07:24:39 stock.orchestrator INFO Predicted SMTC down (prob_up=0.46, cal=0.31)
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  5.63it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  5.63it/s]
+2026-05-18 07:24:56 stock.orchestrator INFO Predicted TSM down (prob_up=0.46, cal=0.31)
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  6.49it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  6.49it/s]
+2026-05-18 07:25:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 07:25:10 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 07:25:18 stock.orchestrator INFO Predicted VRT down (prob_up=0.47, cal=0.31)
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  6.32it/s]Batches: 100%|##########| 1/1 [00:00<00:00,  6.24it/s]
+2026-05-18 07:25:37 stock.orchestrator INFO Predicted VST down (prob_up=0.45, cal=0.31)
+2026-05-18 07:30:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 07:30:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 07:31:07 stock.events INFO events.extract: added #12 MXL earnings -> window_end=2026-09-15
+2026-05-18 07:31:07 stock.research INFO events: extracted 1 new tracked event(s) from research 104
+2026-05-18 07:31:07 stock.orchestrator INFO Research generated id=104 layer=components cost=$0.0000
+2026-05-18 07:35:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 07:35:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 07:40:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 07:40:03 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 07:45:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 07:45:04 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 07:50:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 07:50:04 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 08:31:32 apscheduler.executors.default WARNING Run time of job "Classify replies, queue follow-ups, auto-rewrite prompt (trigger: cron[minute='*/5'], next run at: 2026-05-18 15:35:00 UTC)" was missed by 0:01:32.168656
+2026-05-18 08:31:32 apscheduler.executors.default WARNING Run time of job "Push state to Render free tier + pull boss replies (trigger: cron[minute='*/5'], next run at: 2026-05-18 15:35:00 UTC)" was missed by 0:01:32.168656
+2026-05-18 08:35:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 08:35:46 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 08:40:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 08:40:01 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 08:45:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 08:45:01 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 08:50:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 08:50:01 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 08:55:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 08:55:01 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 09:00:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 09:00:01 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 09:05:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 09:05:01 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 09:10:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 09:10:02 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 09:15:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 09:15:01 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
+2026-05-18 09:20:00 stock.orchestrator INFO learn_from_feedback: no new inbound entries
+2026-05-18 09:20:01 stock.orchestrator INFO Render sync: notes=80 tokens=2 replies=0
