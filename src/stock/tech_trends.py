@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -38,7 +37,7 @@ class TechTrend(BaseModel):
 
     id: str
     name: str
-    sector: str           # ai_compute | ai_biopharma | energy
+    sector: str           # ai_compute | ai_biopharma | energy | space_tech | ...
     horizon: str          # "2-3y" | "3-5y" | "4-5y"
     why_now: list[str]
     falsification: list[str]

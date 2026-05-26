@@ -2130,7 +2130,11 @@ def tech_dive_cmd(
 
 @app.command("smallcap-scan")
 def smallcap_scan_cmd(
-    sector: str = typer.Option(None, help="Filter to one sector (ai_semis_smallcap, biopharma_smallcap, ai_dc_energy_smallcap)"),
+    sector: str = typer.Option(
+        None,
+        help="Filter to one field bucket (ai_semis_smallcap, ai_biology_smallcap, "
+        "biopharma_smallcap, ai_dc_energy_smallcap, space_tech_smallcap)",
+    ),
 ) -> None:
     """F38: scan the curated three-sector small-cap universe + persist + print top hits."""
     from stock import smallcap_scanner

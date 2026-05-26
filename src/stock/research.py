@@ -39,6 +39,7 @@ from stock.events import (
     extract_events_from_research,
     recent_events_block,
 )
+from stock.emerging_fields import format_fields_block, load_fields
 from stock.secular import (
     format_theme_block,
     load_themes,
@@ -372,6 +373,7 @@ def generate_daily_research(
     web_discovery_block = format_extractions_for_research(
         get_recent_extractions(conn, hours=12)
     )
+    emerging_fields_block = format_fields_block(load_fields(active_only=True))
     # F16: thesis verification stats so the morning note self-flags
     # "right direction wrong reason" patterns.
     thesis_block = format_thesis_block(compute_thesis_stats(conn, hours=48))
@@ -467,6 +469,7 @@ def generate_daily_research(
         cross_layer_block=cross_layer_block,
         news_block=news_block,
         web_discovery_block=web_discovery_block,
+        emerging_fields_block=emerging_fields_block,
         feedback_block=feedback_block,
         anomaly_block=anomaly_block,
         previous_followups_block=previous_followups_block,

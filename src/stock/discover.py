@@ -7,10 +7,9 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
-
 from pydantic import BaseModel
 
+from stock import emerging_fields
 from stock.config import get_settings
 from stock.models import (
     ChatMessage,
@@ -27,7 +26,7 @@ from stock.supply_chain import (
     pick_focus_layer,
 )
 from stock.webfetch import FetchResult, fetch_many
-from stock.websearch import SearchResult, WebSearchUnavailable, search_many
+from stock.websearch import SearchResult, search_many
 
 logger = logging.getLogger(__name__)
 
@@ -337,6 +336,7 @@ def run_discovery(
         extraction=extraction,
         cost_usd=response.cost_usd,
     )
+    emerging_fields.update_from_themes(extraction.themes)
 
     return DiscoverResult(
         research_id=research_id,

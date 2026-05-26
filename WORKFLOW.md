@@ -11,7 +11,7 @@ files in `pipeline/` describe design history and may not match current code.
 
 ## One-Line Summary
 
-STOCK is a local-first equity research pipeline:
+STOCK is a local-first multi-field equity research pipeline:
 
 1. Ingest prices/news/web context.
 2. Generate predictions and research notes.
@@ -39,6 +39,10 @@ daily loop is:
 
 Weekly jobs include rules reflection, holdings health check, Q&A deep dive,
 SEC Form 4 pull, entry-zone scan, AI-loop measurement, and company DD.
+
+Tracked fields currently include IT/AI semis, AI biology/biopharma, AI-DC
+energy, space tech, and rotating secular themes. Discovery also auto-records
+new AI-driven or breakthrough technology fields in `data/emerging_fields.yaml`.
 
 ## Deep-Dive Reality
 

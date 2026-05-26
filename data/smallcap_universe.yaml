@@ -5,10 +5,11 @@
 # (~$2B before its 20x run; solved fast-deploy DC power; 12-18 months ahead
 # of the consensus narrative).
 #
-# Three sector pillars:
+# Multi-field pillars:
 #   1. ai_semis_smallcap     -- the layer-3+ supply chain plays consensus skips
 #   2. biopharma_smallcap    -- mechanism+ small-mid biotechs ahead of pivotal data
 #   3. ai_dc_energy_smallcap -- physical-power solvers for the AI-DC bottleneck
+#   4. space_tech_smallcap   -- space infrastructure + geospatial AI data layer
 #
 # Each ticker carries:
 #   - niche_bottleneck: the SPECIFIC problem it solves (one sentence)
@@ -62,6 +63,15 @@ universe:
     - {ticker: SDGR,     name: Schrödinger,            mkt_cap_target_usd: 1500000000, niche_bottleneck: "L2 AI-bio: computational chemistry platform (FEP+) with profitable software-licensing floor; Bill Gates-backed; partnerships with MRK/BMY; compresses lead-optimization phase", inflection_signal: "Software revenue ARR growth + partnered-program milestone payments"}
     - {ticker: ABCL,     name: AbCellera,              mkt_cap_target_usd: 1000000000, niche_bottleneck: "L2 AI-bio: AI antibody discovery royalty-platform; first AI-designed antibody in clinic; profitable royalty stream + 80+ partner programs", inflection_signal: "Royalty-bearing program initiations + AI-designed candidate clinical readouts"}
     - {ticker: TEM,      name: Tempus AI,              mkt_cap_target_usd: 8000000000, niche_bottleneck: "L3 AI-bio gateway: genomic + clinical-trial data platform; Larry Ellison-backed; sits between pharma research and patient data — the Salesforce of healthcare AI", inflection_signal: "Pharma partnership ARR growth + new diagnostic test approvals; FY27 EBITDA inflection"}
+
+  # =====================================================================
+  # Space tech — new first-class field (added 2026-05-25)
+  # =====================================================================
+  space_tech_smallcap:
+    - {ticker: PL,       name: Planet Labs,            mkt_cap_target_usd: 1200000000, niche_bottleneck: "Daily earth-observation imagery dataset; AI turns pixels into economic/geospatial signals", inflection_signal: "Enterprise/defense ARR growth + gross-margin expansion"}
+    - {ticker: RKLB,     name: Rocket Lab,             mkt_cap_target_usd: 4000000000, niche_bottleneck: "Small-launch + space-systems vertical integration; public SpaceX-adjacent launch cadence proxy", inflection_signal: "Neutron milestone + backlog conversion"}
+    - {ticker: BKSY,     name: BlackSky Technology,    mkt_cap_target_usd: 500000000,  niche_bottleneck: "Real-time geospatial intelligence for defense; AI-assisted monitoring and alerts", inflection_signal: "Multi-year defense contract wins + Gen-3 satellite deployment"}
+    - {ticker: IRDM,     name: Iridium Communications, mkt_cap_target_usd: 4000000000, niche_bottleneck: "L-band satellite communications network; resilient connectivity for defense/remote IoT", inflection_signal: "Direct-to-device / IoT service revenue acceleration"}
 
   # =====================================================================
   # AI data-center power / cooling small-mid cap (the Bloom Energy template)

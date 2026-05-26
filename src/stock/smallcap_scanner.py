@@ -3,7 +3,7 @@
 Boss directive 2026-05-05: the value is finding names BEFORE they re-rate
 (the Bloom Energy template -- ~$2B before its 20x run, solving a concrete
 near-term bottleneck nobody else was sized for). This scanner walks the
-curated three-sector small-cap universe and scores each ticker on:
+curated multi-field small-cap universe and scores each ticker on:
 
   * mkt_cap_score      -- smaller = higher (caps below $5B prized)
   * revenue_inflection -- latest QoQ revenue growth vs trailing 4Q mean
@@ -23,8 +23,6 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Iterable
-
 import yaml
 from pydantic import BaseModel
 
@@ -64,7 +62,7 @@ class _UniverseRow:
 
 
 def _load_universe(path: str = UNIVERSE_PATH) -> list[_UniverseRow]:
-    """Read the YAML universe and flatten across the 3 sector buckets."""
+    """Read the YAML universe and flatten across all configured sector buckets."""
     p = Path(path)
     if not p.exists():
         logger.warning("smallcap universe not found at %s", path)
@@ -324,6 +322,8 @@ def format_smallcap_block(conn: sqlite3.Connection, *, days: int = 2) -> str:
     if not by_sector:
         return ""
     sector_titles = {
+        "ai_biology_smallcap": "AI biology / AI-bio platforms",
+        "space_tech_smallcap": "Space tech / Space infrastructure",
         "ai_semis_smallcap": "AI semis / 半导体小盘",
         "biopharma_smallcap": "生物制药 / Biopharma",
         "ai_dc_energy_smallcap": "AI DC 能源 / Energy for AI infra",

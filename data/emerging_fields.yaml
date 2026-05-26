@@ -1,0 +1,13 @@
+fields:
+- id: space_tech
+  name: Space Tech
+  status: active
+  source: manual_seed
+  rationale: "New first-class field requested by operator: space infrastructure, satellite data, launch cadence, space defense, and AI-enabled geospatial intelligence."
+  evidence_count: 1
+  first_seen: "2026-05-25T00:00:00+00:00"
+  last_seen: "2026-05-25T00:00:00+00:00"
+  suggested_queries:
+  - "space tech public companies AI geospatial intelligence"
+  - "satellite launch cadence supply chain bottleneck public companies"
+  - "space defense small cap satellite communications stocks"

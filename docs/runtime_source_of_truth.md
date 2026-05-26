@@ -48,6 +48,23 @@ There are 29 active APScheduler jobs in local mode.
 | `web_discovery_morning` | Mon-Fri pre-morning push | Search/fetch/extract web discovery context. | `web_research` |
 | `web_discovery_evening` | Mon-Fri pre-evening push | Search/fetch/extract web discovery context. | `web_research` |
 
+## Tracked Fields
+
+Daily research is now multi-field. Active manually configured fields include:
+
+- IT / AI semis
+- AI biology / biopharma
+- AI-DC energy
+- Space tech
+- Rotating secular themes
+
+`web_discovery` also updates `data/emerging_fields.yaml` when recent discovery
+themes repeatedly point to AI-driven or breakthrough technology shifts such as
+space tech, quantum, robotics/autonomy, fusion, advanced materials, or synthetic
+biology. Candidate fields are shown in the daily research prompt and can be
+promoted into `data/tech_trends.yaml`, `data/smallcap_universe.yaml`, and
+`data/topic_queue.yaml`.
+
 ## Designed But Not Scheduled
 
 | Feature | Current state | How to run manually | Reason |

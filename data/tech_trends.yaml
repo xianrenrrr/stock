@@ -6,8 +6,8 @@
 # shift with a 2-5 year horizon, the SPECIFIC evidence why it's happening
 # now, the falsification signal, and the cleanest vehicles.
 #
-# Categories: ai_compute (4) | ai_biopharma (3) | energy (3) -- balanced
-# per boss's 3-sector framework with AI*biopharma intersection priority.
+# Categories: ai_compute | ai_biopharma | energy | space_tech -- multi-field
+# framework with AI*biopharma and breakthrough-technology priority.
 #
 # The daily research note rotates 1-2 trends per push (deterministic by
 # day-of-year so each trend gets ~36 days/year of airtime). Operators
@@ -259,3 +259,25 @@ trends:
     vehicles_diversified: [OXY, CEG]
     ai_biopharma_combo: false
     enabled: true   # toggle via `stock trend toggle <id>` or edit here directly
+
+  # =====================================================================
+  # Space tech -- satellite data + launch cadence + defense space layer
+  # =====================================================================
+
+  - id: space_ai_geospatial_intelligence
+    name: AI-enabled satellite/geospatial intelligence becoming an enterprise + defense data layer
+    sector: space_tech
+    horizon: "3-5y"
+    why_now:
+      - "Reusable launch cadence reduces satellite refresh cost and compresses revisit time for earth observation"
+      - "Foundation-model vision pipelines can turn raw satellite imagery into queryable economic, climate, logistics, and defense signals"
+      - "Defense budgets are shifting from exquisite single satellites toward proliferated LEO constellations and faster data loops"
+      - "Commercial demand grows where geospatial AI replaces manual image analysis in insurance, agriculture, shipping, mining, and disaster response"
+    falsification:
+      - "If launch cadence stalls or insurance/regulatory costs keep LEO constellation refresh expensive through 2027"
+      - "If geospatial AI customers do not convert pilots into recurring enterprise contracts"
+      - "If defense procurement consolidates around private SpaceX/Anduril-style systems with little public-market pass-through"
+    vehicles_pure_play: [PL]
+    vehicles_diversified: [RKLB, BKSY, IRDM, LMT, NOC]
+    ai_biopharma_combo: false
+    enabled: true
