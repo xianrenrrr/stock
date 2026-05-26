@@ -8,7 +8,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from stock import prompt_rewriter
 from stock.models import ChatResponse
 from stock.prompt_rewriter import (
     ALLOWED_TARGETS,

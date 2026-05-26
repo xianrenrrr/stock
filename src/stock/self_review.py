@@ -10,6 +10,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
+from stock import emailer
 from stock.config import get_settings
 from stock.models import (
     ChatMessage,
@@ -122,6 +123,33 @@ def _section_health(conn: sqlite3.Connection, since: str, until: str) -> str:
         "SELECT COUNT(*) FROM outcomes WHERE scored_at >= ? AND scored_at < ?",
         (since, until),
     ).fetchone()[0]
+    pending_not_due = conn.execute(
+        "SELECT COUNT(*) FROM predictions p"
+        " WHERE p.created_at >= ? AND p.created_at < ?"
+        " AND p.due_at >= ?"
+        " AND p.id NOT IN (SELECT prediction_id FROM outcomes)",
+        (since, until, until),
+    ).fetchone()[0]
+    due_unscored = conn.execute(
+        "SELECT COUNT(*) FROM predictions p"
+        " WHERE p.due_at < ?"
+        " AND p.id NOT IN (SELECT prediction_id FROM outcomes)",
+        (until,),
+    ).fetchone()[0]
+    due_unscored_with_prices = conn.execute(
+        "SELECT COUNT(*) FROM predictions p"
+        " WHERE p.due_at < ?"
+        " AND p.id NOT IN (SELECT prediction_id FROM outcomes)"
+        " AND EXISTS ("
+        "   SELECT 1 FROM prices ep"
+        "   WHERE ep.ticker = p.ticker AND ep.ts <= substr(p.created_at, 1, 10)"
+        " )"
+        " AND EXISTS ("
+        "   SELECT 1 FROM prices xp"
+        "   WHERE xp.ticker = p.ticker AND xp.ts >= substr(p.due_at, 1, 10)"
+        " )",
+        (until,),
+    ).fetchone()[0]
 
     # Anomalies + web discovery
     anomaly_count = conn.execute(
@@ -147,6 +175,13 @@ def _section_health(conn: sqlite3.Connection, since: str, until: str) -> str:
         f" queued={delivery_map.get('queued', 0)}"
     )
     out.append(f"- Predictions: {pred_count} made, {scored_count} scored")
+    out.append(
+        f"  - Pending from this window, not due by window end: {pending_not_due}"
+    )
+    out.append(
+        f"  - Due but unscored by window end: {due_unscored}"
+        f" ({due_unscored_with_prices} have entry/exit prices available)"
+    )
     out.append(f"- Anomalies flagged: {anomaly_count}")
     out.append(f"- Web research extractions: {web_count}")
     return "\n".join(out) + "\n"
@@ -532,6 +567,63 @@ def _git(*args: str, capture: bool = True) -> tuple[int, str, str]:
     return proc.returncode, proc.stdout or "", proc.stderr or ""
 
 
+def _notify_autopilot_failure(*, subject: str, body: str) -> None:
+    """Best-effort email alert for auto-review failures."""
+    result = emailer.send_email(subject=subject, body=body)
+    if not result.sent:
+        logger.warning("auto-review failure email not sent: %s", result.detail)
+
+
+def _attempt_autopilot_test_fix(*, runner: str, test_output: str) -> bool:
+    """Give the same CLI runner one chance to repair failing tests."""
+    import shutil as _shutil_cli
+    import subprocess
+
+    instruction = (
+        "The STOCK auto-review branch made changes, but pytest failed.\n\n"
+        "Fix only the test failure or the code defect that caused it. Do not add "
+        "new features. Run focused tests if needed, then commit the repair.\n\n"
+        "Pytest output:\n"
+        f"{test_output[:12000]}"
+    )
+    if runner == "codex":
+        binary = _shutil_cli.which("codex") or "codex"
+        argv = [
+            binary, "exec",
+            "--skip-git-repo-check",
+            "--dangerously-bypass-approvals-and-sandbox",
+        ]
+        if CODEX_CLI_MODEL:
+            argv.extend(["-m", CODEX_CLI_MODEL])
+    else:
+        binary = _shutil_cli.which("claude") or "claude"
+        argv = [
+            binary, "-p",
+            "--model", CLAUDE_CLI_MODEL,
+            "--dangerously-skip-permissions",
+        ]
+
+    try:
+        proc = subprocess.run(
+            argv,
+            input=instruction,
+            cwd=str(Path.cwd()),
+            timeout=CODEX_CLI_TIMEOUT_SECS if runner == "codex" else CLAUDE_CLI_TIMEOUT_SECS,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+    except Exception as exc:
+        logger.warning("auto-review[%s]: test-fix attempt could not run: %s", runner, exc)
+        return False
+
+    logger.info(
+        "auto-review[%s]: test-fix attempt exit=%d stdout_len=%d stderr_len=%d",
+        runner, proc.returncode, len(proc.stdout or ""), len(proc.stderr or ""),
+    )
+    return proc.returncode == 0
+
+
 def _build_autopilot_instruction(packet: ReviewPacketResult) -> str:
     """Build the daily auto-review instruction handed to the agent CLI.
 
@@ -541,13 +633,11 @@ def _build_autopilot_instruction(packet: ReviewPacketResult) -> str:
     return (
         f"You are doing the daily STOCK auto-review on {packet.date}.\n\n"
         f"Read the operational packet at: {packet.path}\n\n"
-        "**MOST IMPORTANT RULE: doing nothing is the correct answer most days.**\n"
-        "If the packet shows the system running normally -- no errors, no failures,\n"
-        "no drift, no boss complaint that points to a code-level fix -- then EXIT\n"
-        "WITHOUT MAKING ANY CHANGES. Do not invent work to justify the run. Do not\n"
-        "make small style cleanups or refactors. Do not 'improve' code that is fine.\n"
-        "An empty session is a SUCCESS, not a failure.\n\n"
-        "Only act if you find one of these specific signals in the packet:\n"
+        "**AUTO-APPROVAL MODE:** if the packet contains clear evidence for a "
+        "code-level improvement, implement it without asking for manual approval. "
+        "The wrapper runs pytest after you exit; passing tests are the approval "
+        "gate for merge/push.\n\n"
+        "Act when you find one of these signals in the packet:\n"
         "  - A recurring exception or failure (>=2 occurrences)\n"
         "  - A boss feedback message that explicitly asks for behavior the code\n"
         "    doesn't currently support and that F13 (prompt rewriter) cannot fix\n"
@@ -555,6 +645,8 @@ def _build_autopilot_instruction(packet: ReviewPacketResult) -> str:
         "    that maps to a clear code-level cause\n"
         "  - A prompt rewrite stuck in 'pending review' due to byte-mismatch where\n"
         "    the prompt template structure has shifted under the rewriter\n\n"
+        "If there is no evidence-backed code change, exit without changes; do not "
+        "invent style cleanups or refactors.\n\n"
         "If you do find one of those signals, identify the top 1-3 highest-impact\n"
         "CODE-LEVEL improvements with specific evidence cited from the packet.\n\n"
         "Constraints when you DO act:\n"
@@ -606,15 +698,43 @@ def _finalize_autopilot_branch(
         encoding="utf-8",
     )
     if test_proc.returncode != 0:
+        failed_output = (test_proc.stdout or "") + "\n" + (test_proc.stderr or "")
         logger.warning(
-            "auto-review[%s]: pytest failed (exit=%d); leaving branch %s for review",
+            "auto-review[%s]: pytest failed (exit=%d); trying one repair pass on %s",
             runner, test_proc.returncode, branch,
         )
-        return False
+        _attempt_autopilot_test_fix(runner=runner, test_output=failed_output)
+        test_proc = subprocess.run(
+            ["python", "-m", "pytest", "-q", "--tb=line"],
+            cwd=str(Path.cwd()),
+            capture_output=True,
+            text=True,
+            timeout=PYTEST_TIMEOUT_SECS,
+            encoding="utf-8",
+        )
+        if test_proc.returncode != 0:
+            logger.warning(
+                "auto-review[%s]: pytest still failed; leaving branch %s for review",
+                runner, branch,
+            )
+            _notify_autopilot_failure(
+                subject=f"STOCK auto-review failed tests on {branch}",
+                body=(
+                    "Auto-review made changes and tried one automatic repair pass, "
+                    "but pytest still failed. The branch was left for inspection.\n\n"
+                    f"Branch: {branch}\nRunner: {runner}\n\n"
+                    f"{((test_proc.stdout or '') + chr(10) + (test_proc.stderr or ''))[:12000]}"
+                ),
+            )
+            return False
 
     rc, _, err = _git("checkout", "main")
     if rc != 0:
         logger.warning("auto-review[%s]: checkout main failed: %s", runner, err)
+        _notify_autopilot_failure(
+            subject=f"STOCK auto-review could not checkout main from {branch}",
+            body=f"Runner: {runner}\nBranch: {branch}\n\n{err[:4000]}",
+        )
         return False
     rc, _, err = _git("merge", "--ff-only", branch)
     if rc != 0:
@@ -622,10 +742,18 @@ def _finalize_autopilot_branch(
             "auto-review[%s]: ff-merge of %s into main failed: %s", runner, branch, err,
         )
         _git("checkout", branch)
+        _notify_autopilot_failure(
+            subject=f"STOCK auto-review merge failed for {branch}",
+            body=f"Runner: {runner}\nBranch: {branch}\n\n{err[:4000]}",
+        )
         return False
     rc, _, err = _git("push", "origin", "main")
     if rc != 0:
         logger.warning("auto-review[%s]: push failed: %s", runner, err)
+        _notify_autopilot_failure(
+            subject=f"STOCK auto-review push failed for {branch}",
+            body=f"Runner: {runner}\nBranch: {branch}\n\n{err[:4000]}",
+        )
         return False
     _git("branch", "-D", branch)
     logger.info("auto-review[%s]: merged + pushed; Render will auto-deploy", runner)

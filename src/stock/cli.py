@@ -2193,7 +2193,24 @@ def uoa_scan_cmd(
             hl = [h.ticker for h in holdings.list_holdings(conn, active_only=True)]
             tickers = sorted(set(wl) | set(hl))
         total = 0
+        ratios = 0
         for t in tickers:
+            ratio = options_module.scan_ratio_snapshot(conn, t)
+            if ratio is not None:
+                ratios += 1
+                cp = (
+                    f"{ratio.call_put_volume_ratio:.2f}x"
+                    if ratio.call_put_volume_ratio is not None else "-"
+                )
+                pc = (
+                    f"{ratio.put_call_volume_ratio:.2f}x"
+                    if ratio.put_call_volume_ratio is not None else "-"
+                )
+                typer.echo(
+                    f"  {t} ratios C/P vol={cp} P/C vol={pc}"
+                    f" calls={ratio.call_volume:,} puts={ratio.put_volume:,}"
+                    f" exp={ratio.expiries_scanned}"
+                )
             hits = options_module.scan_ticker(conn, t)
             total += len(hits)
             for h in hits:
@@ -2202,7 +2219,7 @@ def uoa_scan_cmd(
                     f" vol={h.volume:,} OI={h.open_interest:,}"
                     f" V/OI={h.vol_oi_ratio:.1f}x score={h.score:.1f} -- {h.flag_reason}"
                 )
-        typer.echo(f"\nScanned {len(tickers)} tickers, {total} hits.")
+        typer.echo(f"\nScanned {len(tickers)} tickers, {total} hits, {ratios} ratio snapshots.")
     except Exception:
         typer.echo(traceback.format_exc(), err=True)
         raise typer.Exit(code=1)

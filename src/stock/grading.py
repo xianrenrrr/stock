@@ -1,7 +1,8 @@
-"""stock.grading -- daily auto grade-and-reply: refresh prices, score, summarize, queue follow-ups."""
+"""Daily grade-and-reply: refresh prices, score, summarize, queue follow-ups."""
 from __future__ import annotations
 
 import logging
+import re
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
@@ -10,7 +11,7 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel
 
-from stock import action_queue, holdings, thesis
+from stock import action_queue, emailer, holdings, prompt_rewriter, thesis
 from stock.config import get_settings
 from stock.ingest import fetch_prices
 from stock.models import (
@@ -34,6 +35,7 @@ GRADING_MAX_TOKENS: int = 2200
 GRADING_MAX_CHARS: int = 2800
 DEFAULT_LOOKBACK_HOURS: int = 36
 PRICE_HISTORY_DAYS: int = 5
+AUTO_IMPROVE_RULES_PATH: str = "data/rules/current.md"
 
 
 class OutcomeRow(BaseModel):
@@ -86,6 +88,8 @@ class GradingNote(BaseModel):
     refreshed: PriceRefreshResult
     stats: GradingStats
     follow_ups_queued: int
+    rewrites_applied: int = 0
+    rewrites_staged: int = 0
     created_at: str
 
 
@@ -342,6 +346,96 @@ def _empty_grading_body(refreshed: PriceRefreshResult, lookback_hours: int) -> s
     )
 
 
+_MODEL_IMPROVEMENT_HEADING_RE = re.compile(
+    r"(?im)^[ \t]*(?:#{1,4}\s*)?(?:\d+[.)]\s*)?"
+    r".*(?:模型改进方向|model\s+improvement\s+directions).*$"
+)
+_NEXT_SECTION_RE = re.compile(r"(?m)^[ \t]*(?:#{1,4}\s+|\d+[.)]\s+)")
+
+
+def _extract_model_improvement_section(body: str) -> str:
+    """Return the grading note's model-improvement section, or empty string."""
+    match = _MODEL_IMPROVEMENT_HEADING_RE.search(body)
+    if not match:
+        return ""
+    rest = body[match.start():]
+    next_match = _NEXT_SECTION_RE.search(rest, pos=1)
+    section = rest if next_match is None else rest[: next_match.start()]
+    return section.strip()
+
+
+def _auto_apply_model_improvements(
+    conn: sqlite3.Connection, *, grading_body: str, research_id: int
+) -> tuple[int, int]:
+    """Turn concrete grading improvements into prompt/rule rewrites."""
+    section = _extract_model_improvement_section(grading_body)
+    if not section:
+        return 0, 0
+
+    instruction = (
+        "System-generated grading note improvement. Convert only the concrete, "
+        "evidence-backed items in the Model Improvement Directions section into "
+        "surgical edits to data/rules/current.md or prompts/research.txt. "
+        "If the section is vague, unsupported, or only asks for more research, "
+        "emit <no_changes>."
+    )
+    context = (
+        f"Source research_reports.id={research_id}\n\n"
+        f"{section}\n\n"
+        "Full grading note for evidence context:\n"
+        f"{grading_body[:6000]}"
+    )
+
+    proposals = prompt_rewriter.propose_rewrite_from_text(
+        instruction_summary=instruction,
+        context_excerpt=context,
+        conn=conn,
+        caller="grading.auto_improve",
+    )
+    applied = staged = 0
+    for proposal in proposals[:3]:
+        rewrite_id = prompt_rewriter.apply_rewrite(proposal, conn, force=True)
+        if rewrite_id is None:
+            continue
+        row = conn.execute(
+            "SELECT applied FROM prompt_rewrites WHERE id = ?",
+            (rewrite_id,),
+        ).fetchone()
+        if row and int(row[0]) == 1:
+            applied += 1
+        else:
+            staged += 1
+    if applied == 0:
+        _append_model_improvements_to_rules(
+            section=section, research_id=research_id,
+        )
+        applied += 1
+    return applied, staged
+
+
+def _append_model_improvements_to_rules(*, section: str, research_id: int) -> None:
+    """Aggressive fallback: make grading lessons visible to the next prediction.
+
+    The byte-exact rewriter is still preferred because it can edit existing
+    rules cleanly. If it refuses or stages only, append the grading-derived
+    section verbatim to current rules so the prediction prompt receives it on
+    the next run.
+    """
+    if not section.strip():
+        return
+    path = Path(AUTO_IMPROVE_RULES_PATH)
+    existing = path.read_text(encoding="utf-8") if path.exists() else ""
+    header = (
+        "\n\n## Auto-Appended Model Improvement "
+        f"({datetime.now(timezone.utc).date()}, grading #{research_id})\n"
+    )
+    addition = header + section.strip() + "\n"
+    if addition.strip() in existing:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(existing.rstrip() + addition, encoding="utf-8")
+
+
 def generate_grading_note(
     conn: sqlite3.Connection,
     *,
@@ -390,6 +484,8 @@ def generate_grading_note(
             refreshed=refreshed,
             stats=stats,
             follow_ups_queued=0,
+            rewrites_applied=0,
+            rewrites_staged=0,
             created_at=created_at,
         )
 
@@ -472,6 +568,28 @@ def generate_grading_note(
     except Exception:
         logger.exception("grading: action_queue enqueue failed (non-fatal)")
 
+    rewrites_applied = rewrites_staged = 0
+    try:
+        rewrites_applied, rewrites_staged = _auto_apply_model_improvements(
+            conn, grading_body=body, research_id=research_id,
+        )
+        if rewrites_applied or rewrites_staged:
+            logger.info(
+                "grading: auto-improve rewrites applied=%d staged=%d from note %d",
+                rewrites_applied, rewrites_staged, research_id,
+            )
+    except Exception:
+        logger.exception("grading: auto-improve rewrite failed (non-fatal)")
+        emailer.send_email(
+            subject=f"STOCK auto-improve failed for grading #{research_id}",
+            body=(
+                "The grading Model Improvement auto-apply path failed after the "
+                "system attempted to process it automatically.\n\n"
+                f"research_reports.id={research_id}\n\n"
+                "Check orchestrator logs and prompt_rewrites for details."
+            ),
+        )
+
     return GradingNote(
         research_id=research_id,
         body=body,
@@ -479,5 +597,7 @@ def generate_grading_note(
         refreshed=refreshed,
         stats=stats,
         follow_ups_queued=follow_ups_queued,
+        rewrites_applied=rewrites_applied,
+        rewrites_staged=rewrites_staged,
         created_at=created_at,
     )

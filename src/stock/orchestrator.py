@@ -16,7 +16,7 @@ import time
 import httpx
 import openai
 
-from stock import action_queue, ai_loop_monitor, alerts, anomaly, backup, conversation, discovery_engine, entry_signals, events, grading, holdings, intent, options as options_module, prompt_rewriter, self_review, smallcap_scanner, tech_dive, thesis
+from stock import action_queue, ai_loop_monitor, alerts, anomaly, backup, conversation, discovery_engine, emailer, entry_signals, events, grading, holdings, intent, options as options_module, prompt_rewriter, self_review, smallcap_scanner, tech_dive, thesis
 from stock.cloud_sync import run_local_sync
 from stock.config import get_settings
 from stock.db import get_conn
@@ -524,6 +524,32 @@ def _job_research_push() -> None:
         conn.close()
 
 
+def _job_email_daily_action_report() -> None:
+    """Email the latest weekday daily research note to the operator."""
+    conn = get_conn()
+    try:
+        row = conn.execute(
+            "SELECT id, body, created_at FROM research_reports"
+            " WHERE kind = 'daily' ORDER BY created_at DESC LIMIT 1"
+        ).fetchone()
+        if row is None:
+            logger.warning("daily action email skipped: no daily research report found")
+            return
+        research_id, body, created_at = row
+        subject = f"STOCK daily action report #{research_id} ({str(created_at)[:10]})"
+        result = emailer.send_email(subject=subject, body=str(body))
+        if result.sent:
+            logger.info("daily action email sent for research_id=%s", research_id)
+        else:
+            logger.warning(
+                "daily action email not sent for research_id=%s: %s",
+                research_id,
+                result.detail,
+            )
+    finally:
+        conn.close()
+
+
 def _job_backup_db() -> None:
     """F33: nightly SQLite online backup to data/backups/stock.db.<date>.bak."""
     try:
@@ -837,10 +863,21 @@ def _job_scan_unusual_options() -> None:
     """
     conn = get_conn()
     try:
-        tickers = sorted({*_get_active_tickers(conn), *{h.ticker for h in holdings.list_holdings(conn, active_only=True)}})
+        tickers = sorted(
+            {
+                *_get_active_tickers(conn),
+                *{h.ticker for h in holdings.list_holdings(conn, active_only=True)},
+                "FUTU",
+                "TIGR",
+            }
+        )
         total_hits = 0
+        total_ratios = 0
         for ticker in tickers:
             try:
+                ratio = options_module.scan_ratio_snapshot(conn, ticker)
+                if ratio is not None:
+                    total_ratios += 1
                 hits = options_module.scan_ticker(conn, ticker)
             except Exception:  # noqa: BLE001 -- per-ticker isolation
                 logger.debug("UOA scan failed for %s", ticker, exc_info=True)
@@ -849,7 +886,10 @@ def _job_scan_unusual_options() -> None:
             extreme = [h for h in hits if h.vol_oi_ratio >= 20 or h.volume >= 10000]
             if extreme and ticker.upper() in {t.upper() for t in {h.ticker for h in holdings.list_holdings(conn, active_only=True)}}:
                 _write_uoa_alert(conn, ticker, extreme)
-        logger.info("UOA scan: %d tickers, %d total hits", len(tickers), total_hits)
+        logger.info(
+            "UOA scan: %d tickers, %d total hits, %d ratio snapshots",
+            len(tickers), total_hits, total_ratios,
+        )
     except Exception:
         logger.exception("UOA scan job failed")
     finally:
@@ -868,8 +908,8 @@ def _write_uoa_alert(conn: sqlite3.Connection, ticker: str, hits: list) -> None:
     body = "\n".join(summary_lines)
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     conn.execute(
-        "INSERT INTO research_reports (kind, topic, body, model, created_at)"
-        " VALUES ('alert', ?, ?, 'uoa-detector', ?)",
+        "INSERT INTO research_reports (kind, topic, body, created_at)"
+        " VALUES ('alert', ?, ?, ?)",
         (f"{ticker} 异常期权", body, now),
     )
     conn.commit()
@@ -964,13 +1004,15 @@ def _job_grade_and_reply() -> None:
         note = grading.generate_grading_note(conn)
         logger.info(
             "Grading note id=%d total=%d hits=%d hit_rate=%.2f"
-            " refreshed=%d follow_ups=%d cost=$%.4f",
+            " refreshed=%d follow_ups=%d rewrites=%d/%d cost=$%.4f",
             note.research_id,
             note.stats.total,
             note.stats.hits,
             note.stats.hit_rate,
             len(note.refreshed.tickers),
             note.follow_ups_queued,
+            note.rewrites_applied,
+            note.rewrites_staged,
             note.cost_usd,
         )
     except CostCeilingError:
@@ -1049,9 +1091,9 @@ def create_scheduler() -> BlockingScheduler:
     # 30+ times per day was just spawning subprocess flashes for no gain.
     scheduler.add_job(
         _job_ingest_and_extract,
-        CronTrigger(hour="2,14", minute=0, timezone="UTC"),
+        CronTrigger(hour="2,14", minute=0, day_of_week="mon-fri", timezone="UTC"),
         id="ingest_and_extract",
-        name="Ingest news/prices/features (2x daily, pre-push)",
+        name="Ingest news/prices/features (2x weekdays, pre-push)",
     )
 
     # Predictions twice daily, between ingest and research push, weekdays.
@@ -1096,6 +1138,7 @@ def create_scheduler() -> BlockingScheduler:
         CronTrigger(
             hour=DISCOVERY_MORNING_HOUR,
             minute=DISCOVERY_MORNING_MINUTE,
+            day_of_week="mon-fri",
             timezone="UTC",
         ),
         id="web_discovery_morning",
@@ -1106,6 +1149,7 @@ def create_scheduler() -> BlockingScheduler:
         CronTrigger(
             hour=DISCOVERY_EVENING_HOUR,
             minute=DISCOVERY_EVENING_MINUTE,
+            day_of_week="mon-fri",
             timezone="UTC",
         ),
         id="web_discovery_evening",
@@ -1171,12 +1215,14 @@ def create_scheduler() -> BlockingScheduler:
         name="Run pending auto-queued action items",
     )
 
-    # Twice-daily AI-supply-chain research push (every day, including weekends)
+    # Twice-daily AI-supply-chain research push on weekdays. Weekend market scans
+    # are intentionally off; weekly maintenance/deep-dive jobs still run.
     scheduler.add_job(
         _job_research_push,
         CronTrigger(
             hour=RESEARCH_MORNING_HOUR,
             minute=RESEARCH_MORNING_MINUTE,
+            day_of_week="mon-fri",
             timezone="UTC",
         ),
         id="research_push_morning",
@@ -1187,10 +1233,18 @@ def create_scheduler() -> BlockingScheduler:
         CronTrigger(
             hour=RESEARCH_EVENING_HOUR,
             minute=RESEARCH_EVENING_MINUTE,
+            day_of_week="mon-fri",
             timezone="UTC",
         ),
         id="research_push_evening",
         name="Evening research + WeChat push",
+    )
+
+    scheduler.add_job(
+        _job_email_daily_action_report,
+        CronTrigger(hour=14, minute=45, day_of_week="mon-fri", timezone="UTC"),
+        id="daily_action_email",
+        name="Email latest daily action report",
     )
 
     # Sync every 5 seconds to match the APK burst-poll cadence. APScheduler skips
@@ -1268,16 +1322,16 @@ def create_scheduler() -> BlockingScheduler:
         name="F40 weekly Q&A deep-dive on top-FWP candidates",
     )
 
-    # F43 daily tech dive -- DISABLED 2026-05-07 per boss "stop the tech dive
-    # deep into" instruction. The 10 topic queue covered the 3 sectors today;
-    # repeated daily firings would burn rate-limit + produce duplicate output.
-    # To re-enable: uncomment below + bump the F00-F44 expected job count.
-    # scheduler.add_job(
-    #     _job_daily_tech_dive,
-    #     CronTrigger(hour=4, minute=30, timezone="UTC"),
-    #     id="daily_tech_dive",
-    #     name="F43 daily tech-trend deep-dive (sector-rotated)",
-    # )
+    # F43 weekly tech dive. This used to be a daily 04:30 UTC cron, then was
+    # disabled on 2026-05-07 after the initial topic queue was covered. Re-enabled
+    # weekly on 2026-05-25 so the tech-trend queue keeps moving without producing
+    # duplicate daily artifacts.
+    scheduler.add_job(
+        _job_daily_tech_dive,
+        CronTrigger(day_of_week="sun", hour=4, minute=30, timezone="UTC"),
+        id="weekly_tech_dive",
+        name="F43 weekly tech-trend deep-dive (sector-rotated)",
+    )
 
     # F44 company DD dive: weekly Wednesday 09:00 UTC. Boss directive
     # 2026-05-08: previous 5x/day cadence created too many duplicate

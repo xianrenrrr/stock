@@ -28,6 +28,20 @@ PREDICT_PROMPT_PATH: str = "prompts/predict.txt"
 RULES_DIR: str = "data/rules"
 DEFAULT_HORIZON_MINUTES: int = 390
 PRICE_LOOKBACK: int = 10
+AI_INFRA_TICKERS: set[str] = {
+    "AMAT", "AMD", "ASML", "AVGO", "COHR", "CRDO", "DELL", "ETN", "KLAC",
+    "LITE", "LRCX", "MRVL", "MTSI", "MU", "MXL", "NVDA", "SMCI", "SMTC",
+    "TSM", "VRT", "VST",
+}
+AI_INFRA_KEYWORDS: tuple[str, ...] = (
+    "ai demand", "ai infrastructure", "ai hardware", "semiconductor",
+    "semis", "wafer", "hbm", "memory", "gpu", "optics", "optical",
+    "power", "cooling", "data center", "datacenter", "nvidia",
+)
+FRESH_HARD_CATALYSTS: set[str] = {
+    "earnings", "guidance", "earnings_guidance", "m&a", "merger",
+    "acquisition", "fda", "contract",
+}
 
 
 class PredictionOutput(BaseModel):
@@ -187,6 +201,105 @@ def _format_price_history(prices: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def _parse_feature_ts(value: Any) -> datetime | None:
+    if not value:
+        return None
+    text = str(value).replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _has_fresh_hard_catalyst(
+    features: list[dict[str, Any]], as_of: datetime
+) -> bool:
+    """Return true when a recent feature is strong enough to override stale-tape caps."""
+    for feat in features:
+        catalyst = str(feat.get("catalyst_type", "")).strip().lower()
+        if catalyst not in FRESH_HARD_CATALYSTS:
+            continue
+        ts = _parse_feature_ts(feat.get("ts"))
+        if ts is None:
+            continue
+        age = as_of - ts
+        if timedelta(0) <= age <= timedelta(hours=24):
+            return True
+    return False
+
+
+def _recent_return(prices: list[dict[str, Any]], bars: int = 2) -> float | None:
+    if len(prices) <= bars:
+        return None
+    start = float(prices[-(bars + 1)]["c"])
+    end = float(prices[-1]["c"])
+    if start <= 0:
+        return None
+    return (end - start) / start
+
+
+def _text_mentions_ai_infra(output: PredictionOutput) -> bool:
+    text = " ".join(
+        [output.rationale, *[str(f) for f in output.key_factors]]
+    ).lower()
+    return any(keyword in text for keyword in AI_INFRA_KEYWORDS)
+
+
+def apply_probability_guardrails(
+    ticker: str,
+    output: PredictionOutput,
+    features: list[dict[str, Any]],
+    prices: list[dict[str, Any]],
+    *,
+    as_of: datetime | None = None,
+) -> PredictionOutput:
+    """Apply deterministic caps learned from recent grading failures.
+
+    The LLM remains the forecaster, but recent reviews showed repeated
+    overconfidence in stale AI/semis/power/optics bullish narratives. These
+    guardrails keep those narratives from independently pushing mild bullish
+    calls into the 0.55-0.64 range when tape is already rolling over.
+    """
+    if output.direction != "up":
+        return output
+
+    ticker_upper = ticker.upper()
+    if ticker_upper not in AI_INFRA_TICKERS and not _text_mentions_ai_infra(output):
+        return output
+
+    now = as_of or datetime.now(timezone.utc)
+    fresh_hard_catalyst = _has_fresh_hard_catalyst(features, now)
+    recent_ret = _recent_return(prices, bars=2)
+    negative_tape = recent_ret is not None and recent_ret < 0
+
+    cap: float | None = None
+    reason: str | None = None
+    if negative_tape and not fresh_hard_catalyst:
+        cap = 0.52
+        reason = "AI/semis narrative with negative recent tape and no fresh hard catalyst"
+    elif not fresh_hard_catalyst:
+        cap = 0.55
+        reason = "AI/semis narrative without a fresh hard catalyst"
+
+    if cap is not None and output.prob_up > cap:
+        logger.info(
+            "prob_up guardrail for %s: %.2f -> %.2f (%s)",
+            ticker_upper, output.prob_up, cap, reason,
+        )
+        output.prob_up = cap
+        output.confidence = max(0.0, min(output.confidence, cap))
+        output.expected_return_bps = min(output.expected_return_bps, int((cap - 0.5) * 1000))
+        output.rationale = (
+            output.rationale.rstrip()
+            + f" Probability capped because {reason}."
+        )
+
+    return output
+
+
 def predict_ticker(
     ticker: str, conn: sqlite3.Connection
 ) -> PredictionResult:
@@ -272,6 +385,8 @@ def predict_ticker(
             "direction='%s' invalid, inferring from prob_up", output.direction
         )
         output.direction = "up" if output.prob_up >= 0.5 else "down"
+
+    output = apply_probability_guardrails(ticker, output, features, prices)
 
     # Apply calibration to raw prob_up
     calibrated_prob = calibrate(output.prob_up, conn)

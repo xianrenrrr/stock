@@ -251,6 +251,23 @@ CREATE TABLE IF NOT EXISTS option_anomalies (
     UNIQUE(contract_symbol, detected_at)
 );
 
+CREATE TABLE IF NOT EXISTS option_ratio_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticker TEXT NOT NULL,
+    call_volume INTEGER NOT NULL,
+    put_volume INTEGER NOT NULL,
+    call_open_interest INTEGER NOT NULL,
+    put_open_interest INTEGER NOT NULL,
+    call_put_volume_ratio REAL,
+    put_call_volume_ratio REAL,
+    call_put_oi_ratio REAL,
+    put_call_oi_ratio REAL,
+    expiries_scanned INTEGER NOT NULL,
+    contracts_scanned INTEGER NOT NULL,
+    detected_at TEXT NOT NULL,
+    UNIQUE(ticker, detected_at)
+);
+
 CREATE TABLE IF NOT EXISTS conversations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     run_id TEXT NOT NULL,
@@ -297,6 +314,10 @@ CREATE INDEX IF NOT EXISTS idx_option_anom_ticker_detected
     ON option_anomalies (ticker, detected_at DESC);
 CREATE INDEX IF NOT EXISTS idx_option_anom_score
     ON option_anomalies (detected_at DESC, score DESC);
+CREATE INDEX IF NOT EXISTS idx_option_ratio_ticker_detected
+    ON option_ratio_snapshots (ticker, detected_at DESC);
+CREATE INDEX IF NOT EXISTS idx_option_ratio_detected
+    ON option_ratio_snapshots (detected_at DESC);
 CREATE INDEX IF NOT EXISTS idx_conversations_recipient_created
     ON conversations (recipient, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_conversations_intent

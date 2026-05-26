@@ -57,8 +57,9 @@ Returns: `{version, trained_at, n_samples, buckets: [{bin_lower, bin_upper, mean
 Fetch the most recent stored daily AI-supply-chain research note (Chinese by default).
 HTTP: `GET /stock/research/latest?kind=daily`.
 Returns: `{research_id, kind, topic, layer_focus, body, cost_usd, created_at}`.
-The scheduled jobs at 13:00 and 22:00 UTC produce these automatically; this tool
-is for read-back. Set `kind=deep_dive` to fetch the most recent deep-dive instead.
+The current schedule is documented in `docs/runtime_source_of_truth.md`.
+Daily research currently runs at 02:30 and 14:30 UTC. This tool is for read-back.
+Set `kind=deep_dive` to fetch the most recent deep-dive instead.
 
 ### stock.research_run(layer?, language?, push?)
 Generate a *fresh* daily research note on demand.

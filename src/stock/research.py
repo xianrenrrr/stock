@@ -46,7 +46,7 @@ from stock.secular import (
 )
 from stock.stops import format_stop_loss_block
 from stock.ai_loop_monitor import format_loop_block
-from stock.options import format_uoa_block
+from stock.options import format_ratio_block, format_uoa_block
 from stock.smallcap_scanner import format_smallcap_block
 from stock.tech_trends import (
     format_conviction_watchlist_block,
@@ -422,6 +422,7 @@ def generate_daily_research(
     # F36: unusual options activity from the last 3 sessions, top 12.
     # Caller-renders an empty string when nothing fired (silent on quiet days).
     uoa_block = format_uoa_block(conn, days=3, limit=12)
+    option_ratio_block = format_ratio_block(conn, days=3, limit=12)
     # F38: top forward-discovery small-caps in 3 sectors (AI semis, biopharma,
     # AI-DC energy). Refreshed by the 22:15 UTC nightly scan.
     smallcap_block = format_smallcap_block(conn, days=2)
@@ -478,6 +479,10 @@ def generate_daily_research(
         events_block=events_block,
         events_calibration=events_calibration,
         uoa_block=uoa_block or "(no unusual options activity in the last 3 sessions)",
+        option_ratio_block=(
+            option_ratio_block
+            or "(no option-ratio snapshots in the last 3 sessions)"
+        ),
         smallcap_block=smallcap_block or "(smallcap scan has not run yet today)",
         ai_loop_block=ai_loop_block or "(AI loop monitor not yet measured this cycle)",
         trend_radar_block=trend_radar_block,

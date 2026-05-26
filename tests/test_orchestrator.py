@@ -13,6 +13,7 @@ from stock.models import CostCeilingError
 from stock.orchestrator import (
     ScheduleInfo,
     _get_active_tickers,
+    _job_email_daily_action_report,
     _job_ingest_and_extract,
     _job_reflect_weekly,
     _job_run_predictions,
@@ -453,12 +454,12 @@ def test_create_scheduler_has_expected_jobs() -> None:
     """Scheduler registers all F00-F46 pipeline jobs.
 
     19 + backup_db (F33) + uoa_scan (F36) + smallcap_scan (F38)
-    + ai_loop (F39) + weekly_qa_dive (F40) + company_dd_dive (F44)
-    + weekly_entry_scan (F45) + post_close_snapshot (F46) = 27.
-    F43 daily_tech_dive is disabled (boss directive 2026-05-07).
+    + ai_loop (F39) + weekly_qa_dive (F40) + weekly_tech_dive (F43)
+    + company_dd_dive (F44) + weekly_entry_scan (F45)
+    + post_close_snapshot (F46) + daily_action_email = 29.
     """
     scheduler = create_scheduler()
-    assert len(scheduler.get_jobs()) == 27
+    assert len(scheduler.get_jobs()) == 29
 
 
 def test_create_scheduler_job_ids() -> None:
@@ -475,6 +476,7 @@ def test_create_scheduler_job_ids() -> None:
         "web_discovery_evening",
         "research_push_morning",
         "research_push_evening",
+        "daily_action_email",
         "action_queue_runner",
         "anomaly_compute",
         "insiders_pull",
@@ -491,6 +493,7 @@ def test_create_scheduler_job_ids() -> None:
         "smallcap_scan",
         "ai_loop_measure",
         "weekly_qa_dive",
+        "weekly_tech_dive",
         "company_dd_dive",
         "weekly_entry_scan",
         "post_close_snapshot",
@@ -523,13 +526,38 @@ def test_get_schedule_info_format() -> None:
     info = get_schedule_info(scheduler)
 
     assert isinstance(info, ScheduleInfo)
-    assert len(info.jobs) == 27
+    assert len(info.jobs) == 29
 
     # Each entry has name and next_run keys
     for entry in info.jobs:
         assert "name" in entry
         assert "next_run" in entry
         assert entry["next_run"] != ""
+
+
+def test_job_email_daily_action_report_sends_latest_daily(
+    mock_conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The daily email job sends the latest daily research note."""
+    sent: dict[str, str] = {}
+
+    mock_conn.execute(
+        "INSERT INTO research_reports (kind, body, cost_usd, created_at)"
+        " VALUES ('daily', 'Do X today', 0, '2026-05-25T14:30:00+00:00')"
+    )
+    mock_conn.commit()
+
+    def fake_send_email(*, subject: str, body: str, to_addr: str | None = None):
+        sent["subject"] = subject
+        sent["body"] = body
+        return MagicMock(sent=True, detail="sent")
+
+    monkeypatch.setattr("stock.orchestrator.emailer.send_email", fake_send_email)
+
+    _job_email_daily_action_report()
+
+    assert "STOCK daily action report" in sent["subject"]
+    assert sent["body"] == "Do X today"
 
 
 # -- run_orchestrator tests --------------------------------------------------

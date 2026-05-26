@@ -3,21 +3,23 @@ from __future__ import annotations
 
 import sqlite3
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from stock import grading
 from stock.grading import (
-    GradingStats,
     OutcomeRow,
     PriceRefreshResult,
+    _append_model_improvements_to_rules,
+    _extract_model_improvement_section,
     compute_stats,
     generate_grading_note,
     recent_outcomes,
     refresh_prices_for_all,
 )
 from stock.ingest import IngestResult
+from stock.prompt_rewriter import RewriteProposal
 
 
 def _insert_prediction(
@@ -302,6 +304,8 @@ def test_generate_grading_note_with_outcomes_persists_and_queues(
     assert note.cost_usd == pytest.approx(0.0012)
     # Both follow-up bullets queued
     assert note.follow_ups_queued == 2
+    assert note.rewrites_applied == 0
+    assert note.rewrites_staged == 0
 
     # Persisted row
     row = mem_db.execute(
@@ -317,6 +321,104 @@ def test_generate_grading_note_with_outcomes_persists_and_queues(
         (note.research_id,),
     ).fetchone()[0]
     assert queued == 2
+
+
+def test_generate_grading_note_auto_applies_model_improvement_rewrites(
+    mem_db: sqlite3.Connection,
+) -> None:
+    """Model Improvement Directions are sent through the prompt/rules rewriter."""
+    now = datetime.now(timezone.utc).isoformat()
+    pid = _insert_prediction(mem_db, ticker="NVDA")
+    _insert_outcome(
+        mem_db, prediction_id=pid, actual_return=-0.02,
+        direction_hit=0, brier=0.36, scored_at=now,
+    )
+
+    fake_body = (
+        "# Daily grading\n\n"
+        "## 模型改进方向 / Model Improvement Directions\n"
+        "- Add an explicit rule: stale AI-demand headlines with weak tape should "
+        "be capped near neutral.\n\n"
+        "## AI 自动跟进 / Auto-queued follow-ups\n"
+        "- audit stale AI headline misses\n\n"
+        "Not financial advice."
+    )
+    fake_response = MagicMock(content=fake_body, cost_usd=0.0012)
+    proposal = RewriteProposal(
+        target_path="data/rules/current.md",
+        before_text="# Prediction Rules",
+        after_text="# Prediction Rules\n\n- Test rule",
+        rationale="grading evidence",
+    )
+
+    with (
+        patch("stock.grading.refresh_prices_for_all") as mock_refresh,
+        patch("stock.grading.score_due") as mock_score,
+        patch("stock.grading.check_cost_ceiling"),
+        patch("stock.grading.get_core_client") as mock_core_factory,
+        patch("stock.grading.get_core_model", return_value="MiniMax-M2.5-highspeed"),
+        patch(
+            "stock.grading.prompt_rewriter.propose_rewrite_from_text",
+            return_value=[proposal],
+        ) as mock_propose,
+        patch(
+            "stock.grading.prompt_rewriter.apply_rewrite",
+            return_value=123,
+        ) as mock_apply,
+    ):
+        mock_refresh.return_value = PriceRefreshResult(
+            tickers=["NVDA"], inserted_total=1, failed=[],
+        )
+        mock_score.return_value = MagicMock(scored=0, skipped=0, already_scored=1)
+        mock_core_client = MagicMock()
+        mock_core_client.chat.return_value = fake_response
+        mock_core_factory.return_value = mock_core_client
+        mem_db.execute(
+            "INSERT INTO prompt_rewrites"
+            " (id, target_path, before_text, after_text, rationale, cost_usd,"
+            " applied, applied_at, created_at)"
+            " VALUES (123, 'data/rules/current.md', 'a', 'b', 'r', 0, 1, ?, ?)",
+            (now, now),
+        )
+        mem_db.commit()
+
+        note = generate_grading_note(mem_db, lookback_hours=36)
+
+    assert note.rewrites_applied == 1
+    assert note.rewrites_staged == 0
+    mock_propose.assert_called_once()
+    mock_apply.assert_called_once_with(proposal, mem_db, force=True)
+
+
+def test_extract_model_improvement_section() -> None:
+    body = (
+        "## Score\nx\n\n"
+        "## 模型改进方向 / Model Improvement Directions\n"
+        "- tighten confidence caps\n\n"
+        "## AI 自动跟进 / Auto-queued follow-ups\n"
+        "- audit next cohort\n"
+    )
+    section = _extract_model_improvement_section(body)
+    assert "tighten confidence caps" in section
+    assert "Auto-queued" not in section
+
+
+def test_append_model_improvements_to_rules_fallback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rules_path = tmp_path / "current.md"
+    rules_path.write_text("# Prediction Rules\n", encoding="utf-8")
+    monkeypatch.setattr("stock.grading.AUTO_IMPROVE_RULES_PATH", str(rules_path))
+
+    _append_model_improvements_to_rules(
+        section="## Model Improvement Directions\n- Cap stale AI headline calls.",
+        research_id=42,
+    )
+
+    text = rules_path.read_text(encoding="utf-8")
+    assert "Auto-Appended Model Improvement" in text
+    assert "grading #42" in text
+    assert "Cap stale AI headline calls" in text
 
 
 def test_generate_grading_note_appends_disclaimer(mem_db: sqlite3.Connection) -> None:

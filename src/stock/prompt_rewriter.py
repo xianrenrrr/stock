@@ -132,23 +132,18 @@ def parse_patches(text: str) -> list[tuple[str, str, str, str]]:
     return out
 
 
-def propose_rewrite(
-    conversation_ids: list[int], conn: sqlite3.Connection
+def _propose_rewrite_from_context(
+    *,
+    instruction_summary: str,
+    conversation_excerpt: str,
+    conn: sqlite3.Connection,
+    triggered_by_conversation_id: int | None = None,
+    caller: str = "prompt_rewriter.propose",
 ) -> list[RewriteProposal]:
-    """Ask the Opus rewriter to draft byte-exact patches based on instructions."""
-    if not conversation_ids:
+    """Ask the rewriter to draft byte-exact patches from prepared context."""
+    if not instruction_summary.strip():
         return []
 
-    settings = get_settings()
-    try:
-        check_cost_ceiling(conn, settings)
-    except CostCeilingError:
-        logger.warning("propose_rewrite skipped: cost ceiling reached")
-        return []
-
-    instruction_summary, conversation_excerpt = _gather_instruction_excerpt(
-        conn, conversation_ids
-    )
     research_prompt = _read_file_or_default("prompts/research.txt")
     current_rules = _read_file_or_default("data/rules/current.md", "(no rules yet)")
 
@@ -171,7 +166,7 @@ def propose_rewrite(
             model=model,
             max_tokens=REWRITE_MAX_TOKENS,
             conn=conn,
-            caller="prompt_rewriter.propose",
+            caller=caller,
             cached_system=system_template,
         )
     except CostCeilingError:
@@ -182,7 +177,6 @@ def propose_rewrite(
 
     parsed = parse_patches(response.content)
     proposals: list[RewriteProposal] = []
-    triggered_by = conversation_ids[0] if conversation_ids else None
     for target, before, after, rationale in parsed:
         if target not in ALLOWED_TARGETS:
             logger.warning("propose_rewrite rejected disallowed target=%s", target)
@@ -201,11 +195,61 @@ def propose_rewrite(
                 after_text=after,
                 rationale=rationale,
                 cost_usd=response.cost_usd,
-                triggered_by_conversation_id=triggered_by,
+                triggered_by_conversation_id=triggered_by_conversation_id,
                 low_confidence=(provider != "claude"),
             )
         )
     return proposals
+
+
+def propose_rewrite(
+    conversation_ids: list[int], conn: sqlite3.Connection
+) -> list[RewriteProposal]:
+    """Ask the Opus rewriter to draft byte-exact patches based on instructions."""
+    if not conversation_ids:
+        return []
+
+    settings = get_settings()
+    try:
+        check_cost_ceiling(conn, settings)
+    except CostCeilingError:
+        logger.warning("propose_rewrite skipped: cost ceiling reached")
+        return []
+
+    instruction_summary, conversation_excerpt = _gather_instruction_excerpt(
+        conn, conversation_ids
+    )
+    triggered_by = conversation_ids[0] if conversation_ids else None
+    return _propose_rewrite_from_context(
+        instruction_summary=instruction_summary,
+        conversation_excerpt=conversation_excerpt,
+        conn=conn,
+        triggered_by_conversation_id=triggered_by,
+    )
+
+
+def propose_rewrite_from_text(
+    *,
+    instruction_summary: str,
+    context_excerpt: str,
+    conn: sqlite3.Connection,
+    caller: str = "prompt_rewriter.propose_text",
+) -> list[RewriteProposal]:
+    """Draft byte-exact patches from non-conversation instructions."""
+    settings = get_settings()
+    try:
+        check_cost_ceiling(conn, settings)
+    except CostCeilingError:
+        logger.warning("propose_rewrite_from_text skipped: cost ceiling reached")
+        return []
+
+    return _propose_rewrite_from_context(
+        instruction_summary=instruction_summary,
+        conversation_excerpt=context_excerpt,
+        conn=conn,
+        triggered_by_conversation_id=None,
+        caller=caller,
+    )
 
 
 def _last_applied_for_path(
@@ -240,6 +284,7 @@ def apply_rewrite(
     conn: sqlite3.Connection,
     *,
     dry_run: bool = False,
+    force: bool = False,
 ) -> int | None:
     """Apply a proposal byte-exactly. Returns prompt_rewrites.id when applied."""
     if proposal.target_path not in ALLOWED_TARGETS:
@@ -250,7 +295,7 @@ def apply_rewrite(
         # Stage as not-applied for human review
         return _stage(conn, proposal, applied=False)
 
-    if _under_rate_limit(conn, proposal.target_path):
+    if not force and _under_rate_limit(conn, proposal.target_path):
         logger.info(
             "apply_rewrite rate-limited for %s; staging unapplied",
             proposal.target_path,

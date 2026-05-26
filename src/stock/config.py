@@ -24,6 +24,17 @@ class Settings(BaseSettings):
     wechat_push_field_to: str = "to"
     wechat_push_field_text: str = "text"
 
+    # Plain SMTP email for daily action reports and automation failure alerts.
+    # Gmail works with SMTP_HOST=smtp.gmail.com, SMTP_PORT=587, and an app
+    # password in SMTP_PASSWORD.
+    daily_report_email_to: str = "2001liqiyangdaily@gmail.com"
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = "2001liqiyangdaily@gmail.com"
+    smtp_starttls: bool = True
+
     # Daily research output language ("zh" or "en")
     research_language: str = "zh"
 
@@ -45,7 +56,8 @@ class Settings(BaseSettings):
     edgar_user_agent: str = "stock-research 0.1 ops@example.com"
 
     # Hybrid local + Render-free architecture.
-    # `local` (default): full pipeline runs (scheduler, ingest, predictions, research, GUI delivery).
+    # `local` (default): full pipeline runs
+    #   (scheduler, ingest, predictions, research, GUI delivery).
     # `cloud_proxy`: passive Render-side mode -- no scheduler, no MiniMax/Tavily calls.
     #   Just serves /channel/* (boss dashboard) and /sync/* (local laptop pushes data here).
     stock_mode: str = "local"

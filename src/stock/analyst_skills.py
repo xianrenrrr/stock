@@ -348,6 +348,22 @@ def _build_morning_context(conn: sqlite3.Connection) -> str:
             pieces.append(f"- {t} {otype.upper()} ${strike:.0f} V/OI={ratio:.0f}x ({reason})")
 
     rows = conn.execute(
+        "SELECT ticker, call_volume, put_volume, call_put_volume_ratio,"
+        " put_call_volume_ratio FROM option_ratio_snapshots WHERE detected_at >= ?"
+        " ORDER BY detected_at DESC, ticker ASC LIMIT 8",
+        (yesterday,),
+    ).fetchall()
+    if rows:
+        pieces.append("\n## Last-24h options call/put ratios")
+        for t, call_vol, put_vol, cp_ratio, pc_ratio in rows:
+            cp = f"{cp_ratio:.2f}x" if cp_ratio is not None else "-"
+            pc = f"{pc_ratio:.2f}x" if pc_ratio is not None else "-"
+            pieces.append(
+                f"- {t}: C/P vol={cp}, P/C vol={pc} "
+                f"(calls={call_vol:,}, puts={put_vol:,})"
+            )
+
+    rows = conn.execute(
         "SELECT topic, substr(body, 1, 100) FROM research_reports"
         " WHERE kind = 'alert' AND created_at >= ? ORDER BY created_at DESC LIMIT 3",
         (yesterday,),

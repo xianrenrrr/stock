@@ -13,6 +13,8 @@ from stock.config import Settings
 from stock.models import ChatResponse, CostCeilingError
 from stock.predict import (
     PredictionResult,
+    PredictionOutput,
+    apply_probability_guardrails,
     compute_due_at,
     get_recent_features,
     get_recent_prices,
@@ -35,6 +37,70 @@ VALID_FEATURE_JSON: str = json.dumps({
     "time_sensitivity": "days",
     "summary": "Strong earnings beat expectations.",
 })
+
+
+def test_probability_guardrails_cap_stale_ai_negative_tape() -> None:
+    """Stale AI/semis bullish calls are capped when recent tape is negative."""
+    output = PredictionOutput(
+        direction="up",
+        prob_up=0.64,
+        expected_return_bps=90,
+        confidence=0.7,
+        rationale="AI demand and semiconductor equipment demand remain supportive.",
+        key_factors=["AI infrastructure", "positive momentum"],
+    )
+    features = [{
+        "catalyst_type": "analyst",
+        "ts": "2026-05-17T12:00:00+00:00",
+    }]
+    prices = [
+        {"ts": "2026-05-15", "c": 100.0},
+        {"ts": "2026-05-18", "c": 98.0},
+        {"ts": "2026-05-19", "c": 97.0},
+    ]
+
+    adjusted = apply_probability_guardrails(
+        "AMAT",
+        output,
+        features,
+        prices,
+        as_of=datetime(2026, 5, 19, 14, 0, tzinfo=timezone.utc),
+    )
+
+    assert adjusted.prob_up == pytest.approx(0.52)
+    assert adjusted.confidence <= 0.52
+    assert "Probability capped" in adjusted.rationale
+
+
+def test_probability_guardrails_preserve_fresh_hard_catalyst() -> None:
+    """Fresh earnings/guidance catalysts can override the stale narrative cap."""
+    output = PredictionOutput(
+        direction="up",
+        prob_up=0.64,
+        expected_return_bps=90,
+        confidence=0.7,
+        rationale="AI demand and semiconductor equipment demand remain supportive.",
+        key_factors=["earnings beat", "AI infrastructure"],
+    )
+    features = [{
+        "catalyst_type": "earnings",
+        "ts": "2026-05-19T12:00:00+00:00",
+    }]
+    prices = [
+        {"ts": "2026-05-15", "c": 100.0},
+        {"ts": "2026-05-18", "c": 98.0},
+        {"ts": "2026-05-19", "c": 97.0},
+    ]
+
+    adjusted = apply_probability_guardrails(
+        "AMAT",
+        output,
+        features,
+        prices,
+        as_of=datetime(2026, 5, 19, 14, 0, tzinfo=timezone.utc),
+    )
+
+    assert adjusted.prob_up == pytest.approx(0.64)
 
 
 def _mock_chat_response(content: str = VALID_PREDICTION_JSON) -> ChatResponse:

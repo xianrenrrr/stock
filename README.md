@@ -6,8 +6,9 @@ and learns from outcomes (memory, rules, bandit, calibration). Designed to
 run continuously either on a Windows laptop with WeChat GUI delivery or
 fully in the cloud (Render) with API-only output.
 
-Full architecture: `design.md`. Style guide: `CLAUDE.md`.
-Roadmap docs: `pipeline/MASTER_PLAN.md` and `pipeline/plan_*.md`.
+Runtime source of truth: `docs/runtime_source_of_truth.md`.
+Agent guidance: `docs/agent_guidance.md`. Coding style: `CLAUDE.md`.
+Historical roadmap docs live in `pipeline/`; they are not runtime truth.
 
 ## What runs where
 
@@ -53,6 +54,9 @@ Step-by-step + troubleshooting: `pipeline/plan_G_render_deploy.md`.
 | `DAILY_COST_CEILING_USD` | default 10 | Hard kill switch on LLM spend per UTC day |
 | `RESEARCH_LANGUAGE` | default `zh` | `zh` or `en` |
 | `MINIMAX_BASE_URL` | default `https://api.minimaxi.com/v1` | Override if your MiniMax key was issued for the global host |
+| `DAILY_REPORT_EMAIL_TO` | default `2001liqiyangdaily@gmail.com` | Daily action report and failure-alert recipient |
+| `SMTP_FROM` | default `2001liqiyangdaily@gmail.com` | Sender address for daily reports and failure alerts |
+| `SMTP_HOST`, `SMTP_USERNAME`, `SMTP_PASSWORD` | optional | Required for actual email delivery |
 
 Cloud-specific defaults (already set in `render.yaml`):
 - `OPENCLAW_AUTO_DELIVER=false`

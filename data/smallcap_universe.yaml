@@ -44,9 +44,24 @@ universe:
     - {ticker: NUVL,     name: Nuvalent,               mkt_cap_target_usd: 8000000000, niche_bottleneck: "ROS1 + ALK selective TKIs; cleaner safety profile", inflection_signal: "Pivotal data + accelerated approval"}
     - {ticker: KRYS,     name: Krystal Biotech,        mkt_cap_target_usd: 6000000000, niche_bottleneck: "Topical gene therapy delivery platform; rare derm + lung", inflection_signal: "Pipeline expansion beyond DEB"}
     - {ticker: ARWR,     name: Arrowhead Pharma,       mkt_cap_target_usd: 3000000000, niche_bottleneck: "RNAi platform; cardiometabolic + CNS pipeline", inflection_signal: "Plozasiran Phase 3 / partnership"}
-    - {ticker: RXRX,     name: Recursion,              mkt_cap_target_usd: 1500000000, niche_bottleneck: "AI-driven drug discovery (NVDA partner); first IND from platform", inflection_signal: "Platform-derived Phase 1 readout"}
+    # RXRX moved to ai_biology_smallcap below — it is L2 AI-bio compression,
+    # not generic biopharma. The new sector applies the 三层接力 framework
+    # to drug discovery (L2 compression / L3 gateway) explicitly.
     - {ticker: VOR,      name: Vor Biopharma,          mkt_cap_target_usd: 250000000,  niche_bottleneck: "Engineered HSCs to enable CD33-targeted post-transplant therapy", inflection_signal: "Trem-cel + Mylotarg combo data"}
     - {ticker: PRTA,     name: Prothena,               mkt_cap_target_usd: 1500000000, niche_bottleneck: "Anti-amyloid + tau pipeline; AD adjacencies post-Lecanemab", inflection_signal: "Birtamimab Phase 3 readout"}
+
+  # =====================================================================
+  # AI biology — 三层接力 applied to drug discovery (added 2026-05-18)
+  # Boss directive: in AI semis the L2 compression plays (DeepSeek, Moonshot)
+  # are private; in AI bio the L2 compression plays are PUBLIC and beaten-down.
+  # That's the asymmetry. Watch NVDA BioNeMo commentary on May 22 print for
+  # direct read-through (RXRX is the headline NVDA Clara customer).
+  # =====================================================================
+  ai_biology_smallcap:
+    - {ticker: RXRX,     name: Recursion Pharmaceuticals, mkt_cap_target_usd: 1500000000, niche_bottleneck: "L2 AI-bio: phenotypic-screening platform + NVDA BioHive-2 partner; post-Exscientia merger integrated; compresses target→molecule cycle by 10x vs traditional pharma", inflection_signal: "Platform-derived Phase 1 efficacy readout; NVDA Clara partnership extension at GTC"}
+    - {ticker: SDGR,     name: Schrödinger,            mkt_cap_target_usd: 1500000000, niche_bottleneck: "L2 AI-bio: computational chemistry platform (FEP+) with profitable software-licensing floor; Bill Gates-backed; partnerships with MRK/BMY; compresses lead-optimization phase", inflection_signal: "Software revenue ARR growth + partnered-program milestone payments"}
+    - {ticker: ABCL,     name: AbCellera,              mkt_cap_target_usd: 1000000000, niche_bottleneck: "L2 AI-bio: AI antibody discovery royalty-platform; first AI-designed antibody in clinic; profitable royalty stream + 80+ partner programs", inflection_signal: "Royalty-bearing program initiations + AI-designed candidate clinical readouts"}
+    - {ticker: TEM,      name: Tempus AI,              mkt_cap_target_usd: 8000000000, niche_bottleneck: "L3 AI-bio gateway: genomic + clinical-trial data platform; Larry Ellison-backed; sits between pharma research and patient data — the Salesforce of healthcare AI", inflection_signal: "Pharma partnership ARR growth + new diagnostic test approvals; FY27 EBITDA inflection"}
 
   # =====================================================================
   # AI data-center power / cooling small-mid cap (the Bloom Energy template)

@@ -53,6 +53,23 @@ class UnusualOption(BaseModel):
     flag_reason: str
 
 
+class OptionRatioSnapshot(BaseModel):
+    """Aggregate call/put positioning snapshot for one ticker scan."""
+
+    ticker: str
+    call_volume: int
+    put_volume: int
+    call_open_interest: int
+    put_open_interest: int
+    call_put_volume_ratio: float | None
+    put_call_volume_ratio: float | None
+    call_put_oi_ratio: float | None
+    put_call_oi_ratio: float | None
+    expiries_scanned: int
+    contracts_scanned: int
+    detected_at: str | None = None
+
+
 @dataclass
 class _ChainRow:
     """yfinance row reduced to the fields we use -- keeps this module mockable."""
@@ -85,6 +102,12 @@ def _score(volume: int, vol_oi_ratio: float, distance_pct: float) -> float:
     => ~20 (high). Floor: log10(1000)=3, ratio=5, distance=0.12 => ~13.2.
     """
     return math.log10(max(volume, 10)) * vol_oi_ratio * max(0.0, 1.0 - distance_pct)
+
+
+def _safe_ratio(numerator: int, denominator: int) -> float | None:
+    if denominator <= 0:
+        return None
+    return numerator / denominator
 
 
 def _classify(
@@ -198,6 +221,60 @@ def detect_unusual(
     return hits[:TOP_PER_TICKER]
 
 
+def compute_ratio_snapshot(
+    *,
+    ticker: str,
+    expiries: Iterable[str],
+    chain_provider,
+    today: datetime | None = None,
+) -> OptionRatioSnapshot:
+    """Aggregate call/put volume and open interest across nearby expiries."""
+    today = today or datetime.now(timezone.utc)
+    cutoff = today.replace(hour=0, minute=0, second=0, microsecond=0)
+    call_volume = put_volume = 0
+    call_open_interest = put_open_interest = 0
+    expiries_scanned = contracts_scanned = 0
+
+    for expiry in expiries:
+        try:
+            exp_dt = datetime.fromisoformat(expiry).replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+        days_to_expiry = (exp_dt - cutoff).days
+        if days_to_expiry < 0:
+            continue
+        if days_to_expiry > MAX_DAYS_TO_EXPIRY:
+            break
+        try:
+            calls_rows, puts_rows = chain_provider(expiry)
+        except Exception:  # noqa: BLE001 -- network/yfinance, log+skip
+            logger.debug("chain fetch failed for ratio %s %s", ticker, expiry, exc_info=True)
+            continue
+
+        expiries_scanned += 1
+        contracts_scanned += len(calls_rows) + len(puts_rows)
+        for row in calls_rows:
+            call_volume += _coerce_int(row.volume)
+            call_open_interest += _coerce_int(row.open_interest)
+        for row in puts_rows:
+            put_volume += _coerce_int(row.volume)
+            put_open_interest += _coerce_int(row.open_interest)
+
+    return OptionRatioSnapshot(
+        ticker=ticker.upper(),
+        call_volume=call_volume,
+        put_volume=put_volume,
+        call_open_interest=call_open_interest,
+        put_open_interest=put_open_interest,
+        call_put_volume_ratio=_safe_ratio(call_volume, put_volume),
+        put_call_volume_ratio=_safe_ratio(put_volume, call_volume),
+        call_put_oi_ratio=_safe_ratio(call_open_interest, put_open_interest),
+        put_call_oi_ratio=_safe_ratio(put_open_interest, call_open_interest),
+        expiries_scanned=expiries_scanned,
+        contracts_scanned=contracts_scanned,
+    )
+
+
 def _yfinance_provider(ticker: str):
     """Build a chain_provider closure backed by yfinance."""
     import yfinance  # third-party, optional
@@ -265,6 +342,26 @@ def scan_ticker(
     return hits
 
 
+def scan_ratio_snapshot(conn: sqlite3.Connection, ticker: str) -> OptionRatioSnapshot | None:
+    """Scan one ticker's options chain and persist aggregate call/put ratios."""
+    try:
+        provider, yf_ticker = _yfinance_provider(ticker)
+        expiries = list(yf_ticker.options or [])
+    except Exception:  # noqa: BLE001
+        logger.debug("yfinance options unavailable for ratio %s", ticker, exc_info=True)
+        return None
+
+    snapshot = compute_ratio_snapshot(
+        ticker=ticker,
+        expiries=expiries,
+        chain_provider=provider,
+    )
+    if snapshot.expiries_scanned == 0:
+        return None
+    persist_ratio_snapshot(conn, snapshot)
+    return snapshot
+
+
 def persist(conn: sqlite3.Connection, hits: list[UnusualOption]) -> int:
     """Insert detection rows; UNIQUE(contract_symbol, detected_at) dedupes intra-day."""
     if not hits:
@@ -289,6 +386,34 @@ def persist(conn: sqlite3.Connection, hits: list[UnusualOption]) -> int:
     return inserted
 
 
+def persist_ratio_snapshot(conn: sqlite3.Connection, snapshot: OptionRatioSnapshot) -> int:
+    """Insert one aggregate option-ratio snapshot."""
+    detected_at = snapshot.detected_at or datetime.now(timezone.utc).isoformat(timespec="seconds")
+    cur = conn.execute(
+        "INSERT OR IGNORE INTO option_ratio_snapshots"
+        " (ticker, call_volume, put_volume, call_open_interest, put_open_interest,"
+        " call_put_volume_ratio, put_call_volume_ratio, call_put_oi_ratio,"
+        " put_call_oi_ratio, expiries_scanned, contracts_scanned, detected_at)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            snapshot.ticker,
+            snapshot.call_volume,
+            snapshot.put_volume,
+            snapshot.call_open_interest,
+            snapshot.put_open_interest,
+            snapshot.call_put_volume_ratio,
+            snapshot.put_call_volume_ratio,
+            snapshot.call_put_oi_ratio,
+            snapshot.put_call_oi_ratio,
+            snapshot.expiries_scanned,
+            snapshot.contracts_scanned,
+            detected_at,
+        ),
+    )
+    conn.commit()
+    return cur.rowcount
+
+
 def recent_anomalies(
     conn: sqlite3.Connection, *, days: int = 3, limit: int = 20,
 ) -> list[dict]:
@@ -306,6 +431,28 @@ def recent_anomalies(
         "ticker", "contract_symbol", "option_type", "strike", "expiry",
         "volume", "open_interest", "vol_oi_ratio", "implied_vol",
         "underlying_price", "distance_pct", "score", "flag_reason", "detected_at",
+    ]
+    return [dict(zip(keys, r)) for r in rows]
+
+
+def recent_ratio_snapshots(
+    conn: sqlite3.Connection, *, days: int = 3, limit: int = 20,
+) -> list[dict]:
+    """Return recent aggregate option-ratio snapshots."""
+    rows = conn.execute(
+        "SELECT ticker, call_volume, put_volume, call_open_interest, put_open_interest,"
+        " call_put_volume_ratio, put_call_volume_ratio, call_put_oi_ratio,"
+        " put_call_oi_ratio, expiries_scanned, contracts_scanned, detected_at"
+        " FROM option_ratio_snapshots"
+        " WHERE detected_at >= datetime('now', ?)"
+        " ORDER BY detected_at DESC, ticker ASC LIMIT ?",
+        (f"-{int(days)} days", int(limit)),
+    ).fetchall()
+    keys = [
+        "ticker", "call_volume", "put_volume", "call_open_interest",
+        "put_open_interest", "call_put_volume_ratio", "put_call_volume_ratio",
+        "call_put_oi_ratio", "put_call_oi_ratio", "expiries_scanned",
+        "contracts_scanned", "detected_at",
     ]
     return [dict(zip(keys, r)) for r in rows]
 
@@ -331,5 +478,32 @@ def format_uoa_block(conn: sqlite3.Connection, *, days: int = 3, limit: int = 12
             f"${r['strike']:.0f} | {r['expiry']} | "
             f"{r['volume']:,} | {r['open_interest']:,} | "
             f"{r['vol_oi_ratio']:.1f}x | {iv} | {dist} | {r['flag_reason']} |"
+        )
+    return "\n".join(lines)
+
+
+def format_ratio_block(conn: sqlite3.Connection, *, days: int = 3, limit: int = 12) -> str:
+    """Render recent aggregate call/put option ratios as a markdown table."""
+    rows = recent_ratio_snapshots(conn, days=days, limit=limit)
+    if not rows:
+        return ""
+    lines = [
+        "| Ticker | Call Vol | Put Vol | C/P Vol | P/C Vol | Call OI | Put OI | C/P OI | Exp |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for r in rows:
+        cp_vol = (
+            f"{r['call_put_volume_ratio']:.2f}x"
+            if r["call_put_volume_ratio"] is not None else "-"
+        )
+        pc_vol = (
+            f"{r['put_call_volume_ratio']:.2f}x"
+            if r["put_call_volume_ratio"] is not None else "-"
+        )
+        cp_oi = f"{r['call_put_oi_ratio']:.2f}x" if r["call_put_oi_ratio"] is not None else "-"
+        lines.append(
+            f"| {r['ticker']} | {r['call_volume']:,} | {r['put_volume']:,} | "
+            f"{cp_vol} | {pc_vol} | {r['call_open_interest']:,} | "
+            f"{r['put_open_interest']:,} | {cp_oi} | {r['expiries_scanned']} |"
         )
     return "\n".join(lines)

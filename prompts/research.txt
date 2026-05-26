@@ -136,6 +136,13 @@ direction supports the narrative. Do NOT recommend buying the option itself
 or contradict your equity view.
 {uoa_block}
 
+## Options call-put ratios (last 3 sessions)
+Aggregate call/put volume and open-interest ratios across listed expiries within
+75 days. Use high call/put volume as speculative bullish appetite and high
+put/call volume as hedge/bearish pressure, but treat it as confirming context
+only unless it aligns with fresh catalysts and price action.
+{option_ratio_block}
+
 ## 小盘前瞻发现 / Three-sector small-cap forward-discovery (F38)
 Curated universe across AI semis (layer-3+ supply chain), biopharma pre-catalyst,
 and AI-DC energy ("Bloom Energy template"). Each name is scored on (a) market

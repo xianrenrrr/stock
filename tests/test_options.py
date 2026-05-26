@@ -9,10 +9,14 @@ import pytest
 from stock import db
 from stock.options import (
     _ChainRow,
+    compute_ratio_snapshot,
     detect_unusual,
+    format_ratio_block,
     format_uoa_block,
     persist,
+    persist_ratio_snapshot,
     recent_anomalies,
+    recent_ratio_snapshots,
 )
 
 
@@ -143,3 +147,64 @@ def test_format_uoa_block_renders_table(conn: sqlite3.Connection) -> None:
 def test_format_uoa_block_empty_when_nothing(conn: sqlite3.Connection) -> None:
     """No detections -> empty string (caller suppresses the section header)."""
     assert format_uoa_block(conn, days=1) == ""
+
+
+def test_compute_ratio_snapshot_aggregates_nearby_expiries() -> None:
+    """Ratio snapshots aggregate calls and puts across expiries within 75 days."""
+    today = datetime(2026, 5, 4, tzinfo=timezone.utc)
+    chains = {
+        "2026-05-15": (
+            [_row(100, 1000, 500), _row(105, 500, 300)],
+            [_row(95, 250, 400)],
+        ),
+        "2026-06-19": (
+            [_row(100, 200, 100)],
+            [_row(90, 50, 200), _row(85, None, None)],
+        ),
+        "2026-09-18": (
+            [_row(100, 99999, 99999)],
+            [_row(100, 99999, 99999)],
+        ),
+    }
+
+    snapshot = compute_ratio_snapshot(
+        ticker="EBAY",
+        expiries=list(chains),
+        chain_provider=lambda expiry: chains[expiry],
+        today=today,
+    )
+
+    assert snapshot.ticker == "EBAY"
+    assert snapshot.call_volume == 1700
+    assert snapshot.put_volume == 300
+    assert snapshot.call_open_interest == 900
+    assert snapshot.put_open_interest == 600
+    assert snapshot.call_put_volume_ratio == pytest.approx(1700 / 300)
+    assert snapshot.put_call_volume_ratio == pytest.approx(300 / 1700)
+    assert snapshot.call_put_oi_ratio == pytest.approx(900 / 600)
+    assert snapshot.expiries_scanned == 2
+    assert snapshot.contracts_scanned == 6
+
+
+def test_persist_ratio_snapshot_and_format_block(conn: sqlite3.Connection) -> None:
+    """Persisted ratio snapshots round-trip and render as a compact table."""
+    snapshot = compute_ratio_snapshot(
+        ticker="TIGR",
+        expiries=["2026-05-15"],
+        chain_provider=lambda _expiry: (
+            [_row(10, 1000, 500)],
+            [_row(9, 250, 125)],
+        ),
+        today=datetime(2026, 5, 4, tzinfo=timezone.utc),
+    )
+
+    assert persist_ratio_snapshot(conn, snapshot) == 1
+    rows = recent_ratio_snapshots(conn, days=1, limit=5)
+    assert len(rows) == 1
+    assert rows[0]["ticker"] == "TIGR"
+    assert rows[0]["call_put_volume_ratio"] == pytest.approx(4.0)
+
+    block = format_ratio_block(conn, days=1, limit=5)
+    assert "| Ticker | Call Vol |" in block
+    assert "TIGR" in block
+    assert "4.00x" in block

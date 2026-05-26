@@ -43,6 +43,19 @@ tickers:
   - AMBA   # L2/Edge generative-AI-at-edge SoCs (CV3); cameras, auto, robotics
   - HIMX   # Edge micro-cap: display drivers + AI vision (smart glasses / AR)
   - CRUS   # Edge: Apple supplier — on-device Apple Intelligence direct beneficiary
+  # ---- AI biology — 三层接力 applied to drug discovery (added 2026-05-18) ----
+  # RXRX/TEM/SDGR already present below in the US-listed adds block; ABCL is
+  # the new addition. L2 compression of drug-discovery cost (RXRX/SDGR/ABCL)
+  # is PUBLIC and beaten-down — unlike AI-semis where L2 is mostly private.
+  # TEM is the L3 healthcare-AI gateway. Watch NVDA BioNeMo commentary on
+  # May 22 print for direct read-through (RXRX is the headline Clara customer).
+  - ABCL   # L2 AI: AbCellera — AI antibody discovery, royalty platform model
+  # ---- AI cloud infrastructure (added 2026-05-18) ----
+  # CoreWeave is the "AWS of AI compute" — owns GPU infra (Layer 1 asset)
+  # but the moat is operational efficiency + NVDA top customer relationship
+  # (L3 gateway character). Post-IPO 2025; major NVDA partner; revenue
+  # accelerating from hyperscaler-overflow demand.
+  - CRWV   # L1/L3 hybrid: GPU-rental cloud; NVDA's largest non-hyperscaler customer
   # ---- 中国半导体 / Chinese semiconductor (boss directive 2026-05-05) ----
   # Focus: equipment + materials + foundry, less downstream IC design.
   # The "find before it explodes" angle = small-mid caps with niche

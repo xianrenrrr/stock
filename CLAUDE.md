@@ -1,89 +1,107 @@
-# STOCK — coding style guide
+# STOCK Coding Guidance
 
-Python project. Every pipeline agent (planner, creator, validator, screener, writer) must follow this.
+Last updated: 2026-05-25.
 
-## Language and tooling
-- Python 3.12. No f-strings with side effects. No wildcard imports. No mutable default args.
-- Type hints on every function signature. Use `from __future__ import annotations` at the top of every module.
-- `ruff` for lint + format (line length 100). `mypy --strict` for type checking. `pytest` for tests.
-- Dependency manager: `pip` + `pyproject.toml` (no Poetry, no uv for now — keep it simple on Windows).
+This file is for coding agents. For broader agent behavior, read
+`docs/agent_guidance.md` first. For scheduler/runtime truth, read
+`docs/runtime_source_of_truth.md`.
 
-## File headers
-Every source file starts with a one-line module docstring:
-```python
-"""stock.predict — run a single-ticker prediction cycle."""
-from __future__ import annotations
+## Source Of Truth Order
+
+When files conflict, trust:
+
+1. Running code in `src/stock/`.
+2. `docs/runtime_source_of_truth.md`.
+3. `docs/agent_guidance.md`.
+4. `WORKFLOW.md`.
+5. Historical docs in `pipeline/`, `md/`, and old design files.
+
+## Non-Negotiables
+
+- Preserve user work in the dirty tree. Never revert unrelated changes.
+- Keep edits scoped and surgical.
+- Add or update tests for behavior changes.
+- Use existing patterns before adding abstractions.
+- Respect cost ceilings and log LLM calls through existing helpers.
+- Do not silently swallow errors at entry points; log exceptions with context.
+- Never remove the `Not financial advice.` requirement from user-facing investment text.
+
+## Where To Change Things
+
+| Change | Files |
+|---|---|
+| Scheduler cadence/job list | `src/stock/orchestrator.py`, `tests/test_orchestrator.py`, `docs/runtime_source_of_truth.md` |
+| Prediction logic | `src/stock/predict.py`, `prompts/predict.txt`, `data/rules/current.md`, `tests/test_predict.py` |
+| Model improvement loop | `src/stock/grading.py`, `src/stock/prompt_rewriter.py`, `prompts/grading.txt`, `tests/test_grading.py` |
+| Daily research output | `src/stock/research.py`, `prompts/research.txt`, formatter modules |
+| Deep-dive follow-ups | `src/stock/action_queue.py`, `src/stock/research.py`, tests |
+| Options/UOA/ratios | `src/stock/options.py`, `src/stock/db.py`, `tests/test_options.py` |
+| CLI | `src/stock/cli.py` |
+| API/dashboard | `src/stock/api.py`, `src/stock/channel.py`, `src/stock/static/` |
+| Operator docs | `README.md`, `WORKFLOW.md`, `docs/runtime_source_of_truth.md` |
+
+## Coding Style
+
+- Python 3.12.
+- Prefer explicit, typed dataclasses/Pydantic models for structured records.
+- Use parameterized SQL.
+- Keep functions small enough to test directly.
+- Comments should explain non-obvious reasoning, not restate code.
+- Do not introduce broad refactors while fixing narrow behavior.
+- For file searches use `rg`; for edits use the normal patch/edit path.
+
+## Tests
+
+Run focused tests for touched modules. Examples:
+
+```powershell
+pytest tests/test_grading.py tests/test_prompt_rewriter.py -q
+pytest tests/test_options.py -q
+pytest tests/test_orchestrator.py -q
+python -m ruff check src/stock/grading.py tests/test_grading.py
 ```
 
-## Naming
-- `snake_case` for modules, files, functions, variables.
-- `PascalCase` for classes and `TypedDict` / `pydantic.BaseModel` names.
-- Constants `UPPER_SNAKE_CASE`.
-- No single-letter names except `i`, `j`, `k` in tight loops, or `e` in `except`.
+If changing scheduler jobs, also verify:
 
-## Structure
-- Functions read top-to-bottom as a sequence of "code paragraphs": 3–8 lines per paragraph, with a single-line `#` comment above each paragraph stating WHAT happens next (never WHY obvious things are obvious).
-- No paragraph-level comments inside trivial three-line helpers.
-- Early returns preferred over nested `if`.
-- Result objects: return `pydantic` models or `TypedDict`s, not tuples with positional meaning.
-
-## Errors
-- Raise specific exceptions (`ValueError`, `RuntimeError`, custom `StockError` subclasses).
-- At entry points (CLI commands, FastAPI endpoints, scheduled jobs): wrap in try/except, log full traceback, return a structured error object. Never swallow silently.
-- No `except Exception: pass`. Ever.
-
-## Imports
-Grouped, blank line between groups, alphabetical within each:
-```python
-# stdlib
-import json
-from datetime import datetime, timezone
-
-# third-party
-import httpx
-from pydantic import BaseModel
-
-# internal
-from stock.config import Settings
-from stock.db import get_conn
+```powershell
+@'
+from stock.orchestrator import create_scheduler
+s = create_scheduler()
+for job in s.get_jobs():
+    print(job.id, job.trigger)
+print("TOTAL", len(s.get_jobs()))
+'@ | python -
 ```
-Never import `*`. Never import from `src.stock.*` — use `stock.*`.
 
-## LLM calls
-- Always go through `stock.models.get_client(provider)` — never instantiate `anthropic.Anthropic()` or `openai.OpenAI()` directly in feature code.
-- Always set prompt caching on the system prompt.
-- Always log input tokens, output tokens, cost, model, duration to the `llm_calls` table.
-- Respect the daily cost ceiling from `stock.config.Settings.daily_cost_ceiling_usd` — check before every call.
+## Database And Migrations
 
-## Testing
-- One `tests/test_<module>.py` per source module that has logic (not pure config).
-- Use `pytest` fixtures for the test DB (`:memory:` SQLite). Never touch the real `data/stock.db` in tests.
-- Mock all network I/O with `respx` (for httpx) or `unittest.mock`. No tests should call Claude/MiniMax/yfinance/RSS.
+Schema lives in `src/stock/db.py`. This project still mostly uses
+`CREATE TABLE IF NOT EXISTS` and does not have a mature migration framework.
+When adding columns/tables:
 
-## Incremental changes
-- Existing code is production. Never delete or rewrite broadly. Surgical edits only.
-- When modifying a file: Read it first, understand current shape, then Edit.
-- New functionality goes in new files where reasonable, or appended to existing files.
-- Never rename existing public functions/classes without an explicit ticket for the rename.
+- Update `db.py`.
+- Update tests that initialize `:memory:` DBs.
+- Document operational impact in `docs/runtime_source_of_truth.md` if runtime
+  behavior changes.
 
-## No noise
-- Do not add comments that restate the code.
-- Do not add README files per directory.
-- Do not write migration scripts for schema changes that haven't shipped — edit `stock/db.py` directly until v1.
-- No emojis in code, comments, or commit messages.
+## LLM Calls
 
-## Daily self-review
-At the start of any session in this project, check `pipeline/daily_review_*.md`. If a packet from the last 48 hours exists, read the most recent one before proposing changes — it summarizes errors, boss feedback, drift, and pending items the operator may want addressed. Use the `/improve` slash command to drive a structured review.
+- Use existing model client helpers.
+- Log model/provider/tokens/cost/duration/caller to `llm_calls`.
+- Check cost ceiling before discretionary calls.
+- Prefer zero-metered `codex_cli`/`claude_cli` core backend when configured.
+- Keep high-frequency utility calls cheap and resilient.
 
-## AI session bootstrap (read this first)
-**Before grepping the codebase, read `AI_INDEX.md` at the repo root.** It's a single auto-generated file listing every feature, module, table, cron, CLI command, and data file with one-line descriptions. Saves 5-10 file-reads worth of tokens before you can find where to make a change.
+## Generated Artifacts
 
-When you make a change that adds/removes any of:
-- A new module / file in `src/stock/`
-- A new cron job in `orchestrator.py`
-- A new CLI command
-- A new SQLite table in `db.py`
-- A new YAML in `data/`
-- A new feature entry in `feature_backlog.md`
+Do not edit generated artifacts during code cleanup:
 
-…regenerate the index with `python scripts/build_ai_index.py` and include it in the same commit. The index is small (~22 KB), regenerable in <1s, and keeps future sessions cheap.
+- `pipeline/daily_review_*.md`
+- `pipeline/companies/*.md`
+- `pipeline/dd/*.md`
+- `pipeline/pdf/*`
+- `pipeline/logs/*`
+- `pipeline/outputs/*`
+- `logs/*`
+
+Use docs/readmes to point around generated artifacts rather than rewriting them.
