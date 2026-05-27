@@ -12,8 +12,8 @@ from stock.bandit import BanditSelection
 from stock.config import Settings
 from stock.models import ChatResponse, CostCeilingError
 from stock.predict import (
-    PredictionResult,
     PredictionOutput,
+    PredictionResult,
     apply_probability_guardrails,
     compute_due_at,
     get_recent_features,
@@ -101,6 +101,101 @@ def test_probability_guardrails_preserve_fresh_hard_catalyst() -> None:
     )
 
     assert adjusted.prob_up == pytest.approx(0.64)
+
+
+def _seed_ai_infra_peer_breadth(conn: sqlite3.Connection) -> None:
+    for ticker, prior, latest in [
+        ("AMD", 100.0, 108.0),
+        ("AVGO", 100.0, 104.0),
+        ("MU", 100.0, 110.0),
+        ("NVDA", 100.0, 103.0),
+        ("SMCI", 100.0, 102.0),
+        ("DELL", 100.0, 99.0),
+    ]:
+        conn.execute(
+            "INSERT INTO prices (ticker, ts, o, h, l, c, v)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (ticker, "2026-05-18", prior, prior, prior, prior, 1000000),
+        )
+        conn.execute(
+            "INSERT INTO prices (ticker, ts, o, h, l, c, v)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (ticker, "2026-05-19", latest, latest, latest, latest, 1000000),
+        )
+    conn.commit()
+
+
+def test_probability_guardrails_floor_ai_bearish_positive_breadth(
+    mem_db: sqlite3.Connection,
+) -> None:
+    """Broad positive AI/semis tape blocks sub-0.49 bearish stale calls."""
+    _seed_ai_infra_peer_breadth(mem_db)
+    output = PredictionOutput(
+        direction="down",
+        prob_up=0.46,
+        expected_return_bps=-40,
+        confidence=0.7,
+        rationale="Mostly repeated bullish AI-memory narrative; profit-taking risk.",
+        key_factors=["AI infrastructure", "extended up"],
+    )
+    features = [{
+        "catalyst_type": "analyst",
+        "sentiment": "neutral",
+        "ts": "2026-05-19T12:00:00+00:00",
+    }]
+    prices = [
+        {"ts": "2026-05-18", "c": 100.0},
+        {"ts": "2026-05-19", "c": 108.0},
+    ]
+
+    adjusted = apply_probability_guardrails(
+        "MU",
+        output,
+        features,
+        prices,
+        as_of=datetime(2026, 5, 19, 14, 0, tzinfo=timezone.utc),
+        conn=mem_db,
+    )
+
+    assert adjusted.prob_up == pytest.approx(0.49)
+    assert adjusted.confidence <= 0.51
+    assert adjusted.expected_return_bps == -10
+    assert "Probability floored" in adjusted.rationale
+
+
+def test_probability_guardrails_preserve_fresh_negative_hard_catalyst(
+    mem_db: sqlite3.Connection,
+) -> None:
+    """A fresh bearish hard catalyst can override positive sector breadth."""
+    _seed_ai_infra_peer_breadth(mem_db)
+    output = PredictionOutput(
+        direction="down",
+        prob_up=0.46,
+        expected_return_bps=-40,
+        confidence=0.7,
+        rationale="Guidance cut offsets the AI infrastructure tape.",
+        key_factors=["guidance cut", "AI infrastructure"],
+    )
+    features = [{
+        "catalyst_type": "guidance",
+        "sentiment": "bearish",
+        "ts": "2026-05-19T12:00:00+00:00",
+    }]
+    prices = [
+        {"ts": "2026-05-18", "c": 100.0},
+        {"ts": "2026-05-19", "c": 108.0},
+    ]
+
+    adjusted = apply_probability_guardrails(
+        "MU",
+        output,
+        features,
+        prices,
+        as_of=datetime(2026, 5, 19, 14, 0, tzinfo=timezone.utc),
+        conn=mem_db,
+    )
+
+    assert adjusted.prob_up == pytest.approx(0.46)
 
 
 def _mock_chat_response(content: str = VALID_PREDICTION_JSON) -> ChatResponse:

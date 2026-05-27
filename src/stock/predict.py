@@ -28,11 +28,15 @@ PREDICT_PROMPT_PATH: str = "prompts/predict.txt"
 RULES_DIR: str = "data/rules"
 DEFAULT_HORIZON_MINUTES: int = 390
 PRICE_LOOKBACK: int = 10
+AI_INFRA_BREADTH_MIN_OBSERVATIONS: int = 5
+AI_INFRA_BREADTH_THRESHOLD: float = 0.65
+AI_INFRA_BEARISH_BREADTH_FLOOR: float = 0.49
 AI_INFRA_TICKERS: set[str] = {
     "AMAT", "AMD", "ASML", "AVGO", "COHR", "CRDO", "DELL", "ETN", "KLAC",
     "LITE", "LRCX", "MRVL", "MTSI", "MU", "MXL", "NVDA", "SMCI", "SMTC",
     "TSM", "VRT", "VST",
 }
+AI_INFRA_SECTOR_LEADERS: set[str] = {"AMD", "AVGO", "MU", "NVDA", "SMCI"}
 AI_INFRA_KEYWORDS: tuple[str, ...] = (
     "ai demand", "ai infrastructure", "ai hardware", "semiconductor",
     "semis", "wafer", "hbm", "memory", "gpu", "optics", "optical",
@@ -231,6 +235,26 @@ def _has_fresh_hard_catalyst(
     return False
 
 
+def _has_fresh_negative_hard_catalyst(
+    features: list[dict[str, Any]], as_of: datetime
+) -> bool:
+    """Return true when a fresh hard catalyst is explicitly bearish."""
+    for feat in features:
+        catalyst = str(feat.get("catalyst_type", "")).strip().lower()
+        if catalyst not in FRESH_HARD_CATALYSTS:
+            continue
+        sentiment = str(feat.get("sentiment", "")).strip().lower()
+        if sentiment not in {"bearish", "negative"}:
+            continue
+        ts = _parse_feature_ts(feat.get("ts"))
+        if ts is None:
+            continue
+        age = as_of - ts
+        if timedelta(0) <= age <= timedelta(hours=24):
+            return True
+    return False
+
+
 def _recent_return(prices: list[dict[str, Any]], bars: int = 2) -> float | None:
     if len(prices) <= bars:
         return None
@@ -239,6 +263,37 @@ def _recent_return(prices: list[dict[str, Any]], bars: int = 2) -> float | None:
     if start <= 0:
         return None
     return (end - start) / start
+
+
+def _latest_return_for_ticker(ticker: str, conn: sqlite3.Connection) -> float | None:
+    rows = conn.execute(
+        "SELECT c FROM prices WHERE ticker = ? ORDER BY ts DESC LIMIT 2",
+        (ticker,),
+    ).fetchall()
+    if len(rows) < 2:
+        return None
+    latest = float(rows[0][0])
+    prior = float(rows[1][0])
+    if prior <= 0:
+        return None
+    return (latest - prior) / prior
+
+
+def _ai_infra_breadth_positive(conn: sqlite3.Connection) -> bool:
+    returns: dict[str, float] = {}
+    for peer in AI_INFRA_TICKERS:
+        ret = _latest_return_for_ticker(peer, conn)
+        if ret is not None:
+            returns[peer] = ret
+
+    if len(returns) < AI_INFRA_BREADTH_MIN_OBSERVATIONS:
+        return False
+
+    positive_share = sum(1 for ret in returns.values() if ret > 0) / len(returns)
+    leader_positive = any(
+        returns.get(leader, 0.0) > 0 for leader in AI_INFRA_SECTOR_LEADERS
+    )
+    return positive_share >= AI_INFRA_BREADTH_THRESHOLD and leader_positive
 
 
 def _text_mentions_ai_infra(output: PredictionOutput) -> bool:
@@ -255,6 +310,7 @@ def apply_probability_guardrails(
     prices: list[dict[str, Any]],
     *,
     as_of: datetime | None = None,
+    conn: sqlite3.Connection | None = None,
 ) -> PredictionOutput:
     """Apply deterministic caps learned from recent grading failures.
 
@@ -263,14 +319,35 @@ def apply_probability_guardrails(
     guardrails keep those narratives from independently pushing mild bullish
     calls into the 0.55-0.64 range when tape is already rolling over.
     """
-    if output.direction != "up":
-        return output
-
     ticker_upper = ticker.upper()
     if ticker_upper not in AI_INFRA_TICKERS and not _text_mentions_ai_infra(output):
         return output
 
     now = as_of or datetime.now(timezone.utc)
+    if (
+        output.direction == "down"
+        and output.prob_up < AI_INFRA_BEARISH_BREADTH_FLOOR
+        and conn is not None
+        and not _has_fresh_negative_hard_catalyst(features, now)
+        and _ai_infra_breadth_positive(conn)
+    ):
+        logger.info(
+            "prob_up breadth floor for %s: %.2f -> %.2f",
+            ticker_upper, output.prob_up, AI_INFRA_BEARISH_BREADTH_FLOOR,
+        )
+        output.prob_up = AI_INFRA_BEARISH_BREADTH_FLOOR
+        output.confidence = min(output.confidence, 1.0 - AI_INFRA_BEARISH_BREADTH_FLOOR)
+        output.expected_return_bps = max(output.expected_return_bps, -10)
+        output.rationale = (
+            output.rationale.rstrip()
+            + " Probability floored because AI/semis peer breadth is positive "
+            "and there is no fresh negative hard catalyst."
+        )
+        return output
+
+    if output.direction != "up":
+        return output
+
     fresh_hard_catalyst = _has_fresh_hard_catalyst(features, now)
     recent_ret = _recent_return(prices, bars=2)
     negative_tape = recent_ret is not None and recent_ret < 0
@@ -386,7 +463,7 @@ def predict_ticker(
         )
         output.direction = "up" if output.prob_up >= 0.5 else "down"
 
-    output = apply_probability_guardrails(ticker, output, features, prices)
+    output = apply_probability_guardrails(ticker, output, features, prices, conn=conn)
 
     # Apply calibration to raw prob_up
     calibrated_prob = calibrate(output.prob_up, conn)
