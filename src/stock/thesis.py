@@ -18,7 +18,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from stock.config import get_settings
 from stock.ingest.insiders import format_insider_block, recent_for_ticker
@@ -76,6 +76,7 @@ class ThesisStats(BaseModel):
     unverified: int
     pending: int
     right_direction_wrong_reason: int
+    right_direction_wrong_reason_examples: list[str] = Field(default_factory=list)
     by_type: dict[str, dict[str, int]]
 
 
@@ -155,7 +156,7 @@ def list_for_prediction(
 def extract_theses(
     prediction_id: int, conn: sqlite3.Connection
 ) -> list[ThesisRow]:
-    """Decompose a prediction's rationale into atomic claims via MiniMax.
+    """Decompose a prediction's rationale into atomic claims via Codex CLI.
 
     Idempotent in the sense that if rows already exist for prediction_id, this
     returns them without re-calling the LLM. Failures (cost ceiling, JSON
@@ -446,7 +447,9 @@ def compute_thesis_stats(
     cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
 
     rows = conn.execute(
-        "SELECT t.claim_type, t.verdict, t.prediction_id, o.direction_hit"
+        "SELECT t.claim_type, t.verdict, t.prediction_id, o.direction_hit,"
+        " t.id, p.ticker, p.direction, p.prob_up, o.actual_return,"
+        " t.claim_text, COALESCE(t.evidence_text, '')"
         " FROM prediction_theses t"
         " JOIN predictions p ON p.id = t.prediction_id"
         " LEFT JOIN outcomes o ON o.prediction_id = p.id"
@@ -463,11 +466,24 @@ def compute_thesis_stats(
     # Right direction wrong reason: prediction direction was a hit, but a
     # catalyst|valuation|macro|supply_chain claim was refuted.
     rdwr_pred_ids: set[int] = set()
-    for claim_type, verdict, pid, hit in rows:
+    rdwr_examples: list[str] = []
+    for (
+        claim_type, verdict, pid, hit, thesis_id, ticker, direction, prob_up,
+        actual_return, claim_text, evidence_text,
+    ) in rows:
         if verdict == "refuted" and hit == 1 and claim_type in (
             "catalyst", "valuation", "macro", "supply_chain"
         ):
             rdwr_pred_ids.add(int(pid))
+            if len(rdwr_examples) < 5:
+                evidence = str(evidence_text or "").strip()
+                evidence_part = f"; evidence={evidence[:160]}" if evidence else ""
+                rdwr_examples.append(
+                    f"prediction_id={int(pid)} thesis_id={int(thesis_id)} "
+                    f"{ticker} {direction} prob_up={float(prob_up):.2f} "
+                    f"actual={float(actual_return):+.2%}; refuted {claim_type} "
+                    f"claim={str(claim_text)[:180]}{evidence_part}"
+                )
 
     by_type: dict[str, dict[str, int]] = {}
     for ct in VALID_CLAIM_TYPES:
@@ -486,6 +502,7 @@ def compute_thesis_stats(
         unverified=unverified,
         pending=pending,
         right_direction_wrong_reason=len(rdwr_pred_ids),
+        right_direction_wrong_reason_examples=rdwr_examples,
         by_type=by_type,
     )
 
@@ -502,6 +519,10 @@ def format_thesis_block(stats: ThesisStats) -> str:
         f"Right direction wrong reason: {stats.right_direction_wrong_reason} prediction(s)",
         "By claim type:",
     ]
+    if stats.right_direction_wrong_reason_examples:
+        lines.append("Right direction wrong reason examples:")
+        for example in stats.right_direction_wrong_reason_examples:
+            lines.append(f"  - {example}")
     for ct in VALID_CLAIM_TYPES:
         sub = stats.by_type.get(ct, {})
         if not sub.get("total"):

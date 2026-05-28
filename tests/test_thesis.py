@@ -314,8 +314,9 @@ def test_compute_thesis_stats_right_direction_wrong_reason(
     # Two claims: one catalyst refuted, one sentiment supported
     mem_db.execute(
         "INSERT INTO prediction_theses (prediction_id, claim_text, claim_type,"
-        " verdict, created_at) VALUES (?, ?, 'catalyst', 'refuted', ?)",
-        (pid, "Guidance will be raised", recent),
+        " verdict, evidence_text, created_at) VALUES (?, ?, 'catalyst',"
+        " 'refuted', ?, ?)",
+        (pid, "Guidance will be raised", "actual support came from HBM demand", recent),
     )
     mem_db.execute(
         "INSERT INTO prediction_theses (prediction_id, claim_text, claim_type,"
@@ -329,7 +330,15 @@ def test_compute_thesis_stats_right_direction_wrong_reason(
     assert stats.refuted == 1
     assert stats.supported == 1
     assert stats.right_direction_wrong_reason == 1
+    assert stats.right_direction_wrong_reason_examples
+    assert f"prediction_id={pid}" in stats.right_direction_wrong_reason_examples[0]
+    assert "NVDA up" in stats.right_direction_wrong_reason_examples[0]
+    assert "Guidance will be raised" in stats.right_direction_wrong_reason_examples[0]
     assert stats.by_type["catalyst"]["refuted"] == 1
+
+    block = format_thesis_block(stats)
+    assert "Right direction wrong reason examples:" in block
+    assert f"prediction_id={pid}" in block
 
 
 def test_compute_thesis_stats_does_not_count_rdwr_when_direction_missed(
