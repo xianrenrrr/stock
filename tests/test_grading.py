@@ -242,7 +242,7 @@ def test_generate_grading_note_empty_window_no_llm(mem_db: sqlite3.Connection) -
     with (
         patch("stock.grading.refresh_prices_for_all") as mock_refresh,
         patch("stock.grading.score_due") as mock_score,
-        patch("stock.grading.get_client") as mock_client,
+        patch("stock.grading.get_core_client") as mock_client,
     ):
         mock_refresh.return_value = PriceRefreshResult(
             tickers=["NVDA"], inserted_total=1, failed=[],
@@ -486,7 +486,7 @@ def test_generate_grading_note_skips_refresh_and_score_when_disabled(
     with (
         patch("stock.grading.refresh_prices_for_all") as mock_refresh,
         patch("stock.grading.score_due") as mock_score,
-        patch("stock.grading.get_client") as mock_client,
+        patch("stock.grading.get_core_client") as mock_client,
     ):
         note = generate_grading_note(
             mem_db, lookback_hours=36, refresh_prices=False, score_first=False,

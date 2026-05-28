@@ -52,9 +52,9 @@ def test_select_arm_single_arm(mem_db: sqlite3.Connection) -> None:
     result = select_arm("AAPL", mem_db)
 
     assert isinstance(result, BanditSelection)
-    assert result.strategy_arm == "minimax/default"
-    assert result.provider == "minimax"
-    assert result.model == "MiniMax-M1-80k"
+    assert result.strategy_arm == "codex_cli/default"
+    assert result.provider == "codex_cli"
+    assert result.model == "codex-cli-session"
 
 
 def test_select_arm_creates_state_row(mem_db: sqlite3.Connection) -> None:
@@ -64,7 +64,7 @@ def test_select_arm_creates_state_row(mem_db: sqlite3.Connection) -> None:
     row = mem_db.execute(
         "SELECT alpha, beta, pulls FROM bandit_state"
         " WHERE strategy_arm = ? AND ticker_bucket = ?",
-        ("minimax/default", "AAPL"),
+        ("codex_cli/default", "AAPL"),
     ).fetchone()
     assert row is not None
     assert row[0] == pytest.approx(1.0)

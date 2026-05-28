@@ -7,8 +7,8 @@ promotes top-N candidates onto the active watchlist for deep research.
 Universe sources, in priority order:
   1. Tickers in active watchlist (re-score them too)
   2. Holdings (always score)
-  3. Tickers in data/ai_supply_chain.yaml (the AI-supply-chain map)
-  4. Tickers that have appeared in news in the last N days (broader coverage)
+  3. Tickers that have appeared in news in the last N days (broader coverage)
+  4. Tickers in data/ai_supply_chain.yaml (the AI-supply-chain map)
 
 We dedupe + cap at MAX_UNIVERSE so the daily run stays bounded. Score updates
 are upserts -- we keep one row per ticker with `last_score_at` stamping the
@@ -159,13 +159,6 @@ def build_discovery_universe(conn: sqlite3.Connection) -> list[str]:
         if h.ticker.upper() not in universe:
             universe.append(h.ticker.upper())
 
-    # Supply-chain map
-    for t in sorted(_load_supply_chain_tickers()):
-        if t not in universe:
-            universe.append(t)
-        if len(universe) >= MAX_UNIVERSE:
-            break
-
     # Recent-news tickers (broader coverage)
     if len(universe) < MAX_UNIVERSE:
         cutoff = (
@@ -180,6 +173,13 @@ def build_discovery_universe(conn: sqlite3.Connection) -> list[str]:
                 universe.append(t.upper())
             if len(universe) >= MAX_UNIVERSE:
                 break
+
+    # Supply-chain map fills the remaining bounded slots.
+    for t in sorted(_load_supply_chain_tickers()):
+        if t not in universe:
+            universe.append(t)
+        if len(universe) >= MAX_UNIVERSE:
+            break
 
     return universe[:MAX_UNIVERSE]
 
