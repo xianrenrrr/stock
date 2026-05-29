@@ -315,10 +315,41 @@ def apply_rewrite(
     return _stage(conn, proposal, applied=True)
 
 
+def _pending_rewrite_id(
+    conn: sqlite3.Connection, target_path: str, before_text: str
+) -> int | None:
+    """Return the id of an existing unapplied rewrite for the same edit anchor."""
+    row = conn.execute(
+        "SELECT id FROM prompt_rewrites"
+        " WHERE applied = 0 AND target_path = ? AND before_text = ?"
+        " ORDER BY id DESC LIMIT 1",
+        (target_path, before_text),
+    ).fetchone()
+    return int(row[0]) if row else None
+
+
 def _stage(
     conn: sqlite3.Connection, proposal: RewriteProposal, *, applied: bool
 ) -> int:
-    """Insert a prompt_rewrites row and return its id."""
+    """Insert a prompt_rewrites row and return its id.
+
+    Unapplied (pending-review) rows are deduplicated per (target_path,
+    before_text): if an equivalent rewrite already awaits review, return its id
+    instead of stacking byte-identical duplicates. This stops the every-5-minute
+    feedback loop from flooding the review queue when a patch cannot auto-apply
+    (e.g. the template anchor shifted under the rewriter).
+    """
+    if not applied:
+        existing_id = _pending_rewrite_id(
+            conn, proposal.target_path, proposal.before_text
+        )
+        if existing_id is not None:
+            logger.info(
+                "prompt_rewrite dedup: pending rewrite already staged for %s (id=%s)",
+                proposal.target_path, existing_id,
+            )
+            return existing_id
+
     now = datetime.now(timezone.utc).isoformat()
     cursor = conn.execute(
         "INSERT INTO prompt_rewrites (target_path, before_text, after_text,"

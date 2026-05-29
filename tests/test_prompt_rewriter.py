@@ -100,6 +100,36 @@ def test_apply_rewrite_stages_when_no_match(
     assert row[0] == 0
 
 
+def test_apply_rewrite_dedups_pending_review(
+    mem_db: sqlite3.Connection, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Re-staging the same unapplied patch reuses the pending row, not piling up."""
+    target = tmp_path / "research.txt"
+    target.write_text("foo bar baz", encoding="utf-8")
+    monkeypatch.setattr(
+        "stock.prompt_rewriter.ALLOWED_TARGETS",
+        (str(target),) + ALLOWED_TARGETS,
+    )
+
+    proposal = RewriteProposal(
+        target_path=str(target),
+        before_text="anchor that shifted",
+        after_text="x",
+        rationale="t",
+    )
+    # Simulate the every-5-minute loop re-proposing the same mismatched patch.
+    rid1 = apply_rewrite(proposal, mem_db)
+    rid2 = apply_rewrite(proposal, mem_db)
+    rid3 = apply_rewrite(proposal, mem_db)
+
+    assert rid1 == rid2 == rid3
+    count = mem_db.execute(
+        "SELECT COUNT(*) FROM prompt_rewrites WHERE target_path = ? AND applied = 0",
+        (str(target),),
+    ).fetchone()[0]
+    assert count == 1
+
+
 def test_apply_rewrite_rejects_disallowed_path(
     mem_db: sqlite3.Connection, tmp_path: Path
 ) -> None:
