@@ -14,6 +14,7 @@ from stock.models import ChatResponse, CostCeilingError
 from stock.predict import (
     PredictionOutput,
     PredictionResult,
+    _preserve_supported_calibration_direction,
     apply_probability_guardrails,
     compute_due_at,
     get_recent_features,
@@ -196,6 +197,96 @@ def test_probability_guardrails_preserve_fresh_negative_hard_catalyst(
     )
 
     assert adjusted.prob_up == pytest.approx(0.46)
+
+
+def test_calibration_direction_guard_preserves_fresh_bullish_catalyst(
+    mem_db: sqlite3.Connection,
+) -> None:
+    """Calibration cannot flip a fresh bullish hard-catalyst call below neutral."""
+    output = PredictionOutput(
+        direction="up",
+        prob_up=0.54,
+        expected_return_bps=30,
+        confidence=0.55,
+        rationale="Fresh earnings beat supports upside.",
+        key_factors=["earnings beat"],
+    )
+    features = [{
+        "catalyst_type": "earnings",
+        "sentiment": "bullish",
+        "ts": "2026-05-19T12:00:00+00:00",
+    }]
+
+    adjusted = _preserve_supported_calibration_direction(
+        "DELL",
+        output,
+        features,
+        0.47,
+        mem_db,
+        as_of=datetime(2026, 5, 19, 14, 0, tzinfo=timezone.utc),
+    )
+
+    assert adjusted == pytest.approx(0.50)
+
+
+def test_calibration_direction_guard_preserves_fresh_bearish_catalyst(
+    mem_db: sqlite3.Connection,
+) -> None:
+    """Calibration cannot flip a fresh bearish hard-catalyst call above neutral."""
+    output = PredictionOutput(
+        direction="down",
+        prob_up=0.46,
+        expected_return_bps=-30,
+        confidence=0.55,
+        rationale="Fresh guidance cut supports downside.",
+        key_factors=["guidance cut"],
+    )
+    features = [{
+        "catalyst_type": "guidance",
+        "sentiment": "bearish",
+        "ts": "2026-05-19T12:00:00+00:00",
+    }]
+
+    adjusted = _preserve_supported_calibration_direction(
+        "ORCL",
+        output,
+        features,
+        0.53,
+        mem_db,
+        as_of=datetime(2026, 5, 19, 14, 0, tzinfo=timezone.utc),
+    )
+
+    assert adjusted == pytest.approx(0.50)
+
+
+def test_calibration_direction_guard_keeps_unsupported_crossing(
+    mem_db: sqlite3.Connection,
+) -> None:
+    """Unsupported raw calls still receive the stored calibration result."""
+    output = PredictionOutput(
+        direction="up",
+        prob_up=0.54,
+        expected_return_bps=30,
+        confidence=0.55,
+        rationale="Short-term price action is positive.",
+        key_factors=["top-quartile close"],
+    )
+    features = [{
+        "catalyst_type": "analyst",
+        "sentiment": "neutral",
+        "ts": "2026-05-19T12:00:00+00:00",
+    }]
+
+    adjusted = _preserve_supported_calibration_direction(
+        "AAPL",
+        output,
+        features,
+        0.47,
+        mem_db,
+        as_of=datetime(2026, 5, 19, 14, 0, tzinfo=timezone.utc),
+    )
+
+    assert adjusted == pytest.approx(0.47)
 
 
 def _mock_chat_response(content: str = VALID_PREDICTION_JSON) -> ChatResponse:

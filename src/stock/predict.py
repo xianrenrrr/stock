@@ -31,6 +31,7 @@ PRICE_LOOKBACK: int = 10
 AI_INFRA_BREADTH_MIN_OBSERVATIONS: int = 5
 AI_INFRA_BREADTH_THRESHOLD: float = 0.65
 AI_INFRA_BEARISH_BREADTH_FLOOR: float = 0.49
+CALIBRATION_NEUTRAL_PROB: float = 0.50
 AI_INFRA_TICKERS: set[str] = {
     "AMAT", "AMD", "ASML", "AVGO", "COHR", "CRDO", "DELL", "ETN", "KLAC",
     "LITE", "LRCX", "MRVL", "MTSI", "MU", "MXL", "NVDA", "SMCI", "SMTC",
@@ -255,6 +256,29 @@ def _has_fresh_negative_hard_catalyst(
     return False
 
 
+def _has_fresh_directional_hard_catalyst(
+    output: PredictionOutput, features: list[dict[str, Any]], as_of: datetime
+) -> bool:
+    """Return true when a fresh hard catalyst supports the raw direction."""
+    expected_sentiments = (
+        {"bullish", "positive"} if output.direction == "up" else {"bearish", "negative"}
+    )
+    for feat in features:
+        catalyst = str(feat.get("catalyst_type", "")).strip().lower()
+        if catalyst not in FRESH_HARD_CATALYSTS:
+            continue
+        sentiment = str(feat.get("sentiment", "")).strip().lower()
+        if sentiment not in expected_sentiments:
+            continue
+        ts = _parse_feature_ts(feat.get("ts"))
+        if ts is None:
+            continue
+        age = as_of - ts
+        if timedelta(0) <= age <= timedelta(hours=24):
+            return True
+    return False
+
+
 def _recent_return(prices: list[dict[str, Any]], bars: int = 2) -> float | None:
     if len(prices) <= bars:
         return None
@@ -301,6 +325,40 @@ def _text_mentions_ai_infra(output: PredictionOutput) -> bool:
         [output.rationale, *[str(f) for f in output.key_factors]]
     ).lower()
     return any(keyword in text for keyword in AI_INFRA_KEYWORDS)
+
+
+def _preserve_supported_calibration_direction(
+    ticker: str,
+    output: PredictionOutput,
+    features: list[dict[str, Any]],
+    calibrated_prob: float,
+    conn: sqlite3.Connection,
+    *,
+    as_of: datetime | None = None,
+) -> float:
+    """Block calibration from crossing 0.50 on evidence-supported raw calls."""
+    raw_prob = output.prob_up
+    raw_up = raw_prob >= CALIBRATION_NEUTRAL_PROB
+    calibrated_up = calibrated_prob >= CALIBRATION_NEUTRAL_PROB
+    if raw_up == calibrated_up:
+        return calibrated_prob
+
+    now = as_of or datetime.now(timezone.utc)
+    support = _has_fresh_directional_hard_catalyst(output, features, now)
+    if (
+        not support
+        and raw_up
+        and (ticker.upper() in AI_INFRA_TICKERS or _text_mentions_ai_infra(output))
+    ):
+        support = _ai_infra_breadth_positive(conn)
+    if not support:
+        return calibrated_prob
+
+    logger.info(
+        "calibration direction guard for %s: raw=%.2f calibrated=%.2f -> %.2f",
+        ticker.upper(), raw_prob, calibrated_prob, CALIBRATION_NEUTRAL_PROB,
+    )
+    return CALIBRATION_NEUTRAL_PROB
 
 
 def apply_probability_guardrails(
@@ -467,6 +525,9 @@ def predict_ticker(
 
     # Apply calibration to raw prob_up
     calibrated_prob = calibrate(output.prob_up, conn)
+    calibrated_prob = _preserve_supported_calibration_direction(
+        ticker, output, features, calibrated_prob, conn
+    )
 
     # Compute timestamps
     now = datetime.now(timezone.utc)
