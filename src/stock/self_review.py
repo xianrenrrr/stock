@@ -1,4 +1,4 @@
-"""stock.self_review -- compile a daily review packet, route to Claude Code or MiniMax."""
+"""stock.self_review -- compile a daily review packet, route through Codex CLI."""
 from __future__ import annotations
 
 import json
@@ -26,12 +26,12 @@ logger = logging.getLogger(__name__)
 
 REVIEW_DIR: str = "pipeline"
 REVIEW_PROMPT_PATH: str = "prompts/self_review.txt"
-SELF_REVIEW_MODEL: str = "MiniMax-M2.5-highspeed"
+SELF_REVIEW_MODEL: str = "codex-cli-session"
 SELF_REVIEW_MAX_TOKENS: int = 4000
 LOOKBACK_HOURS: int = 24
 PROMPT_REWRITES_LOOKBACK_DAYS: int = 7
 ALLOWED_BACKENDS: tuple[str, ...] = (
-    "claude_code", "minimax", "both", "claude_cli", "codex_cli", "off",
+    "claude_code", "claude_cli", "codex_cli", "off",
 )
 CLAUDE_CLI_TIMEOUT_SECS: int = 1800
 CLAUDE_CLI_MODEL: str = "claude-opus-4-7"
@@ -343,7 +343,7 @@ def _section_open_questions() -> str:
     out = [_section_header("Open questions for the reviewer")]
     out.append(
         "1. Are any of the failures above caused by upstream provider changes"
-        " (RSS feed format, yfinance API, SEC EDGAR, MiniMax)?\n"
+        " (RSS feed format, yfinance API, SEC EDGAR, Codex CLI)?\n"
         "2. Do recent boss instructions imply a code change beyond what F13's"
         " prompt-rewriter can do (new feeds, new schedule, new logic)?\n"
         "3. Are pending action-queue items piling up — and if so, is the"
@@ -396,15 +396,15 @@ def _load_review_prompt() -> tuple[str, str]:
     return system_part, user_part
 
 
-def propose_via_minimax(
+def propose_via_codex(
     packet: ReviewPacketResult, conn: sqlite3.Connection
 ) -> list[ReviewProposal]:
-    """Call MiniMax with the packet, parse strict-JSON proposal list."""
+    """Call the Codex-first core backend with the packet and parse proposals."""
     settings = get_settings()
     try:
         check_cost_ceiling(conn, settings)
     except CostCeilingError:
-        logger.warning("propose_via_minimax skipped: cost ceiling reached")
+        logger.warning("propose_via_codex skipped: cost ceiling reached")
         return []
 
     # Compose the messages
@@ -412,7 +412,7 @@ def propose_via_minimax(
     user_message = user_template.format(packet=packet.body)
     messages: list[ChatMessage] = [{"role": "user", "content": user_message}]
 
-    # Call the active core backend (claude_cli or minimax via CORE_LLM_BACKEND)
+    # Call the active Codex-first core backend.
     try:
         client = get_core_client()
         response: ChatResponse = client.chat(
@@ -426,19 +426,19 @@ def propose_via_minimax(
     except CostCeilingError:
         return []
     except Exception:
-        logger.exception("propose_via_minimax LLM call failed")
+        logger.exception("propose_via_codex LLM call failed")
         return []
 
     # Parse JSON proposals
     try:
         parsed = parse_llm_json(response.content)
     except Exception:
-        logger.exception("propose_via_minimax JSON parse failed")
+        logger.exception("propose_via_codex JSON parse failed")
         return []
 
     raw_items = parsed.get("proposals") if isinstance(parsed, dict) else None
     if not isinstance(raw_items, list):
-        logger.warning("propose_via_minimax: no 'proposals' list in response")
+        logger.warning("propose_via_codex: no 'proposals' list in response")
         return []
 
     proposals: list[ReviewProposal] = []
@@ -957,23 +957,24 @@ def run_daily_review(conn: sqlite3.Connection) -> ReviewPacketResult:
     packet = compile_daily_packet(conn)
     logger.info("self_review packet written: %s (%d bytes)", packet.path, len(packet.body))
 
-    # Route to MiniMax when requested
-    if backend in ("minimax", "both"):
-        proposals = propose_via_minimax(packet, conn)
+    # Route proposal-only review through the same Codex-first backend when the
+    # legacy claude_code backend is requested.
+    if backend == "claude_code":
+        proposals = propose_via_codex(packet, conn)
         if proposals:
             ids = store_proposals(
                 conn,
                 review_date=packet.date,
-                backend="minimax",
+                backend="codex_cli",
                 proposals=proposals,
             )
             logger.info(
-                "self_review minimax: stored %d proposals (ids=%s)",
+                "self_review codex: stored %d proposals (ids=%s)",
                 len(proposals),
                 ids,
             )
         else:
-            logger.info("self_review minimax: no proposals returned")
+            logger.info("self_review codex: no proposals returned")
 
     # Route to Codex autopilot (with claude_cli fallback) when requested
     if backend == "codex_cli":

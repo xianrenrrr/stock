@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import sys
 import traceback
 from pathlib import Path
 from typing import Annotated
@@ -45,6 +46,13 @@ from stock.wechat_inbox import (
     read_feedback_entries,
 )
 
+
+def _console_safe(text: str) -> str:
+    """Avoid Windows cp1252 crashes when CLI output contains Chinese topics."""
+    encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+    return text.encode(encoding, errors="backslashreplace").decode(encoding)
+
+
 app = typer.Typer(name="stock", help="Stock prediction pipeline CLI.")
 ingest_app = typer.Typer(help="Ingest news and price data.")
 app.add_typer(ingest_app, name="ingest")
@@ -54,7 +62,7 @@ holding_app = typer.Typer(help="Manage tracked portfolio holdings.")
 app.add_typer(holding_app, name="holding")
 channel_app = typer.Typer(help="Manage per-recipient dashboard tokens (channel.py).")
 app.add_typer(channel_app, name="channel-token")
-self_review_app = typer.Typer(help="Daily self-review packet + Claude/MiniMax proposals.")
+self_review_app = typer.Typer(help="Daily self-review packet + Codex CLI proposals.")
 app.add_typer(self_review_app, name="self-review")
 
 
@@ -89,7 +97,7 @@ def self_review_run_cmd(
         str,
         typer.Option(
             "--backend",
-            help="Override SELF_REVIEW_BACKEND (claude_code | minimax | both | off)",
+            help="Override SELF_REVIEW_BACKEND (codex_cli | claude_cli | claude_code | off)",
         ),
     ] = "",
 ) -> None:
@@ -483,11 +491,13 @@ def research_cmd(
             conn, focus_layer_name=layer, language=language
         )
         typer.echo(
-            f"Research id={report.research_id} layer={report.layer_focus}"
-            f" cost=${report.cost_usd:.4f}"
+            _console_safe(
+                f"Research id={report.research_id} layer={report.layer_focus}"
+                f" cost=${report.cost_usd:.4f}"
+            )
         )
         typer.echo("--- Body ---")
-        typer.echo(report.body)
+        typer.echo(_console_safe(report.body))
         typer.echo("--- End body ---")
 
         if push:
@@ -525,11 +535,13 @@ def deep_dive_cmd(
             conn, topic=topic, extra_context=extra_context, language=language
         )
         typer.echo(
-            f"Deep dive id={report.research_id} topic={report.topic}"
-            f" cost=${report.cost_usd:.4f}"
+            _console_safe(
+                f"Deep dive id={report.research_id} topic={report.topic}"
+                f" cost=${report.cost_usd:.4f}"
+            )
         )
         typer.echo("--- Body ---")
-        typer.echo(report.body)
+        typer.echo(_console_safe(report.body))
         typer.echo("--- End body ---")
 
         if push:
@@ -799,11 +811,11 @@ def action_queue_list_cmd() -> None:
         done = action_queue.recent_completed(conn, hours=24)
         typer.echo(f"Pending: {len(pend)}")
         for item in pend:
-            typer.echo(f"  - id={item.id} | {item.topic[:80]}")
+            typer.echo(_console_safe(f"  - id={item.id} | {item.topic[:120]}"))
         typer.echo(f"Recently completed (24h): {len(done)}")
         for item in done:
             tag = f"deep_dive_id={item.deep_dive_id}" if item.deep_dive_id else "no body"
-            typer.echo(f"  - id={item.id} | {item.topic[:80]} | {tag}")
+            typer.echo(_console_safe(f"  - id={item.id} | {item.topic[:120]} | {tag}"))
     except Exception:
         typer.echo(traceback.format_exc(), err=True)
         raise typer.Exit(code=1)
@@ -821,7 +833,7 @@ def action_queue_run_cmd(
         completed = action_queue.run_pending(conn, max_items=max_items)
         typer.echo(f"Drained: {len(completed)}")
         for item in completed:
-            typer.echo(f"  - {item.status} | {item.topic[:80]}")
+            typer.echo(_console_safe(f"  - {item.status} | {item.topic[:120]}"))
     except Exception:
         typer.echo(traceback.format_exc(), err=True)
         raise typer.Exit(code=1)
@@ -1266,7 +1278,6 @@ def backend_show_cmd() -> None:
         typer.echo(f"core model       = {get_core_model() or '(codex default)'}")
         client = get_core_client()
         typer.echo(f"client provider  = {client.provider}")
-        typer.echo(f"minimax key set  = {bool(settings.minimax_api_key)}")
         typer.echo(f"codex_cli bin    = {CODEX_CLI_CORE_BIN}")
         typer.echo(f"claude_cli bin   = {CLAUDE_CLI_CORE_BIN}")
 
@@ -1293,7 +1304,7 @@ def backend_show_cmd() -> None:
             else:
                 typer.echo(
                     f"WARNING: `{CLAUDE_CLI_CORE_BIN}` not on PATH;"
-                    f" claude fallback unavailable -- core calls will drop to MiniMax."
+                    f" claude fallback unavailable -- core calls will fail closed."
                 )
                 any_missing = True
         if any_missing:
@@ -1310,7 +1321,7 @@ def backend_show_cmd() -> None:
 @backend_app.command("set")
 def backend_set_cmd(
     backend: Annotated[
-        str, typer.Argument(help="Backend name: codex_cli | claude_cli | minimax"),
+        str, typer.Argument(help="Backend name: codex_cli | claude_cli"),
     ],
 ) -> None:
     """Update CORE_LLM_BACKEND in .env (creates the file if missing).
@@ -1320,9 +1331,9 @@ def backend_set_cmd(
     using the previous backend.
     """
     backend = backend.strip().lower()
-    if backend not in ("minimax", "claude_cli", "codex_cli"):
+    if backend not in ("claude_cli", "codex_cli"):
         typer.echo(
-            f"Backend must be one of 'codex_cli', 'claude_cli', 'minimax'; got '{backend}'.",
+            f"Backend must be one of 'codex_cli', 'claude_cli'; got '{backend}'.",
             err=True,
         )
         raise typer.Exit(code=1)

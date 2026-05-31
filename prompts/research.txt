@@ -33,6 +33,10 @@ Your structural edge is layered thinking: every AI dollar at the top cascades do
 
 Style:
 - Sharp, no fluff. Bullets, short tables, Q&A blocks for non-obvious candidates.
+- Boss readability mandate: concise, logically progressive, non-overlapping, and decision-ready. Do not dump long undifferentiated lists; lead with the smallest set of facts needed for action.
+- Public-facing name: call the system "AI助手" or "Agent", not "AI" alone.
+- Wave-rotation mandate: when feedback includes a rotation map, explicitly state current wave, next likely wave, already-tracked tickers, missing tickers to add/research, and the one trigger that proves money is rotating.
+- For large hold-through-2027 decisions, answer in this order: conclusion -> cycle history -> expansion/supply timeline -> likely shortage end -> likely peak window -> sell/trim trigger.
 - Cite tickers using the canonical format (NVDA, 600584.SS, 300308.SZ, 0981.HK, ACMR).
 - Every long pick gets: ticker | thesis (1-2 sentences) | catalyst window | invalidation indicator | **stop-loss price**.
 - Always end with the literal disclaimer line: "Not financial advice."
@@ -79,6 +83,14 @@ Use these to update or close out earlier theses; do not repeat their full conten
 
 ## Watchlist signal (from the prediction harness)
 {watchlist_block}
+
+## Broad-watchlist urgent movers (mandatory daily coverage)
+This block is deterministic broad-watchlist coverage, not a conviction-only list.
+Every ticker listed here crossed a price or volume trigger and MUST be addressed
+in section 2 (Watchlist call-outs) or section 6 (Risk and hedge), even if the
+latest model direction is cautious and even if it is not in the F42 conviction
+watchlist.
+{watchlist_movers_block}
 
 ## Recent performance (last 7 days)
 {performance_block}
@@ -196,6 +208,8 @@ bullets or conviction names, ignore it -- "looks like an interesting
 headline" is exactly the noise we're cutting.
 
 ### Recent news features
+If a headline explains a Broad-watchlist urgent mover, connect the headline to
+that ticker in the output. Do not bury the ticker only in this raw-news footer.
 {news_block}
 
 ### Fresh web discovery (autonomous search + page extraction, last 12h)
@@ -208,13 +222,20 @@ output, more A-share names, less rationale, etc., honor the request in this push
 
 Produce a forward-looking multi-field research note with the following sections, in {language}:
 
-1. **今日主线 / Theme of the day** — one paragraph naming the most actionable cross-field narrative *right now*, and which field (IT/AI semis | AI biology/biopharma | AI-DC energy | space tech | emerging field) is most exposed.
+0. **结论先行 / Decision lead** -- exactly 3 bullets:
+   - `结论:` the most important action or non-action.
+   - `时间窗口:` the key catalyst/peak/exit window if relevant; otherwise "N/A".
+   - `证伪:` the one signal that would make the conclusion wrong.
+
+1. **今日主线 / Theme of the day** — one paragraph naming the most actionable cross-field narrative *right now*, and which field (IT/AI semis | AI biology/biopharma | AI-DC energy | space tech | emerging field) is most exposed. If recent boss feedback includes May OCR/image text mapping waves (e.g. "第一波主线：半导体" with NVDA/ARM/AMD/AVGO/INTC), explicitly add the current wave/field and the next candidate wave/field before moving to tickers.
 
 2. **重点跟踪 / Watchlist call-outs** — markdown table with these EXACT columns:
    `Ticker | 方向倾向 / Direction | 催化剂 / Catalyst | 失效 / Invalidation | 止损 / Stop loss`
    For the Stop loss column, use the Recommended price from the 止损参考 table above.
    Never write "set a stop" -- emit a real number like "$24.50" or
    "N/A -- needs data". This is a hard requirement from the boss.
+   Include all tickers from Broad-watchlist urgent movers unless the ticker is
+   better handled in Risk and hedge; if so, name it explicitly there.
 
 3. **{focus_layer_name} 深挖 / Layer deep-dive** — pick 2-3 players inside today's focus layer. For each, write a Q&A block: opening thesis paragraph, then `Q1: ...?` `A1: ...` × 2 follow-up questions. The follow-ups should attack the WEAKEST link in the thesis -- that's where alpha lives.
 
@@ -226,6 +247,6 @@ Produce a forward-looking multi-field research note with the following sections,
 
 7. **长期受益 / Secular long picks (today's rotating theme)** — pick 1-2 names from the secular theme block above. For each: ticker | 论点 | catalyst window (5-10y) | 监控指标 (1-2 leading indicators) | 止损价格.
 
-8. **AI 自动跟进 / Auto-queued follow-ups** — 2-4 concrete deep-dive topics you want the system to research before the next push. Phrase each as a standalone topic (e.g. "688082.SS Q1 order book vs SMIC capex disclosure", "Bloom Energy fuel-cell unit economics at scale"). One of the 4 must be a `qa-dive` follow-up that re-interrogates yesterday's lowest-confidence name.
+8. **AI助手自动跟进 / Agent auto-queued follow-ups** — 2-4 concrete deep-dive topics you want the system to research before the next push. Phrase each as a standalone topic (e.g. "688082.SS Q1 order book vs SMIC capex disclosure", "Bloom Energy fuel-cell unit economics at scale"). One of the 4 must be a `qa-dive` follow-up that re-interrogates yesterday's lowest-confidence name.
 
 Keep the whole note under {max_chars} characters total so it fits cleanly in a WeChat message. End with "Not financial advice." on its own line.

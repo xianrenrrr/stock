@@ -32,18 +32,12 @@ def strip_thinking(content: str) -> str:
         cleaned = cleaned.split("<think>")[0]
     return cleaned.strip()
 
-# Default to China-mainland host (api.minimaxi.com). The "global" host (api.minimax.io)
-# uses a *different* API key issued by platform.minimax.io. If your key was issued
-# against the global host, set MINIMAX_BASE_URL=https://api.minimax.io/v1 in .env.
+# Legacy MiniMax constants are kept only so old DB rows/tests can still be read.
+# Runtime LLM work is Codex CLI first. MiniMax must not be an automatic fallback.
 MINIMAX_BASE_URL: str = "https://api.minimaxi.com/v1"
 MINIMAX_DEFAULT_MODEL: str = "MiniMax-M2.5-highspeed"
 MINIMAX_HTTP_TIMEOUT_SECS: float = 60.0
-# Cap retries low: when balance is depleted MiniMax returns 429 with
-# `insufficient_balance_error` and the OpenAI SDK auto-retries up to N times
-# with exponential backoff. With N=8 a single bad call burns ~28s; with the
-# whole watchlist that compounds into hour-long ingest hangs. With balance
-# the calls succeed first try anyway, so 1 retry is the right ceiling --
-# transient network blip recovers, true failures fail fast.
+# Cap retries low for the legacy explicit MiniMax client.
 MINIMAX_MAX_RETRIES: int = 1
 
 PRICING: dict[str, dict[str, float]] = {
@@ -62,8 +56,7 @@ PRICING: dict[str, dict[str, float]] = {
 
 # F17: subprocess Claude Code session as a swappable core backend. Has built-in
 # WebSearch so the prompt can ground itself; our existing Tavily/Serper layer
-# (stock.websearch) stays available as an explicit backup for the MiniMax path
-# and as a fallback when subprocess search whiffs.
+# stays available for autonomous discovery.
 CLAUDE_CLI_CORE_BIN: str = "claude"
 CLAUDE_CLI_CORE_DEFAULT_MODEL: str = "claude-opus-4-7"
 CLAUDE_CLI_CORE_TIMEOUT_SECS: int = 600
@@ -227,17 +220,10 @@ class LLMClient:
         self._anthropic_client: anthropic.Anthropic | None = None
 
         if provider == "minimax":
-            settings = get_settings()
-            base_url = (settings.minimax_base_url or "").strip() or MINIMAX_BASE_URL
-            # Aggressive retries because api.minimaxi.com DNS can be flaky from the US;
-            # the OpenAI SDK does exponential backoff between attempts internally.
-            self._openai_client = openai.OpenAI(
-                api_key=api_key,
-                base_url=base_url,
-                max_retries=MINIMAX_MAX_RETRIES,
-                timeout=MINIMAX_HTTP_TIMEOUT_SECS,
+            raise RuntimeError(
+                "MiniMax provider is retired. Route LLM calls through get_core_client()."
             )
-        elif provider == "claude":
+        if provider == "claude":
             self._anthropic_client = anthropic.Anthropic(api_key=api_key)
         else:
             raise ValueError(f"Unknown provider: {provider}")
@@ -379,7 +365,10 @@ def get_client(provider: str) -> LLMClient:
     """Return an LLMClient for the given provider."""
     settings = get_settings()
     if provider == "minimax":
-        return LLMClient("minimax", settings.minimax_api_key)
+        raise RuntimeError(
+            "MiniMax runtime client is retired. Route LLM calls through "
+            "get_core_client() so they use Codex CLI."
+        )
     if provider == "claude":
         return LLMClient("claude", settings.anthropic_api_key)
     raise ValueError(f"Unknown provider: {provider}")
@@ -398,8 +387,7 @@ class ClaudeCliClient:
     Claude Code subscription -- cost is logged as $0 against our daily ceiling.
 
     Critically, `claude -p` has access to its own WebSearch tool, so prompts can
-    self-ground without going through our Tavily/Serper layer. The Tavily layer
-    stays available as the backup path and is still used by the MiniMax backend.
+    self-ground without going through our Tavily/Serper layer.
     """
 
     def __init__(
@@ -437,8 +425,7 @@ class ClaudeCliClient:
         import subprocess
 
         # Cost ceiling check is a no-op for this backend (cost is $0 here), but
-        # we still call it so a MiniMax-spike day blocks subprocess calls too --
-        # we don't want a runaway subscription drain hidden behind "free."
+        # we still call it so a runaway subprocess loop is visible to ops.
         settings = get_settings()
         check_cost_ceiling(conn, settings)
 
@@ -467,7 +454,7 @@ class ClaudeCliClient:
         # a 32 KB total command-line limit; the daily research prompt with all
         # its context blocks (watchlist + news + supply chain + thesis +
         # discovery + holdings) easily exceeds that and the call would silently
-        # fail then fall back to MiniMax. `claude -p` reads from stdin when
+        # fail. `claude -p` reads from stdin when
         # the positional prompt arg is omitted.
         start = time.perf_counter()
         # Windows: pass CREATE_NO_WINDOW so subprocess.run doesn't flash a
@@ -739,9 +726,8 @@ class CodexWithClaudeFallback:
     """Try codex_cli first; on CodexCliUnavailable, fall back to claude_cli.
 
     This is what `get_core_client()` returns when core_llm_backend == "codex_cli"
-    (the new default). It preserves the existing call-site contract: callers
-    catch `ClaudeCliUnavailable` and drop to MiniMax, so a both-subprocess-
-    failed scenario still degrades gracefully through the final MiniMax tier.
+    (the default). If both subprocess backends fail, the error propagates; we do
+    not silently fall back to MiniMax.
     """
 
     def __init__(self) -> None:
@@ -826,12 +812,11 @@ def get_core_client() -> LLMClient | ClaudeCliClient | CodexCliClient | CodexWit
                               binary / non-zero exit. Free under the user's
                               ChatGPT + Claude Code subscriptions.
       "claude_cli"          : pure Claude Code CLI (no codex layer).
-      "minimax"             : MiniMax via OpenAI-compatible endpoint
-                              (metered, faster, balance-dependent).
-      anything else         : treated as minimax (defensive default).
+      "minimax"             : legacy value; ignored and routed to codex_cli.
+      anything else         : routed to codex_cli.
 
-    A both-subprocess-failed scenario propagates `ClaudeCliUnavailable` to
-    the caller, which existing call sites catch and downgrade to MiniMax.
+    A both-subprocess-failed scenario propagates `ClaudeCliUnavailable` to the
+    caller; MiniMax is not used as a safety net.
     """
     settings = get_settings()
     backend = (settings.core_llm_backend or "codex_cli").strip().lower()
@@ -840,9 +825,10 @@ def get_core_client() -> LLMClient | ClaudeCliClient | CodexCliClient | CodexWit
     if backend == "claude_cli":
         return ClaudeCliClient()
     if backend == "minimax":
-        return get_client("minimax")
-    logger.warning("Unknown CORE_LLM_BACKEND=%s; using minimax", backend)
-    return get_client("minimax")
+        logger.warning("CORE_LLM_BACKEND=minimax is legacy; using codex_cli")
+        return CodexWithClaudeFallback()
+    logger.warning("Unknown CORE_LLM_BACKEND=%s; using codex_cli", backend)
+    return CodexWithClaudeFallback()
 
 
 def get_core_model() -> str:
@@ -859,4 +845,4 @@ def get_core_model() -> str:
         return (getattr(settings, "core_codex_model", "") or CODEX_CLI_CORE_DEFAULT_MODEL).strip()
     if backend == "claude_cli":
         return (settings.core_claude_model or CLAUDE_CLI_CORE_DEFAULT_MODEL).strip()
-    return MINIMAX_DEFAULT_MODEL
+    return (getattr(settings, "core_codex_model", "") or CODEX_CLI_CORE_DEFAULT_MODEL).strip()

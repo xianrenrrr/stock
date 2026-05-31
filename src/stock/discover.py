@@ -295,7 +295,7 @@ def run_discovery(
     # Cost-ceiling check before LLM dispatch
     check_cost_ceiling(conn, settings)
 
-    # LLM extraction (cheap MiniMax model)
+    # LLM extraction through the Codex-first core backend.
     system_template, user_template = _load_extract_prompt()
     user_message = user_template.format(
         focus_layer_name=focus_layer.layer,

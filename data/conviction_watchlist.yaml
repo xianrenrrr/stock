@@ -146,6 +146,24 @@ names:
   # 0981.HK) discloses or the JV gets spun out separately. If you find a different
   # interpretation of "盛合微晶", `stock conviction add ...` to register it.
 
+  - ticker: AVGO
+    name: Broadcom (CPO / switch silicon anchor)
+    trend_id: cpo_co_packaged_optics
+    why: "Switch ASIC + AI networking silicon anchor; CPO adoption should surface first in hyperscaler roadmap/design-win commentary"
+    enabled: true
+
+  - ticker: MRVL
+    name: Marvell (PAM4/DSP + AI networking silicon)
+    trend_id: cpo_co_packaged_optics
+    why: "DSP/optical-networking silicon read-through; bridge name between pluggable optics, CPO, and AI fabric upgrades"
+    enabled: true
+
+  - ticker: AAOI
+    name: Applied Optoelectronics (smaller optical module / laser proxy)
+    trend_id: cpo_co_packaged_optics
+    why: "Higher-beta smaller optical-module/laser proxy for AI DC interconnect demand; use CPO as upside/risk lens"
+    enabled: true
+
   # =====================================================================
   # Boss directive 2026-05-07: high-growth A-share AI names + IDM PPT validation
   # All from confirmed Q1 2026 high-growth list (>30% YoY net income growth)

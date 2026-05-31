@@ -52,6 +52,14 @@ _NOTE_F11 = """\
 Not financial advice.
 """
 
+_NOTE_AGENT_FOLLOWUPS = """\
+1. Theme.
+8. AI助手自动跟进 / Agent auto-queued follow-ups
+- HBM cycle peak-window study through 2027
+- Optical 800G/1.6T expansion lead-time audit
+
+Not financial advice.
+"""
 
 # ---- extract_action_items -------------------------------------------------
 
@@ -77,6 +85,13 @@ def test_extract_action_items_f11_heading() -> None:
     assert "HBM3E" in items[0]
 
 
+def test_extract_action_items_agent_heading() -> None:
+    """The AI助手 / Agent heading is matched after the boss rename request."""
+    items = extract_action_items(_NOTE_AGENT_FOLLOWUPS)
+    assert len(items) == 2
+    assert "peak-window" in items[0]
+
+
 def test_extract_action_items_no_heading() -> None:
     """Body without a recognized heading returns empty list."""
     items = extract_action_items("just a paragraph with no heading.\n")
@@ -89,10 +104,10 @@ def test_extract_action_items_empty_body() -> None:
 
 
 def test_normalize_topic_truncates() -> None:
-    """Topics over 80 chars are truncated."""
+    """Topics over the configured cap are truncated."""
     long = "x" * 200
     out = normalize_topic(long)
-    assert len(out) <= 80
+    assert len(out) <= action_queue.TOPIC_MAX_CHARS
 
 
 def test_normalize_topic_strips_quotes_and_bullets() -> None:
@@ -255,3 +270,4 @@ def test_recent_completed_filters_by_window(mem_db: sqlite3.Connection) -> None:
     topics = {item.topic for item in items}
     assert "fresh" in topics
     assert "old" not in topics
+

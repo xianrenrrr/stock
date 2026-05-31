@@ -31,7 +31,7 @@ class BanditSelection(BaseModel):
 
 
 REGISTERED_ARMS: list[ArmConfig] = [
-    ArmConfig(name="minimax/default", provider="minimax", model="MiniMax-M1-80k"),
+    ArmConfig(name="codex_cli/default", provider="codex_cli", model="codex-cli-session"),
 ]
 
 

@@ -10,6 +10,10 @@
 #   2. biopharma_smallcap    -- mechanism+ small-mid biotechs ahead of pivotal data
 #   3. ai_dc_energy_smallcap -- physical-power solvers for the AI-DC bottleneck
 #   4. space_tech_smallcap   -- space infrastructure + geospatial AI data layer
+#   5. ai_compute_cloud_smallcap -- miner-to-AI compute-site conversions
+#   6. critical_materials_smallcap -- raw-material/rare-earth bottlenecks
+#   7. defense_drones_smallcap -- defense drone/autonomy procurement
+#   8. robotics_autonomy_smallcap -- embodied AI / automation wave
 #
 # Each ticker carries:
 #   - niche_bottleneck: the SPECIFIC problem it solves (one sentence)
@@ -29,6 +33,7 @@ universe:
     - {ticker: ICHR,     name: Ichor Holdings,         mkt_cap_target_usd: 700000000,  niche_bottleneck: "Fluid delivery subsystems for AMAT/LRCX; pure-play WFE shovel maker", inflection_signal: "AMAT + LRCX guidance up = ICHR up 1Q later"}
     - {ticker: ONTO,     name: Onto Innovation,        mkt_cap_target_usd: 7000000000, niche_bottleneck: "Optical metrology for HBM packaging; quietly added by Samsung/SK", inflection_signal: "HBM-bound revenue % disclosure in next earnings"}
     - {ticker: AEHR,     name: Aehr Test Systems,      mkt_cap_target_usd: 350000000,  niche_bottleneck: "Wafer-level burn-in for SiC + photonics; nichest of niches", inflection_signal: "ON Semi or Wolfspeed adding capacity"}
+    - {ticker: AAOI,     name: Applied Optoelectronics, mkt_cap_target_usd: 1200000000, niche_bottleneck: "Smaller optical-module / laser supplier for AI data-center interconnect; higher-beta read-through to 800G/1.6T demand", inflection_signal: "Datacenter revenue acceleration + customer concentration improving"}
     - {ticker: PLAB,     name: Photon Dynamics,        mkt_cap_target_usd: 1200000000, niche_bottleneck: "Photomask supplier 2nd-source vs Toppan; DUV/EUV-prep mask demand", inflection_signal: "Sole-supply contract loss recovery"}
     - {ticker: AMSC,     name: American Superconductor, mkt_cap_target_usd: 800000000, niche_bottleneck: "HTS cable for grid + Navy; AI-DC interconnect adjacency", inflection_signal: "Utility partnership announcements"}
     - {ticker: NVMI,     name: Nova,                   mkt_cap_target_usd: 7500000000, niche_bottleneck: "Process-control metrology for advanced nodes; >5nm beneficiary", inflection_signal: "TSMC 2nm volume timing"}
@@ -90,3 +95,39 @@ universe:
     - {ticker: NPWR,     name: NET Power,              mkt_cap_target_usd: 350000000,  niche_bottleneck: "Allam-cycle natural gas zero-emission power; first commercial plant 2027", inflection_signal: "First MW online + offtake announcements"}
     - {ticker: OKLO,     name: Oklo,                   mkt_cap_target_usd: 8000000000, niche_bottleneck: "Small modular nuclear reactor; AI-DC PPA optionality", inflection_signal: "NRC license application progress"}
     - {ticker: NNE,      name: Nano Nuclear Energy,    mkt_cap_target_usd: 700000000,  niche_bottleneck: "Microreactor concept stage; speculative AI-DC SMR play", inflection_signal: "DOE funding + first-fuel milestones"}
+
+  # =====================================================================
+  # AI compute cloud / miner-to-AI conversion (YouTuber 2026-05-07 hypothesis)
+  # =====================================================================
+  ai_compute_cloud_smallcap:
+    - {ticker: IREN,     name: IREN,                   mkt_cap_target_usd: 8000000000, niche_bottleneck: "Power-site owner converting mining infrastructure into AI compute hosting", inflection_signal: "Binding GPU-hosting contracts + contracted MW growth"}
+    - {ticker: CIFR,     name: Cipher Mining,          mkt_cap_target_usd: 4000000000, niche_bottleneck: "Bitcoin miner with power/interconnect optionality for AI data-center conversion", inflection_signal: "AI/HPC customer contract and financing terms"}
+    - {ticker: WULF,     name: TeraWulf,               mkt_cap_target_usd: 5000000000, niche_bottleneck: "Low-cost power and site control; candidate for AI compute conversion", inflection_signal: "HPC lease signings and non-dilutive project financing"}
+    - {ticker: CORZ,     name: Core Scientific,        mkt_cap_target_usd: 6000000000, niche_bottleneck: "Large hosting footprint; AI infrastructure conversion read-through", inflection_signal: "AI hosting backlog, MW conversion pace, and customer concentration"}
+    - {ticker: NBIS,     name: Nebius,                 mkt_cap_target_usd: 12000000000, niche_bottleneck: "AI cloud capacity proxy outside hyperscalers", inflection_signal: "GPU capacity additions + enterprise revenue growth"}
+
+  # =====================================================================
+  # Critical materials / rare earths (YouTuber 2026-05-07 hypothesis)
+  # =====================================================================
+  critical_materials_smallcap:
+    - {ticker: MP,       name: MP Materials,           mkt_cap_target_usd: 6000000000, niche_bottleneck: "US rare-earth mining/refining and magnet supply-chain localization", inflection_signal: "Magnetics revenue ramp + offtake/policy support"}
+    - {ticker: USAR,     name: USA Rare Earth,         mkt_cap_target_usd: 3000000000, niche_bottleneck: "Domestic rare-earth processing/magnet optionality", inflection_signal: "Commercial processing milestone and customer offtake"}
+    - {ticker: UUUU,     name: Energy Fuels,           mkt_cap_target_usd: 2000000000, niche_bottleneck: "Uranium plus rare-earth processing optionality", inflection_signal: "Rare-earth separation revenue and uranium contract pricing"}
+    - {ticker: FCX,      name: Freeport-McMoRan,       mkt_cap_target_usd: 70000000000, niche_bottleneck: "Copper supply for grid/data-center buildout", inflection_signal: "Copper price breakout + capex-driven volume guidance"}
+    - {ticker: AA,       name: Alcoa,                  mkt_cap_target_usd: 12000000000, niche_bottleneck: "Aluminum input for grid/data-center construction", inflection_signal: "Aluminum price and smelter margin inflection"}
+
+  # =====================================================================
+  # Defense drones / autonomy
+  # =====================================================================
+  defense_drones_smallcap:
+    - {ticker: KTOS,     name: Kratos Defense,         mkt_cap_target_usd: 5000000000, niche_bottleneck: "Attritable drone and tactical systems supplier", inflection_signal: "Defense drone program awards and backlog conversion"}
+    - {ticker: AVAV,     name: AeroVironment,          mkt_cap_target_usd: 6000000000, niche_bottleneck: "Small unmanned systems and loitering munitions leader", inflection_signal: "DoD/Ukraine replenishment orders and margin expansion"}
+    - {ticker: ONDS,     name: Ondas Holdings,         mkt_cap_target_usd: 500000000, niche_bottleneck: "Drone systems and autonomy for inspection/security niches", inflection_signal: "Commercial/defense fleet deployments and recurring revenue"}
+
+  # =====================================================================
+  # Robotics / autonomous systems
+  # =====================================================================
+  robotics_autonomy_smallcap:
+    - {ticker: PATH,     name: UiPath,                 mkt_cap_target_usd: 8000000000, niche_bottleneck: "Enterprise RPA platform exposed to AI agent workflow automation", inflection_signal: "ARR acceleration and AI-agent attach rate"}
+    - {ticker: SYM,      name: Symbotic,               mkt_cap_target_usd: 12000000000, niche_bottleneck: "Warehouse automation robotics for labor-scarce logistics", inflection_signal: "Backlog conversion and gross-margin recovery"}
+    - {ticker: SERV,     name: Serve Robotics,         mkt_cap_target_usd: 1000000000, niche_bottleneck: "Last-mile delivery robotics with high-beta autonomy exposure", inflection_signal: "Fleet deployment growth and unit economics"}

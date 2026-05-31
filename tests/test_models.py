@@ -19,11 +19,10 @@ from stock.models import (
 )
 
 
-def test_get_client_minimax(env_settings: Settings) -> None:
-    """get_client('minimax') returns a minimax-backed client."""
-    with patch("stock.models.openai.OpenAI"):
-        client = get_client("minimax")
-    assert client.provider == "minimax"
+def test_get_client_minimax_is_retired(env_settings: Settings) -> None:
+    """get_client('minimax') fails closed; runtime must use get_core_client()."""
+    with pytest.raises(RuntimeError, match="MiniMax runtime client is retired"):
+        get_client("minimax")
 
 
 def test_get_client_claude(env_settings: Settings) -> None:
@@ -45,57 +44,10 @@ def test_empty_api_key_raises() -> None:
         LLMClient("minimax", "")
 
 
-def test_chat_minimax_logs_call(
-    env_settings: Settings, mem_db: sqlite3.Connection
-) -> None:
-    """MiniMax chat call creates a row in llm_calls."""
-    mock_response = MagicMock()
-    mock_response.choices = [MagicMock()]
-    mock_response.choices[0].message.content = '{"test": "data"}'
-    mock_response.usage.prompt_tokens = 100
-    mock_response.usage.completion_tokens = 50
-
-    with patch("stock.models.openai.OpenAI") as mock_openai:
-        mock_oa_client = MagicMock()
-        mock_openai.return_value = mock_oa_client
-        mock_oa_client.chat.completions.create.return_value = mock_response
-
-        client = LLMClient("minimax", "test-key")
-        messages: list[ChatMessage] = [{"role": "user", "content": "test"}]
-        client.chat(messages, "MiniMax-M1-80k", 100, mem_db, "test_caller")
-
-    row = mem_db.execute("SELECT * FROM llm_calls").fetchone()
-    assert row is not None
-    assert row[1] == "MiniMax-M1-80k"
-    assert row[2] == "minimax"
-    assert row[7] == "test_caller"
-
-
-def test_chat_returns_chat_response(
-    env_settings: Settings, mem_db: sqlite3.Connection
-) -> None:
-    """chat() returns a properly populated ChatResponse."""
-    mock_response = MagicMock()
-    mock_response.choices = [MagicMock()]
-    mock_response.choices[0].message.content = '{"result": "ok"}'
-    mock_response.usage.prompt_tokens = 100
-    mock_response.usage.completion_tokens = 50
-
-    with patch("stock.models.openai.OpenAI") as mock_openai:
-        mock_oa_client = MagicMock()
-        mock_openai.return_value = mock_oa_client
-        mock_oa_client.chat.completions.create.return_value = mock_response
-
-        client = LLMClient("minimax", "test-key")
-        messages: list[ChatMessage] = [{"role": "user", "content": "test"}]
-        result = client.chat(messages, "MiniMax-M1-80k", 100, mem_db, "test")
-
-    assert isinstance(result, ChatResponse)
-    assert result.content == '{"result": "ok"}'
-    assert result.input_tokens == 100
-    assert result.output_tokens == 50
-    assert result.model == "MiniMax-M1-80k"
-    assert result.cost_usd > 0
+def test_llmclient_minimax_is_retired() -> None:
+    """Direct MiniMax client construction fails closed."""
+    with pytest.raises(RuntimeError, match="MiniMax provider is retired"):
+        LLMClient("minimax", "test-key")
 
 
 def test_cost_ceiling_blocks_when_exceeded(

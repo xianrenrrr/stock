@@ -1,6 +1,6 @@
 # Thesis-grading research stack (2024-2026)
 
-Background reading that informed F16 (thesis tracking + verification). Read once, mine for ideas, do **not** vendor any of these libraries — most are too heavy for the 12 GB laptop and depend on external Google/Serper search. We re-implement the loops with our own evidence corpus + MiniMax.
+Background reading that informed F16 (thesis tracking + verification). Read once, mine for ideas, do **not** vendor any of these libraries — most are too heavy for the 12 GB laptop and depend on external Google/Serper search. We re-implement the loops with our own evidence corpus + Codex CLI.
 
 ## 1. Trading-R1 — Financial Trading with LLM Reasoning via RL
 - Xiao, Sun, Chen, Wu, Luo, Wang. arXiv:2509.11420 (2025).

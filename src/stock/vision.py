@@ -7,10 +7,10 @@ extraction the existing intent-classify -> reply pipeline can consume as if it
 were a typed message.
 
 Backend choice (lazy-evaluated, never raises at import):
-- Anthropic Claude vision via the SDK we already use (preferred -- best accuracy).
-- MiniMax vision via the OpenAI-compatible endpoint (fallback).
-- If neither key is set, returns a graceful "no vision backend" stub so the
-  upload still gets logged as a typed-feedback entry with the filename.
+- Codex CLI with `codex exec --image <file>` is the default local vision path.
+- Anthropic Claude vision remains an optional fallback when configured.
+- If neither path works, returns a graceful stub so the upload still gets logged
+  as a typed-feedback entry with the filename. MiniMax is not used.
 
 Cost: per-image vision calls are tiny; we still log them to llm_calls so the
 operator can spot a runaway upload spammer in the daily review.
@@ -22,28 +22,29 @@ import json
 import logging
 import re
 import sqlite3
+import subprocess
 import time
 from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 
 import anthropic
-import openai
 from pydantic import BaseModel
 
 from stock.config import get_settings
 from stock.models import (
-    MINIMAX_BASE_URL,
+    CODEX_CLI_CORE_BIN,
+    CODEX_CLI_CORE_MODEL_NAME,
+    CODEX_CLI_CORE_TIMEOUT_SECS,
     PRICING,
+    _looks_like_codex_credit_limit,
     parse_llm_json,
-    strip_thinking,
 )
 
 logger = logging.getLogger(__name__)
 
 VISION_PROMPT_PATH: str = "prompts/vision_extract.txt"
 VISION_CLAUDE_MODEL: str = "claude-opus-4-7"
-VISION_MINIMAX_MODEL: str = "MiniMax-M2.5"
 VISION_MAX_TOKENS: int = 800
 SUPPORTED_MIME_TYPES: dict[str, str] = {
     ".png": "image/png",
@@ -52,7 +53,7 @@ SUPPORTED_MIME_TYPES: dict[str, str] = {
     ".gif": "image/gif",
     ".webp": "image/webp",
 }
-MAX_IMAGE_BYTES: int = 8 * 1024 * 1024  # 8 MB -- Anthropic + MiniMax both cap around here
+MAX_IMAGE_BYTES: int = 8 * 1024 * 1024  # 8 MB upload cap
 
 _TICKER_RE = re.compile(
     r"(?<![A-Za-z0-9])([A-Z]{2,5}|[0-9]{4,6}\.(?:SS|SZ|HK|TW))(?![A-Za-z0-9])"
@@ -73,7 +74,7 @@ class ImageExtraction(BaseModel):
     ticker_mentions: list[str]  # tickers detected in the image, deduped + filtered
     suspected_topic: str      # short-phrase topic guess (e.g. "AVGO Q3 earnings preview")
     user_intent: str          # "question" | "instruction" | "share" | "unknown"
-    backend: str              # "anthropic" | "minimax" | "stub"
+    backend: str              # "codex_cli" | "anthropic" | "stub"
     cost_usd: float           # logged to llm_calls
     duration_ms: int
 
@@ -114,7 +115,7 @@ def _read_and_encode(image_path: Path) -> tuple[str, str]:
 
 
 def _filter_tickers(raw: list[str]) -> list[str]:
-    """Dedupe, normalize, drop common stopwords. Cap at 6 to keep prompts tight."""
+    """Dedupe, normalize, drop common stopwords. Cap at 25 for portfolio screenshots."""
     seen: list[str] = []
     for tok in raw:
         t = (tok or "").strip().upper()
@@ -125,7 +126,7 @@ def _filter_tickers(raw: list[str]) -> list[str]:
         if t in seen:
             continue
         seen.append(t)
-        if len(seen) >= 6:
+        if len(seen) >= 25:
             break
     return seen
 
@@ -211,54 +212,74 @@ def _call_anthropic_vision(
     return content, in_toks, out_toks, cost, duration_ms
 
 
-def _call_minimax_vision(
-    image_b64: str, mime: str, caption: str
+def _call_codex_vision(
+    image_path: Path, caption: str
 ) -> tuple[str, int, int, float, int]:
-    """Run the vision call against MiniMax (OpenAI-compatible endpoint with image_url)."""
-    settings = get_settings()
-    if not settings.minimax_api_key:
-        raise RuntimeError("MiniMax key not configured")
+    """Run Codex CLI against a local image attachment."""
+    import os
+    import shutil
+    import tempfile
 
-    base_url = (settings.minimax_base_url or "").strip() or MINIMAX_BASE_URL
-    client = openai.OpenAI(
-        api_key=settings.minimax_api_key,
-        base_url=base_url,
-        max_retries=4,
-        timeout=60.0,
-    )
-
+    codex_bin = shutil.which(CODEX_CLI_CORE_BIN) or CODEX_CLI_CORE_BIN
     system_prompt = _load_vision_prompt()
-    user_text = (
+    prompt = (
+        f"{system_prompt}\n\n"
         f"Optional caption from the user: {caption.strip() or '(none)'}\n\n"
-        "Analyze the image and respond with the JSON schema described above."
+        "Analyze the attached image and respond with the JSON schema described above."
     )
-    data_url = f"data:{mime};base64,{image_b64}"
+    input_tokens_estimate = max(1, len(prompt) // 4)
+
+    out_handle = tempfile.NamedTemporaryFile(
+        mode="w", suffix=".txt", delete=False, encoding="utf-8",
+    )
+    out_path = out_handle.name
+    out_handle.close()
+
+    argv = [
+        codex_bin, "exec",
+        "--skip-git-repo-check",
+        "--dangerously-bypass-approvals-and-sandbox",
+        "-i", str(image_path),
+        "-o", out_path,
+    ]
+
+    creation_flags = 0
+    if os.name == "nt":
+        creation_flags = subprocess.CREATE_NO_WINDOW
 
     start = time.perf_counter()
-    response = client.chat.completions.create(
-        model=VISION_MINIMAX_MODEL,
-        max_tokens=VISION_MAX_TOKENS,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {
-                "role": "user",
-                "content": [
-                    {"type": "image_url", "image_url": {"url": data_url}},
-                    {"type": "text", "text": user_text},
-                ],
-            },
-        ],
-    )
-    duration_ms = int((time.perf_counter() - start) * 1000)
+    try:
+        proc = subprocess.run(
+            argv,
+            input=prompt,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=CODEX_CLI_CORE_TIMEOUT_SECS,
+            creationflags=creation_flags,
+        )
+        duration_ms = int((time.perf_counter() - start) * 1000)
+        try:
+            raw = Path(out_path).read_text(encoding="utf-8").strip()
+        except OSError as exc:
+            raise RuntimeError(f"codex vision output file missing: {exc}") from exc
 
-    raw = response.choices[0].message.content or ""
-    content = strip_thinking(raw) if "<think>" in raw else raw
-    usage = response.usage
-    in_toks = usage.prompt_tokens if usage else 0
-    out_toks = usage.completion_tokens if usage else 0
-    pricing = PRICING.get(VISION_MINIMAX_MODEL, {"input": 0.0, "output": 0.0})
-    cost = in_toks / 1_000_000 * pricing["input"] + out_toks / 1_000_000 * pricing["output"]
-    return content, in_toks, out_toks, cost, duration_ms
+        if _looks_like_codex_credit_limit(proc.stderr or "", raw):
+            raise RuntimeError(f"codex vision hit credit/usage limit: {(proc.stderr or raw)[:300]}")
+        if proc.returncode != 0:
+            raise RuntimeError(
+                f"codex vision exit={proc.returncode}: {(proc.stderr or '').strip()[:500]}"
+            )
+        if not raw:
+            raise RuntimeError("codex vision produced empty output")
+
+        output_tokens_estimate = max(1, len(raw) // 4)
+        return raw, input_tokens_estimate, output_tokens_estimate, 0.0, duration_ms
+    finally:
+        try:
+            Path(out_path).unlink()
+        except OSError:
+            pass
 
 
 def _stub_extraction(filename: str) -> ImageExtraction:
@@ -297,60 +318,55 @@ def extract_image_info(
 ) -> ImageExtraction:
     """Read an uploaded image and return a structured extraction.
 
-    Tries Anthropic Claude first (best accuracy on charts + Chinese OCR), falls
-    back to MiniMax vision if Anthropic isn't configured, then to a stub. Logs
-    the call to llm_calls. Never raises on backend failure -- callers always
-    get a usable extraction.
+    Tries Codex CLI image input first, then Anthropic Claude vision when
+    configured, otherwise returns a stub. Never calls MiniMax. Never raises on
+    backend failure -- callers always get a usable extraction.
     """
     image_path = Path(image_path)
     settings = get_settings()
     filename = image_path.name
 
-    # Stub path: no backends -> still give the caller something to log
-    if not settings.anthropic_api_key and not settings.minimax_api_key:
-        return _stub_extraction(filename)
-
-    # Read + encode once; both backends accept base64
+    # Validate file and size once. Codex accepts the file path directly; Anthropic
+    # needs base64 if used as fallback.
     try:
         image_b64, mime = _read_and_encode(image_path)
     except (FileNotFoundError, ValueError) as exc:
         logger.warning("vision: cannot read image %s: %s", filename, exc)
         return _stub_extraction(filename)
 
-    # Try Anthropic first
     raw = ""
     backend = ""
     in_toks = out_toks = 0
     cost_usd = 0.0
     duration_ms = 0
-    if settings.anthropic_api_key:
+    try:
+        raw, in_toks, out_toks, cost_usd, duration_ms = _call_codex_vision(
+            image_path, caption
+        )
+        backend = "codex_cli"
+    except Exception:
+        logger.exception("vision: codex_cli backend failed")
+
+    if not raw and settings.anthropic_api_key:
         try:
             raw, in_toks, out_toks, cost_usd, duration_ms = _call_anthropic_vision(
                 image_b64, mime, caption
             )
             backend = "anthropic"
         except Exception:
-            logger.exception("vision: anthropic backend failed; trying MiniMax")
-
-    if not raw and settings.minimax_api_key:
-        try:
-            raw, in_toks, out_toks, cost_usd, duration_ms = _call_minimax_vision(
-                image_b64, mime, caption
-            )
-            backend = "minimax"
-        except Exception:
-            logger.exception("vision: minimax backend also failed; falling back to stub")
+            logger.exception("vision: anthropic backend failed; falling back to stub")
             return _stub_extraction(filename)
 
     if not raw:
         return _stub_extraction(filename)
 
-    # Log the call for cost auditing
+    # Log the call for cost auditing.
+    model_name = CODEX_CLI_CORE_MODEL_NAME if backend == "codex_cli" else VISION_CLAUDE_MODEL
     try:
         _log_call(
             conn,
             backend=backend,
-            model=VISION_CLAUDE_MODEL if backend == "anthropic" else VISION_MINIMAX_MODEL,
+            model=model_name,
             input_tokens=in_toks,
             output_tokens=out_toks,
             cost_usd=cost_usd,

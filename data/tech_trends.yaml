@@ -70,6 +70,24 @@ trends:
     ai_biopharma_combo: false
     enabled: true   # toggle via `stock trend toggle <id>` or edit here directly
 
+  - id: cpo_co_packaged_optics
+    name: Co-packaged optics (CPO) moving optical I/O next to switch silicon
+    sector: ai_compute
+    horizon: "2-4y"
+    why_now:
+      - "AI clusters are pushing switch radix and bandwidth toward the electrical trace-loss limit; CPO moves optics closer to switching silicon to cut power per bit"
+      - "AVGO and MRVL are the public switch/DSP silicon anchors; CPO traction should show up first in roadmap commentary, samples, and hyperscaler design wins"
+      - "COHR and LITE supply the laser/optical engine layer; AXTI is an InP/GaAs substrate read-through; AAOI is the higher-beta smaller optical module/laser proxy"
+      - "OCS and CPO are not mutually exclusive: OCS solves rack/network topology flexibility, while CPO solves switch-box power and bandwidth density"
+    falsification:
+      - "If pluggable 1.6T/3.2T optics keep cost and power low enough through 2028, CPO adoption delays"
+      - "If hyperscalers keep optics outside the package for serviceability/yield reasons despite bandwidth pressure"
+      - "If AVGO/MRVL roadmap commentary avoids CPO volume language for two consecutive major AI networking cycles"
+    vehicles_pure_play: [COHR, LITE, AAOI, AXTI]
+    vehicles_diversified: [AVGO, MRVL]
+    ai_biopharma_combo: false
+    enabled: true
+
   - id: hbm4_hybrid_bonding
     name: HBM4 hybrid-bonding equipment ramp (BESI / Disco) -- pre-priced gap
     sector: ai_compute
@@ -279,5 +297,94 @@ trends:
       - "If defense procurement consolidates around private SpaceX/Anduril-style systems with little public-market pass-through"
     vehicles_pure_play: [PL]
     vehicles_diversified: [RKLB, BKSY, IRDM, LMT, NOC]
+    ai_biopharma_combo: false
+    enabled: true
+
+  # =====================================================================
+  # YouTuber rotation-map fields -- external hypotheses to validate
+  # =====================================================================
+
+  - id: ai_compute_cloud_miner_conversion
+    name: AI compute cloud and bitcoin miners converting power sites into GPU hosting
+    sector: ai_compute_cloud
+    horizon: "1-3y"
+    why_now:
+      - "External YouTuber message dated 2026-05-07 flags IREN/CIFR/WULF/CORZ/NBIS/CRWV as the current AI compute/data-center wave"
+      - "Mining sites already own power interconnects and land; the bottleneck for AI hosting is time-to-power, not just GPU purchase"
+      - "CoreWeave/Nebius public-market comps create valuation anchors for GPU-hosting revenue if contracts are signed"
+    falsification:
+      - "If miner-to-AI names fail to sign binding hyperscaler/GPU-hosting contracts for two quarters"
+      - "If debt/equity dilution funds the conversion faster than contracted revenue backlog"
+      - "If power prices or grid constraints make converted sites uneconomic versus purpose-built data centers"
+    vehicles_pure_play: [IREN, CIFR, WULF, CORZ, NBIS]
+    vehicles_diversified: [CRWV]
+    ai_biopharma_combo: false
+    enabled: true
+
+  - id: ai_dc_critical_materials
+    name: Critical materials and rare-earth bottlenecks for AI data-center buildout
+    sector: critical_materials_rare_earths
+    horizon: "2-5y"
+    why_now:
+      - "External YouTuber message dated 2026-05-07 flags raw materials/rare earths as the likely next wave after data-center compute"
+      - "AI data centers require copper/aluminum for grid buildout and rare-earth magnets for motors, cooling, and defense/robotics links"
+      - "US domestic rare-earth refining and magnet supply remain concentrated bottlenecks after China export-control pressure"
+    falsification:
+      - "If copper/aluminum inventories rise while AI data-center capex still grows, the material bottleneck thesis is weak"
+      - "If rare-earth prices fail to respond to policy/export-control shocks"
+      - "If MP/USAR/UUUU do not convert policy support into offtake or processing milestones"
+    vehicles_pure_play: [MP, USAR, UUUU]
+    vehicles_diversified: [FCX, AA]
+    ai_biopharma_combo: false
+    enabled: true
+
+  - id: ai_cluster_network_equipment
+    name: AI cluster networking equipment after optics and switching bandwidth inflect
+    sector: ai_network_equipment
+    horizon: "1-3y"
+    why_now:
+      - "External YouTuber message dated 2026-05-07 flags network equipment as a rotation lane after optical modules"
+      - "AI clusters push Ethernet switching, routing, optical transport, and datacenter interconnect demand alongside 800G/1.6T optics"
+      - "ANET is the pure AI Ethernet switch proxy; CIEN/NOK add optical-network systems exposure beyond component suppliers"
+    falsification:
+      - "If hyperscaler AI capex shifts away from Ethernet/network scale-out"
+      - "If ANET backlog or 800G/1.6T commentary weakens for two quarters"
+      - "If CSCO/NOK/CIEN do not show AI-data-center revenue mix acceleration"
+    vehicles_pure_play: [ANET, CIEN]
+    vehicles_diversified: [CSCO, NOK, AVGO, MRVL]
+    ai_biopharma_combo: false
+    enabled: true
+
+  - id: defense_drones_ai_autonomy
+    name: Defense drones and AI autonomy procurement wave
+    sector: defense_drones_autonomy
+    horizon: "2-5y"
+    why_now:
+      - "External YouTuber message dated 2026-05-07 flags defense drones as a later rotation wave"
+      - "Ukraine-style attritable drone warfare and Pentagon Replicator-style procurement favor lower-cost autonomous systems"
+      - "AI vision, autonomy software, and resilient communications are becoming core defense purchasing criteria"
+    falsification:
+      - "If US/EU defense procurement slows drone/autonomy contract awards"
+      - "If public drone suppliers fail to turn awards into revenue growth and margin expansion"
+      - "If large primes absorb the economics and small specialists remain subcontractors with no pricing power"
+    vehicles_pure_play: [KTOS, AVAV, ONDS]
+    vehicles_diversified: [LMT]
+    ai_biopharma_combo: false
+    enabled: true
+
+  - id: embodied_ai_robotics
+    name: Embodied AI, warehouse robotics, RPA, and autonomous delivery
+    sector: robotics_autonomous_systems
+    horizon: "2-5y"
+    why_now:
+      - "External YouTuber message dated 2026-05-07 flags robotics/autonomous driving as a later AI rotation wave"
+      - "Foundation-model capability is moving from chat into physical task automation, warehouse systems, delivery, and RPA agents"
+      - "SYM/PATH/SERV are higher-beta public proxies; TSLA is the diversified autonomous driving and humanoid option"
+    falsification:
+      - "If robotics deployments remain pilot-only with no unit-economics improvement"
+      - "If RPA agent automation compresses PATH pricing faster than customer growth"
+      - "If autonomous delivery/warehouse robotics names fund growth mainly through dilution without backlog conversion"
+    vehicles_pure_play: [PATH, SYM, SERV]
+    vehicles_diversified: [TSLA]
     ai_biopharma_combo: false
     enabled: true

@@ -483,8 +483,7 @@ def predict_ticker(
     # reward), but the provider/model fields are ignored: every core LLM call
     # routes through get_core_client() per the AI_INDEX convention, which
     # honors the operator's CORE_LLM_BACKEND selection (codex_cli with
-    # claude_cli fallback). The hardcoded REGISTERED_ARMS pointed at a retired
-    # MiniMax model and was 400'ing every prediction.
+    # claude_cli fallback).
     arm = select_arm(ticker, conn)
 
     # Call LLM via the active core backend (codex_cli + claude_cli fallback)

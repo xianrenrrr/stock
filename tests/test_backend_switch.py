@@ -113,28 +113,28 @@ def test_get_core_client_switches_to_claude_cli(
         get_settings.cache_clear()
 
 
-def test_get_core_client_explicit_minimax(
+def test_get_core_client_legacy_minimax_routes_to_codex(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """CORE_LLM_BACKEND=minimax -> get_core_client returns a MiniMax LLMClient."""
+    """CORE_LLM_BACKEND=minimax is legacy and now routes to Codex."""
     _seed_settings(monkeypatch, CORE_LLM_BACKEND="minimax")
     try:
         client = get_core_client()
-        assert isinstance(client, LLMClient)
-        assert client.provider == "minimax"
-        assert get_core_model() == "MiniMax-M2.5-highspeed"
+        assert isinstance(client, CodexWithClaudeFallback)
+        assert client.provider == "codex_cli"
+        assert get_core_model() == ""
     finally:
         get_settings.cache_clear()
 
 
-def test_get_core_client_unknown_backend_falls_back_to_minimax(
+def test_get_core_client_unknown_backend_falls_back_to_codex(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Garbage value in env -> get_core_client doesn't crash; returns MiniMax."""
+    """Garbage value in env -> get_core_client doesn't crash; returns Codex."""
     _seed_settings(monkeypatch, CORE_LLM_BACKEND="banana")
     try:
         client = get_core_client()
-        assert client.provider == "minimax"
+        assert client.provider == "codex_cli"
     finally:
         get_settings.cache_clear()
 
@@ -428,10 +428,10 @@ def test_claude_cli_client_strips_thinking_blocks(
     assert "final answer here" in response.content
 
 
-def test_grading_falls_back_to_minimax_when_claude_cli_unavailable(
+def test_grading_fails_closed_when_claude_cli_unavailable(
     mem_db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """When claude_cli backend is selected but unreachable, grading.generate_grading_note falls back to MiniMax."""
+    """When claude_cli is unreachable, grading does not fall back to MiniMax."""
     _seed_settings(monkeypatch, CORE_LLM_BACKEND="claude_cli")
 
     # Seed a scored prediction so the grading window isn't empty
@@ -452,14 +452,8 @@ def test_grading_falls_back_to_minimax_when_claude_cli_unavailable(
     )
     mem_db.commit()
 
-    # claude_cli raises -> grading falls back to MiniMax
     cli_client = MagicMock(spec=ClaudeCliClient)
     cli_client.chat.side_effect = ClaudeCliUnavailable("no binary")
-
-    minimax_client = MagicMock()
-    minimax_client.chat.return_value = MagicMock(
-        content="grading body\n\nNot financial advice.", cost_usd=0.0003,
-    )
 
     try:
         with (
@@ -467,7 +461,6 @@ def test_grading_falls_back_to_minimax_when_claude_cli_unavailable(
             patch("stock.grading.score_due"),
             patch("stock.grading.check_cost_ceiling"),
             patch("stock.grading.get_core_client", return_value=cli_client),
-            patch("stock.grading.get_client", return_value=minimax_client),
         ):
             from stock.grading import (
                 PriceRefreshResult,
@@ -477,52 +470,41 @@ def test_grading_falls_back_to_minimax_when_claude_cli_unavailable(
             mock_refresh.return_value = PriceRefreshResult(
                 tickers=["NVDA"], inserted_total=1, failed=[],
             )
-            note = generate_grading_note(mem_db, lookback_hours=36)
+            with pytest.raises(ClaudeCliUnavailable):
+                generate_grading_note(mem_db, lookback_hours=36)
     finally:
         get_settings.cache_clear()
 
     cli_client.chat.assert_called_once()
-    minimax_client.chat.assert_called_once()
-    # Fallback caller string is logged
-    assert "fallback" in minimax_client.chat.call_args.kwargs["caller"]
-    assert note.cost_usd == pytest.approx(0.0003)
 
 
-def test_research_core_chat_helper_falls_back(
+def test_research_core_chat_helper_fails_closed(
     mem_db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """research._core_chat falls back to MiniMax when the primary raises ClaudeCliUnavailable."""
+    """research._core_chat does not fall back to MiniMax."""
     _seed_settings(monkeypatch, CORE_LLM_BACKEND="claude_cli")
 
     cli_client = MagicMock(spec=ClaudeCliClient)
     cli_client.chat.side_effect = ClaudeCliUnavailable("no binary")
-    minimax_client = MagicMock()
-    minimax_client.chat.return_value = MagicMock(
-        content="ok", cost_usd=0.0001, model="MiniMax-M2.5-highspeed",
-        input_tokens=10, output_tokens=2,
-    )
 
     try:
         with (
             patch("stock.research.get_core_client", return_value=cli_client),
-            patch("stock.research.get_client", return_value=minimax_client),
             patch("stock.research.get_core_model", return_value="claude-opus-4-7"),
         ):
             from stock.research import _core_chat
 
-            response = _core_chat(
-                messages=[{"role": "user", "content": "hi"}],
-                max_tokens=64,
-                conn=mem_db,
-                caller="test.research_core",
-            )
+            with pytest.raises(ClaudeCliUnavailable):
+                _core_chat(
+                    messages=[{"role": "user", "content": "hi"}],
+                    max_tokens=64,
+                    conn=mem_db,
+                    caller="test.research_core",
+                )
     finally:
         get_settings.cache_clear()
 
-    assert response.content == "ok"
     cli_client.chat.assert_called_once()
-    minimax_client.chat.assert_called_once()
-    assert "fallback" in minimax_client.chat.call_args.kwargs["caller"]
 
 
 # ---------------------------------------------------------------------------

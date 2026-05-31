@@ -3,7 +3,47 @@
 # DB-only ticker as inactive. CLI/API mutations write to the DB; ops can edit
 # this file manually and the next startup syncs it.
 
-holdings: []
+holdings:
+  - ticker: AMD
+    qty: 50
+    cost_basis: 0
+    opened_at: '2026-05-27'
+    notes: 'Imported from Robinhood screenshot 20260527T070557Z_richard.png; avg cost basis not visible.'
+  - ticker: GOOGL
+    qty: 60
+    cost_basis: 0
+    opened_at: '2026-05-27'
+    notes: 'Imported from Robinhood screenshot 20260527T070557Z_richard.png; avg cost basis not visible.'
+  - ticker: MSFT
+    qty: 12
+    cost_basis: 0
+    opened_at: '2026-05-27'
+    notes: 'Imported from Robinhood screenshot 20260527T070557Z_richard.png; avg cost basis not visible.'
+  - ticker: AMBA
+    qty: 258
+    cost_basis: 0
+    opened_at: '2026-05-27'
+    notes: 'Imported from Robinhood screenshot 20260527T070557Z_richard.png; avg cost basis not visible.'
+  - ticker: RXRX
+    qty: 100
+    cost_basis: 0
+    opened_at: '2026-05-27'
+    notes: 'Imported from Robinhood screenshot 20260527T070557Z_richard.png; avg cost basis not visible.'
+  - ticker: VEEV
+    qty: 2
+    cost_basis: 0
+    opened_at: '2026-05-27'
+    notes: 'Imported from Robinhood screenshot 20260527T070557Z_richard.png; avg cost basis not visible.'
+  - ticker: SDGR
+    qty: 10
+    cost_basis: 0
+    opened_at: '2026-05-27'
+    notes: 'Imported from Robinhood screenshot 20260527T070557Z_richard.png; avg cost basis not visible.'
+  - ticker: ACMR
+    qty: 5
+    cost_basis: 0
+    opened_at: '2026-05-27'
+    notes: 'Imported from Robinhood screenshot 20260527T070557Z_richard.png; avg cost basis not visible.'
 
 # SMCI -- CLOSED 2026-05-05 AH at $32.50 from $28 cost (~$20k position,
 # +16.07% realized in 1 trading day on the Q3 fiscal 26 earnings pop).

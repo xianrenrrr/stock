@@ -342,6 +342,20 @@ def _job_compute_anomalies() -> None:
         conn.close()
 
 
+def _job_scan_intraday_holding_moves() -> None:
+    """Live holding crash/spike alerts during the US session."""
+    conn = get_conn()
+    try:
+        moves = alerts.scan_holdings_for_intraday_moves(conn)
+        if moves:
+            summary = ", ".join(f"{t}: {msg}" for t, msg in moves.items())
+            logger.warning("Intraday holding move alerts fired: %s", summary)
+    except Exception:
+        logger.exception("Intraday holding move scan failed")
+    finally:
+        conn.close()
+
+
 def _job_learn_from_feedback() -> None:
     """Classify recent inbound replies, queue follow-ups, auto-rewrite the prompt."""
     conn = get_conn()
@@ -377,7 +391,7 @@ def _job_learn_from_feedback() -> None:
                 continue
 
             # Treat "unknown" the same as "question": when the cheap classifier fails
-            # (MiniMax flake, JSON parse error, etc.) the boss still gets a reply
+                    # (LLM flake, JSON parse error, etc.) the boss still gets a reply
             # rather than silent stash. False positives just produce a polite answer.
             if result.intent in ("question", "unknown"):
                 try:
@@ -537,7 +551,17 @@ def _job_email_daily_action_report() -> None:
             return
         research_id, body, created_at = row
         subject = f"STOCK daily action report #{research_id} ({str(created_at)[:10]})"
-        result = emailer.send_email(subject=subject, body=str(body))
+        upload_link = _dashboard_upload_link(conn)
+        email_body = str(body)
+        if upload_link:
+            email_body = (
+                f"{email_body.rstrip()}\n\n"
+                "---\n"
+                "Upload holdings screenshot / submit feedback:\n"
+                f"{upload_link}\n"
+                "Caption suggestion: Update my holdings from this Robinhood screenshot\n"
+            )
+        result = emailer.send_email(subject=subject, body=email_body)
         if result.sent:
             logger.info("daily action email sent for research_id=%s", research_id)
         else:
@@ -548,6 +572,35 @@ def _job_email_daily_action_report() -> None:
             )
     finally:
         conn.close()
+
+
+def _dashboard_upload_link(conn) -> str:
+    """Return a Render dashboard link with the latest active recipient token."""
+    settings = get_settings()
+    base_url = (settings.render_sync_url or "").strip().rstrip("/")
+    if not base_url:
+        return ""
+
+    preferred = ("richard", "yjz", "boss", "operator")
+    row = None
+    for recipient in preferred:
+        row = conn.execute(
+            "SELECT token FROM recipient_tokens"
+            " WHERE revoked = 0 AND lower(recipient) = ?"
+            " ORDER BY created_at DESC LIMIT 1",
+            (recipient,),
+        ).fetchone()
+        if row:
+            break
+    if row is None:
+        row = conn.execute(
+            "SELECT token FROM recipient_tokens"
+            " WHERE revoked = 0 ORDER BY created_at DESC LIMIT 1"
+        ).fetchone()
+    if row is None:
+        return ""
+    token_part = f"?token={row[0]}" if row else ""
+    return f"{base_url}/channel/{token_part}"
 
 
 def _job_backup_db() -> None:
@@ -1176,6 +1229,15 @@ def create_scheduler() -> BlockingScheduler:
         name="Daily price/volume anomaly computation",
     )
 
+    # Live holding crash/spike alerts during the US cash session. This catches
+    # active-holding moves before the post-close anomaly job has a settled bar.
+    scheduler.add_job(
+        _job_scan_intraday_holding_moves,
+        CronTrigger(hour="13-20", minute="*/15", day_of_week="mon-fri", timezone="UTC"),
+        id="intraday_holding_move_alerts",
+        name="Intraday holding crash/spike alerts",
+    )
+
     # Weekly insider Form 4 pull on Sundays 05:00 UTC
     scheduler.add_job(
         _job_pull_insiders,
@@ -1416,13 +1478,13 @@ def create_scheduler() -> BlockingScheduler:
     )
 
     # Daily self-review packet at 06:00 UTC (after evening push + learn cycle complete).
-    # Writes pipeline/daily_review_YYYY-MM-DD.md; if SELF_REVIEW_BACKEND=minimax|both,
-    # also auto-calls MiniMax for ranked code-level proposals.
+    # Writes pipeline/daily_review_YYYY-MM-DD.md and routes improvement work
+    # through Codex CLI when enabled.
     scheduler.add_job(
         _job_daily_self_review,
         CronTrigger(hour=6, minute=0, timezone="UTC"),
         id="daily_self_review",
-        name="Daily self-review packet + optional MiniMax proposals",
+        name="Daily self-review packet + optional Codex proposals",
     )
 
     return scheduler

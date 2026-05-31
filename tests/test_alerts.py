@@ -191,6 +191,50 @@ def test_stop_breach_skipped_when_cost_basis_unset(
     assert "SMCI" not in out
 
 
+def test_intraday_holding_drop_alerts_even_without_cost_basis(
+    mem_db: sqlite3.Connection,
+) -> None:
+    """A live -20% holding move alerts even if cost_basis is still unset."""
+    _seed_holding(mem_db, "AMBA")
+
+    out = alerts.scan_holdings_for_intraday_moves(
+        mem_db,
+        provider=lambda ticker: (73.19, 91.84, -0.203),
+        as_of=datetime(2026, 5, 29, 17, 0, tzinfo=timezone.utc),
+    )
+
+    assert "AMBA" in out
+    row = mem_db.execute(
+        "SELECT topic, layer_focus, body FROM research_reports WHERE kind = 'alert'"
+    ).fetchone()
+    assert row is not None
+    assert "AMBA intraday DROP" in row[0]
+    assert row[1] == "intraday_holding_move"
+    assert "Intraday holding DROP alert" in row[2]
+
+
+def test_intraday_holding_move_dedupes_same_severity_bucket(
+    mem_db: sqlite3.Connection,
+) -> None:
+    """Same-day rerun at the same severity bucket does not spam alerts."""
+    _seed_holding(mem_db, "AMBA")
+    as_of = datetime(2026, 5, 29, 17, 0, tzinfo=timezone.utc)
+
+    first = alerts.scan_holdings_for_intraday_moves(
+        mem_db, provider=lambda ticker: (73.19, 91.84, -0.203), as_of=as_of,
+    )
+    second = alerts.scan_holdings_for_intraday_moves(
+        mem_db, provider=lambda ticker: (73.00, 91.84, -0.205), as_of=as_of,
+    )
+
+    assert "AMBA" in first
+    assert "AMBA" not in second
+    rows = mem_db.execute(
+        "SELECT COUNT(*) FROM research_reports WHERE kind = 'alert'"
+    ).fetchone()
+    assert rows[0] == 1
+
+
 def test_stop_breach_dedupes_at_same_close(mem_db: sqlite3.Connection) -> None:
     """Re-running scan at the same breached close doesn't re-alert."""
     _seed_holding_with_cost(mem_db, cost_basis=100.0)

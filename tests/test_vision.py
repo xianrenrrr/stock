@@ -39,13 +39,11 @@ def tmp_png(tmp_path: Path) -> Path:
 
 def _seed_settings(
     monkeypatch: pytest.MonkeyPatch, *,
-    anthropic_key: str = "", minimax_key: str = "",
+    anthropic_key: str = "",
 ) -> None:
     """Stub get_settings everywhere it's used so .env on disk doesn't leak in."""
     fake = MagicMock()
     fake.anthropic_api_key = anthropic_key
-    fake.minimax_api_key = minimax_key
-    fake.minimax_base_url = ""
     fake.daily_cost_ceiling_usd = 1.0
     monkeypatch.setattr("stock.vision.get_settings", lambda: fake)
 
@@ -53,19 +51,19 @@ def _seed_settings(
 # -- backend selection + stub fallback --
 
 
-def test_extract_returns_stub_when_no_keys(
+def test_extract_returns_stub_when_no_vision_backend(
     mem_db: sqlite3.Connection, tmp_png: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Neither anthropic nor minimax key -> stub extraction, no LLM call."""
+    """No working vision backend -> stub extraction, no LLM call logged."""
     _seed_settings(monkeypatch)
     try:
         with (
+            patch("stock.vision._call_codex_vision", side_effect=RuntimeError("codex unavailable")) as m_c,
             patch("stock.vision._call_anthropic_vision") as m_a,
-            patch("stock.vision._call_minimax_vision") as m_m,
         ):
             result = extract_image_info(tmp_png, mem_db, caption="x")
+        m_c.assert_called_once()
         m_a.assert_not_called()
-        m_m.assert_not_called()
         assert result.backend == "stub"
         assert result.cost_usd == 0.0
         assert result.ticker_mentions == []
@@ -73,11 +71,11 @@ def test_extract_returns_stub_when_no_keys(
         get_settings.cache_clear()
 
 
-def test_extract_anthropic_happy_path(
+def test_extract_codex_happy_path(
     mem_db: sqlite3.Connection, tmp_png: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Anthropic returns valid JSON -> extraction parsed, llm_calls row written."""
-    _seed_settings(monkeypatch, anthropic_key="x")
+    """Codex CLI image returns valid JSON -> extraction parsed, llm_calls row written."""
+    _seed_settings(monkeypatch)
     fake_json = json.dumps({
         "description": "Daily candlestick chart of NVDA, last 6 months, uptrend.",
         "extracted_text": "NVDA 145.32 +2.4%\nVolume 320M",
@@ -87,14 +85,15 @@ def test_extract_anthropic_happy_path(
     })
     try:
         with (
+            patch("stock.vision._call_codex_vision",
+                  return_value=(fake_json, 1200, 80, 0.0, 1500)) as m_c,
             patch("stock.vision._call_anthropic_vision",
                   return_value=(fake_json, 1200, 80, 0.0234, 1500)) as m_a,
-            patch("stock.vision._call_minimax_vision") as m_m,
         ):
             result = extract_image_info(tmp_png, mem_db, caption="check")
-        m_a.assert_called_once()
-        m_m.assert_not_called()
-        assert result.backend == "anthropic"
+        m_c.assert_called_once()
+        m_a.assert_not_called()
+        assert result.backend == "codex_cli"
         assert result.ticker_mentions == ["NVDA"]
         assert result.user_intent == "question"
         assert "uptrend" in result.description.lower()
@@ -102,49 +101,48 @@ def test_extract_anthropic_happy_path(
         row = mem_db.execute(
             "SELECT provider, model, cost_usd FROM llm_calls WHERE caller = 'vision.extract_image_info'"
         ).fetchone()
-        assert row == ("anthropic", "claude-opus-4-7", pytest.approx(0.0234))
+        assert row == ("codex_cli", "codex-cli-session", pytest.approx(0.0))
     finally:
         get_settings.cache_clear()
 
 
-def test_extract_falls_back_to_minimax_on_anthropic_failure(
+def test_extract_falls_back_to_anthropic_on_codex_failure(
     mem_db: sqlite3.Connection, tmp_png: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Anthropic raises -> MiniMax tried -> success."""
-    _seed_settings(monkeypatch, anthropic_key="x", minimax_key="y")
+    """Codex failure with Anthropic configured -> Anthropic fallback is used."""
+    _seed_settings(monkeypatch, anthropic_key="x")
     fake_json = json.dumps({
-        "description": "Screenshot of broker app showing AVGO position.",
-        "extracted_text": "AVGO +3.2%",
-        "ticker_mentions": ["AVGO"],
-        "suspected_topic": "AVGO position",
+        "description": "Broker holding screenshot for AMD.",
+        "extracted_text": "AMD 50 shares",
+        "ticker_mentions": ["AMD"],
+        "suspected_topic": "AMD holding",
         "user_intent": "share",
     })
     try:
         with (
+            patch("stock.vision._call_codex_vision", side_effect=RuntimeError("codex 503")) as m_c,
             patch("stock.vision._call_anthropic_vision",
-                  side_effect=RuntimeError("anthropic 503")),
-            patch("stock.vision._call_minimax_vision",
-                  return_value=(fake_json, 800, 40, 0.0008, 900)) as m_m,
+                  return_value=(fake_json, 100, 20, 0.001, 500)) as m_a,
         ):
             result = extract_image_info(tmp_png, mem_db)
-        m_m.assert_called_once()
-        assert result.backend == "minimax"
-        assert result.ticker_mentions == ["AVGO"]
+        m_c.assert_called_once()
+        m_a.assert_called_once()
+        assert result.backend == "anthropic"
+        assert result.ticker_mentions == ["AMD"]
     finally:
         get_settings.cache_clear()
 
 
-def test_extract_returns_stub_on_double_failure(
+def test_extract_returns_stub_on_failure(
     mem_db: sqlite3.Connection, tmp_png: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Both backends raise -> stub extraction, never raises to caller."""
-    _seed_settings(monkeypatch, anthropic_key="x", minimax_key="y")
+    """All vision backends raise -> stub extraction, never raises to caller."""
+    _seed_settings(monkeypatch, anthropic_key="x")
     try:
         with (
+            patch("stock.vision._call_codex_vision", side_effect=RuntimeError("codex boom")),
             patch("stock.vision._call_anthropic_vision",
                   side_effect=RuntimeError("anthropic boom")),
-            patch("stock.vision._call_minimax_vision",
-                  side_effect=RuntimeError("minimax boom")),
         ):
             result = extract_image_info(tmp_png, mem_db)
         assert result.backend == "stub"
@@ -160,8 +158,12 @@ def test_extract_invalid_extension_returns_stub(
     bmp = tmp_path / "x.bmp"
     bmp.write_bytes(b"BM")
     try:
-        with patch("stock.vision._call_anthropic_vision") as m_a:
+        with (
+            patch("stock.vision._call_codex_vision") as m_c,
+            patch("stock.vision._call_anthropic_vision") as m_a,
+        ):
             result = extract_image_info(bmp, mem_db)
+        m_c.assert_not_called()
         m_a.assert_not_called()
         assert result.backend == "stub"
     finally:
@@ -177,8 +179,12 @@ def test_extract_oversized_image_returns_stub(
     # PNG header + giant payload
     huge.write_bytes(b"\x89PNG\r\n\x1a\n" + b"x" * (9 * 1024 * 1024))
     try:
-        with patch("stock.vision._call_anthropic_vision") as m_a:
+        with (
+            patch("stock.vision._call_codex_vision") as m_c,
+            patch("stock.vision._call_anthropic_vision") as m_a,
+        ):
             result = extract_image_info(huge, mem_db)
+        m_c.assert_not_called()
         m_a.assert_not_called()
         assert result.backend == "stub"
     finally:
@@ -201,8 +207,8 @@ def test_extract_filters_stopword_tickers(
         "user_intent": "share",
     })
     try:
-        with patch("stock.vision._call_anthropic_vision",
-                   return_value=(fake_json, 100, 20, 0.001, 500)):
+        with patch("stock.vision._call_codex_vision",
+                   return_value=(fake_json, 100, 20, 0.0, 500)):
             result = extract_image_info(tmp_png, mem_db)
         assert result.ticker_mentions == ["NVDA", "AVGO"]
     finally:
@@ -222,8 +228,8 @@ def test_extract_picks_up_regex_tickers_from_ocr(
         "user_intent": "question",
     })
     try:
-        with patch("stock.vision._call_anthropic_vision",
-                   return_value=(fake_json, 100, 20, 0.001, 500)):
+        with patch("stock.vision._call_codex_vision",
+                   return_value=(fake_json, 100, 20, 0.0, 500)):
             result = extract_image_info(tmp_png, mem_db)
         assert "NVDA" in result.ticker_mentions
         assert "600584.SS" in result.ticker_mentions
@@ -244,8 +250,8 @@ def test_extract_invalid_intent_coerced_to_unknown(
         "suspected_topic": "", "user_intent": "BUY",
     })
     try:
-        with patch("stock.vision._call_anthropic_vision",
-                   return_value=(fake_json, 100, 20, 0.001, 500)):
+        with patch("stock.vision._call_codex_vision",
+                   return_value=(fake_json, 100, 20, 0.0, 500)):
             result = extract_image_info(tmp_png, mem_db)
         assert result.user_intent == "unknown"
     finally:
@@ -265,8 +271,8 @@ def test_extract_handles_prose_wrapped_json(
         'Let me know if you have other questions.'
     )
     try:
-        with patch("stock.vision._call_anthropic_vision",
-                   return_value=(raw, 100, 50, 0.002, 600)):
+        with patch("stock.vision._call_codex_vision",
+                   return_value=(raw, 100, 50, 0.0, 600)):
             result = extract_image_info(tmp_png, mem_db)
         assert "TSLA" in result.ticker_mentions
         assert "chart" in result.description.lower()

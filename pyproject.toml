@@ -29,6 +29,8 @@ dependencies = [
     "python-dotenv",
     "arxiv",
     "python-multipart",
+    "markdown",
+    "xhtml2pdf",
 ]
 
 [project.optional-dependencies]

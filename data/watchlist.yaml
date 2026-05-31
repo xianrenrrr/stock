@@ -18,12 +18,24 @@ tickers:
   - KLAC
   - MU
   - MRVL
+  # ---- AI memory rerating / MU read-through (added 2026-05-26) ----
+  # Trigger: UBS reframed MU from cyclical memory to AI infrastructure compounder.
+  # Track direct memory/storage peers, memory-IP, and HBM packaging/inspection
+  # suppliers that can move when the market prices the same thesis.
+  - WDC     # NAND/storage peer; benefits if memory pricing cycle is repriced
+  - STX     # nearline HDD/storage capacity beneficiary from AI data growth
+  - SNDK    # SanDisk NAND/storage pure-play if available in market data
+  - RMBS    # memory interface IP; DDR/HBM architecture read-through
+  - ONTO    # advanced packaging / process control for HBM yield
+  - CAMT    # inspection/metrology for advanced packaging and HBM substrates
+  - BESI.AS # hybrid bonding equipment; Europe-listed HBM packaging vehicle
   - MTSI
   - MXL
   - SMTC
   - CRDO
   - COHR
   - LITE
+  - AAOI   # Applied Optoelectronics -- smaller optical module / laser read-through
   - SMCI
   - DELL
   - VRT
@@ -56,6 +68,41 @@ tickers:
   # (L3 gateway character). Post-IPO 2025; major NVDA partner; revenue
   # accelerating from hyperscaler-overflow demand.
   - CRWV   # L1/L3 hybrid: GPU-rental cloud; NVDA's largest non-hyperscaler customer
+  # ---- 2026-05-28 boss wave-rotation map ----
+  # Purpose: track "next wave" candidates from the boss's eight-image map.
+  # The daily report should decide which wave is heating, not chase every name.
+  - ARM    # semiconductor wave: CPU architecture/IP layer
+  - INTC   # semiconductor wave: lagging foundry/CPU turnaround proxy
+  - NOK    # optical/network equipment wave
+  - GLW    # fiber/glass substrate read-through for AI DC connectivity
+  - CIEN   # optical networking systems
+  - IREN   # AI compute / miner-to-AI capacity conversion
+  - CIFR   # AI compute / miner-to-AI capacity conversion
+  - WULF   # AI compute + power-site optionality
+  - CORZ   # AI infrastructure / former miner hosting capacity
+  - NBIS   # AI compute cloud
+  - P      # AI application / consumer attention layer
+  - MP     # rare earth / permanent magnet supply chain
+  - USAR   # rare earth domestic supply chain
+  - UUUU   # uranium + rare earth processing
+  - FCX    # copper bottleneck for grid + data-center buildout
+  - AA     # aluminum input for grid/data-center construction
+  - ANET   # AI data-center switching
+  - CSCO   # networking equipment incumbent
+  - GEV    # grid + gas turbine power equipment
+  - SMR    # NuScale SMR pure-play
+  - ASTS   # space connectivity
+  - RKLB   # commercial launch / space systems
+  - LUNR   # lunar/space infrastructure
+  - PL     # satellite imagery / geospatial data
+  - KTOS   # defense drones and tactical systems
+  - AVAV   # unmanned systems
+  - ONDS   # drone systems / autonomy
+  - LMT    # defense prime
+  - TSLA   # autonomous driving + robotics
+  - PATH   # RPA / enterprise automation
+  - SYM    # warehouse robotics
+  - SERV   # delivery robotics
   # ---- 中国半导体 / Chinese semiconductor (boss directive 2026-05-05) ----
   # Focus: equipment + materials + foundry, less downstream IC design.
   # The "find before it explodes" angle = small-mid caps with niche
@@ -64,6 +111,7 @@ tickers:
   - 688012.SS  # 中微公司 AMEC -- etch (high-end), MOCVD
   - 002371.SZ  # 北方华创 NAURA -- broadest equipment portfolio in China
   - 688126.SS  # 沪硅产业 SICC -- 300mm silicon wafers
+  - 688783.SH  # Xi'an ESWIN -- China pure-play 12-inch silicon wafers
   - 600584.SS  # 长电科技 JCET -- advanced packaging (HBM beneficiary)
   - 688981.SS  # 中芯国际 SMIC A -- foundry leader (mature node domestic)
   - 0981.HK    # 中芯国际 SMIC HK

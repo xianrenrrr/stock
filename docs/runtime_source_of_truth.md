@@ -12,9 +12,24 @@ files describe design history and may be stale.
 | Local full pipeline | `STOCK_MODE=local` | Scheduler runs all jobs below plus FastAPI/dashboard sync. |
 | Render cloud proxy | `STOCK_MODE=cloud_proxy` | Scheduler is disabled. FastAPI only serves `/channel/*` and `/sync/*`. |
 
+## LLM Backend Policy
+
+Runtime LLM calls are Codex-first:
+
+- `CORE_LLM_BACKEND=codex_cli` is the default and applies to research, grading,
+  predictions, features, intent classification, thesis extraction, discovery
+  extraction, replies, and self-review.
+- Codex CLI falls back only to Claude CLI when available.
+- MiniMax is retired for runtime use. `CORE_LLM_BACKEND=minimax` is treated as a
+  legacy value and routed to Codex CLI. Direct `get_client("minimax")` calls fail
+  closed so leftover code cannot silently use MiniMax again.
+- Image uploads use Codex CLI image input first (`codex exec -i <png>`), then
+  Anthropic vision only as an optional fallback when `ANTHROPIC_API_KEY` is
+  configured. They never call MiniMax.
+
 ## Active Scheduled Jobs
 
-There are 29 active APScheduler jobs in local mode.
+There are 30 active APScheduler jobs in local mode.
 
 | Job id | Cadence UTC | What it actually does | Main output |
 |---|---:|---|---|
@@ -25,6 +40,7 @@ There are 29 active APScheduler jobs in local mode.
 | `daily_action_email` | Mon-Fri 14:45 | Email the latest daily research/action report to `DAILY_REPORT_EMAIL_TO`. | SMTP email |
 | `learn_from_feedback` | every 5 min | Process boss replies, classify intent, queue follow-ups, apply prompt rewrites when safe. | `conversations`, `action_queue`, `prompt_rewrites` |
 | `sync_to_render` | every 5 min | Push local notes/tokens to Render and pull dashboard replies. No-op if `RENDER_SYNC_URL` is empty. | Render sync state |
+| `intraday_holding_move_alerts` | Mon-Fri every 15 min, 13:00-20:59 | Live quote crash/spike alerts for active holdings; catches moves like AMBA -20% before close. | `research_reports(kind='alert')` |
 | `post_close_snapshot` | Mon-Fri 20:05 | Refresh settled daily bars and flag close/volume snapshots. | prices/anomaly context |
 | `score_daily` | Mon-Fri 21:30 | Score due predictions. | `outcomes`, bandit/calibration updates |
 | `anomaly_compute` | Mon-Fri 21:35 | Recompute price/volume anomalies. | `price_anomalies` |
@@ -56,6 +72,11 @@ Daily research is now multi-field. Active manually configured fields include:
 - AI biology / biopharma
 - AI-DC energy
 - Space tech
+- AI compute cloud / miner-to-AI conversion
+- Critical materials / rare earths
+- AI network equipment
+- Defense drones / autonomy
+- Robotics / autonomous systems
 - Rotating secular themes
 
 `web_discovery` also updates `data/emerging_fields.yaml` when recent discovery

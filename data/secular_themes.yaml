@@ -169,6 +169,7 @@ themes:
       - {ticker: 002371.SZ, name: 北方华创 NAURA,           thesis: "Broadest domestic equipment portfolio (etch/CVD/diffusion/cleaning); de-facto national champion"}
       # Materials -- the 'shovel' layer most overlooked
       - {ticker: 688126.SS, name: 沪硅产业 SICC,            thesis: "300mm silicon wafer; replaces Shin-Etsu/SUMCO at SMIC; gross margins inflecting positive"}
+      - {ticker: 688783.SH, name: 西安奕材 ESWIN,           thesis: "China pure-play 12-inch polished/epi wafer leader; highest-beta domestic replacement read-through if 2026H2 wafer price repair reaches local suppliers"}
       - {ticker: 002129.SZ, name: TCL中环 Zhonghuan,        thesis: "300mm wafer + solar wafers; vertical integration story"}
       # Packaging -- the AI/HBM beneficiary closest to parity
       - {ticker: 600584.SS, name: 长电科技 JCET,             thesis: "Top-3 OSAT globally; HBM CoWoS-analogue capacity ramp; quietly added Nvidia in 2025"}

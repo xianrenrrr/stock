@@ -23,13 +23,16 @@ from __future__ import annotations
 import logging
 import sqlite3
 from datetime import datetime, timezone
-from typing import Sequence
+from typing import Callable, Sequence
 
 from pydantic import BaseModel
 
 from stock import holdings
 
 logger = logging.getLogger(__name__)
+
+INTRADAY_HOLDING_DROP_THRESHOLD: float = -0.08
+INTRADAY_HOLDING_GAIN_THRESHOLD: float = 0.12
 
 
 # Sell-trigger keyword taxonomy. Phrases are matched as case-insensitive
@@ -247,6 +250,143 @@ def _stop_breach_key(ticker: str) -> str:
     return f"alerts_stop_breach_last_alerted_{ticker.upper()}"
 
 
+def _intraday_move_key(ticker: str, date_part: str) -> str:
+    """Dedup key for live holding crash/spike alerts.
+
+    Value stores the largest severity bucket already alerted today. This allows
+    one re-alert if a -9% drop worsens to -15% or -20%, but avoids every-5-min
+    spam at the same severity.
+    """
+    return f"alerts_intraday_move_last_bucket_{ticker.upper()}_{date_part}"
+
+
+def _live_pct_change_yfinance(ticker: str) -> tuple[float, float, float] | None:
+    """Return (last_price, previous_close, pct_change) from yfinance.
+
+    This intentionally uses quote-style data instead of the local `prices`
+    table. The daily prices table often does not settle until after close, but
+    holding crash alerts must fire intraday.
+    """
+    try:
+        import yfinance as yf
+
+        t = yf.Ticker(ticker)
+        fast = getattr(t, "fast_info", None)
+        last = getattr(fast, "last_price", None) if fast is not None else None
+        prev = getattr(fast, "previous_close", None) if fast is not None else None
+        if last is not None and prev not in (None, 0):
+            last_f = float(last)
+            prev_f = float(prev)
+            return last_f, prev_f, (last_f - prev_f) / prev_f
+
+        hist = t.history(period="2d", interval="1d")
+        if hist is not None and len(hist) >= 2:
+            prev_f = float(hist["Close"].iloc[-2])
+            last_f = float(hist["Close"].iloc[-1])
+            if prev_f:
+                return last_f, prev_f, (last_f - prev_f) / prev_f
+    except Exception:
+        logger.debug("live pct lookup failed for %s", ticker, exc_info=True)
+    return None
+
+
+LiveMoveProvider = Callable[[str], tuple[float, float, float] | None]
+
+
+def scan_holdings_for_intraday_moves(
+    conn: sqlite3.Connection,
+    *,
+    provider: LiveMoveProvider | None = None,
+    as_of: datetime | None = None,
+) -> dict[str, str]:
+    """Fire an alert when an active holding makes a large live move.
+
+    This is the guardrail that should have caught a holding like AMBA dropping
+    ~20% intraday even when cost_basis is unknown and the close-based stop scan
+    has not run yet.
+    """
+    quote_provider = provider or _live_pct_change_yfinance
+    now_dt = as_of or datetime.now(timezone.utc)
+    now = now_dt.isoformat()
+    date_part = now_dt.strftime("%Y-%m-%d")
+    out: dict[str, str] = {}
+
+    for h in holdings.list_holdings(conn, active_only=True):
+        ticker = h.ticker.upper()
+        quote = quote_provider(ticker)
+        if quote is None:
+            continue
+        last_price, previous_close, pct_change = quote
+
+        if (
+            pct_change > INTRADAY_HOLDING_DROP_THRESHOLD
+            and pct_change < INTRADAY_HOLDING_GAIN_THRESHOLD
+        ):
+            continue
+
+        severity_bucket = int(abs(pct_change) // 0.05) * 5
+        min_bucket = 5
+        if severity_bucket < min_bucket:
+            severity_bucket = min_bucket
+        key = _intraday_move_key(ticker, date_part)
+        row = conn.execute(
+            "SELECT value FROM cloud_sync_state WHERE key = ?",
+            (key,),
+        ).fetchone()
+        last_bucket = int(float(row[0])) if row else 0
+        if severity_bucket <= last_bucket:
+            continue
+
+        conn.execute(
+            "INSERT INTO cloud_sync_state (key, value, updated_at)"
+            " VALUES (?, ?, ?) ON CONFLICT(key)"
+            " DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+            (key, str(severity_bucket), now),
+        )
+
+        direction = "DROP" if pct_change < 0 else "SPIKE"
+        pct_s = f"{pct_change * 100:+.1f}%"
+        body = "\n".join(
+            [
+                f"# 🚨 Intraday holding {direction} alert -- {ticker}",
+                "",
+                f"Active holding **{ticker}** moved **{pct_s} intraday**.",
+                "",
+                "## Live quote",
+                f"- last price: ${last_price:.2f}",
+                f"- previous close: ${previous_close:.2f}",
+                f"- move: {pct_s}",
+                f"- quantity tracked: {h.qty:g}",
+                f"- cost basis: ${h.cost_basis:.2f}" if h.cost_basis > 0 else "- cost basis: unset",
+                "",
+                "## Why this fired",
+                f"- Drop threshold: {INTRADAY_HOLDING_DROP_THRESHOLD * 100:.0f}%",
+                f"- Spike threshold: +{INTRADAY_HOLDING_GAIN_THRESHOLD * 100:.0f}%",
+                "- This alert uses live quote data, not only settled daily close.",
+                "",
+                "## Immediate operator checklist",
+                "- Check whether the move is earnings/guidance/downgrade driven.",
+                "- Compare with today's daily note and the current stop level.",
+                "- Decide: hold, trim, exit, or wait for close confirmation.",
+                "",
+                "Not financial advice.",
+            ]
+        )
+        cursor = conn.execute(
+            "INSERT INTO research_reports"
+            " (kind, topic, layer_focus, body, cost_usd, created_at)"
+            " VALUES ('alert', ?, 'intraday_holding_move', ?, 0, ?)",
+            (f"{ticker} intraday {direction}: {pct_s}", body, now),
+        )
+        conn.commit()
+        rid = int(cursor.lastrowid or 0)
+        msg = f"{direction} {pct_s} last=${last_price:.2f} prev=${previous_close:.2f} -> alert id={rid}"
+        out[ticker] = msg
+        logger.warning("ALERT: %s intraday holding move %s", ticker, msg)
+
+    return out
+
+
 def scan_holdings_for_stop_breach(
     conn: sqlite3.Connection,
 ) -> dict[str, str]:
@@ -417,5 +557,14 @@ def scan_all_holdings(conn: sqlite3.Connection) -> dict[str, int]:
             counts[ticker] = counts.get(ticker, 0) + 1
     except Exception:
         logger.exception("alerts: stop-breach scan raised at top level")
+
+    # Live quote crash/spike scan. This catches intraday holding moves before
+    # yfinance's daily bar settles and before close-only anomaly jobs run.
+    try:
+        moves = scan_holdings_for_intraday_moves(conn)
+        for ticker in moves:
+            counts[ticker] = counts.get(ticker, 0) + 1
+    except Exception:
+        logger.exception("alerts: intraday holding move scan raised at top level")
 
     return counts

@@ -47,6 +47,7 @@ topics:
   topic: 'Immersion cooling for AI-DC: who''s winning the dielectric fluid + tank chain (Vertiv VRT + Submer + LiquidStack + 3M Novec replacement) as 1MW+ rack densities arrive in 2026-2027, and which name
     is the listed pure-play'
   enabled: true
+  last_run: '2026-05-31'
 - sector: space_tech
   topic: 'AI-enabled geospatial intelligence: Planet Labs (PL) + BlackSky (BKSY) + Rocket Lab (RKLB) -- which public company captures the most value as satellite imagery becomes a queryable AI data layer'
   enabled: true

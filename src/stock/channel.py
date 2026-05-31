@@ -414,12 +414,9 @@ async def post_upload_image(
         image_path, len(raw), recipient,
     )
 
-    # When running as cloud_proxy (Render), DO NOT call vision -- Render has
-    # no Anthropic key by design (render.yaml: ANTHROPIC_API_KEY=""). Write a
-    # `[image_pending_local_vision]` marker; local laptop's cloud_sync will
-    # fetch the binary via /sync/upload/{filename}, run vision locally with
-    # its real keys, and write a proper extraction back. This keeps the
-    # "Render = passive proxy" design intent intact.
+    # When running as cloud_proxy (Render), DO NOT call vision. Render is a
+    # passive relay; the local laptop pulls the image and runs Codex CLI vision
+    # against the downloaded file.
     settings = get_settings()
     is_cloud_proxy = (settings.stock_mode or "").strip().lower() == "cloud_proxy"
 

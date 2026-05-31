@@ -59,7 +59,7 @@ def _coerce_intent(raw: str) -> str:
 def classify(
     text: str, *, recipient: str, conn: sqlite3.Connection
 ) -> IntentResult:
-    """Classify an inbound WeChat reply via a cheap MiniMax call.
+    """Classify an inbound WeChat reply via the Codex-first core backend.
 
     Failures (cost ceiling, parse errors, network) downgrade to
     `IntentResult(intent="unknown", confidence=0.0)`.

@@ -23,12 +23,9 @@ from stock.discover import (
 )
 from stock.wechat_inbox import recent_feedback_block
 from stock.models import (
-    MINIMAX_DEFAULT_MODEL,
     ChatMessage,
     ChatResponse,
-    ClaudeCliUnavailable,
     check_cost_ceiling,
-    get_client,
     get_core_client,
     get_core_model,
 )
@@ -94,38 +91,17 @@ def _core_chat(
     caller: str,
     cached_system: str | None = None,
 ) -> ChatResponse:
-    """Send a chat request via the active core backend, falling back to MiniMax on outage.
-
-    Honors STOCK_CORE_BACKEND. When `claude_cli` is selected but the binary is
-    missing or the subprocess fails, transparently falls back to MiniMax so a
-    misconfigured Render deployment doesn't break the daily push. Logs the
-    fallback so the operator can see it in `pipeline/logs/orchestrator.log`.
-    """
+    """Send a chat request via the active Codex-first core backend."""
     primary = get_core_client()
     primary_model = get_core_model()
-    try:
-        return primary.chat(
-            messages=messages,
-            model=primary_model,
-            max_tokens=max_tokens,
-            conn=conn,
-            caller=caller,
-            cached_system=cached_system,
-        )
-    except ClaudeCliUnavailable as exc:
-        logger.warning(
-            "core backend claude_cli unavailable for %s (%s); falling back to MiniMax",
-            caller, exc,
-        )
-        fallback = get_client("minimax")
-        return fallback.chat(
-            messages=messages,
-            model=MINIMAX_DEFAULT_MODEL,
-            max_tokens=max_tokens,
-            conn=conn,
-            caller=f"{caller}+fallback",
-            cached_system=cached_system,
-        )
+    return primary.chat(
+        messages=messages,
+        model=primary_model,
+        max_tokens=max_tokens,
+        conn=conn,
+        caller=caller,
+        cached_system=cached_system,
+    )
 
 
 class ResearchReport(BaseModel):
@@ -230,6 +206,93 @@ def _build_watchlist_block(conn: sqlite3.Connection) -> str:
             f"- {ticker} {direction} | {prob_str} | conf={confidence:.2f} | {created_at[:16]}\n"
             f"    rationale: {rationale[:240]}"
         )
+    return "\n".join(lines)
+
+
+def _build_watchlist_movers_block(conn: sqlite3.Connection) -> str:
+    """Force broad-watchlist urgent movers into the daily research prompt."""
+    rows = conn.execute(
+        "SELECT ticker FROM watchlist WHERE active = 1 ORDER BY ticker"
+    ).fetchall()
+    if not rows:
+        return "(no active watchlist tickers)"
+
+    lines = [
+        "| Ticker | Last close move | Volume vs prior avg | Latest model view | Why mandatory |",
+        "| --- | ---: | ---: | --- | --- |",
+    ]
+    for (ticker_raw,) in rows:
+        ticker = str(ticker_raw).upper()
+        price_rows = conn.execute(
+            "SELECT ts, c, v FROM prices WHERE ticker = ? ORDER BY ts DESC LIMIT 7",
+            (ticker,),
+        ).fetchall()
+        if len(price_rows) < 2:
+            continue
+
+        latest_ts, latest_close, latest_volume = price_rows[0]
+        _prev_ts, prev_close, _prev_volume = price_rows[1]
+        if not latest_close or not prev_close:
+            continue
+
+        move_pct = (float(latest_close) / float(prev_close) - 1.0) * 100.0
+        prior_volumes = [float(r[2]) for r in price_rows[1:] if r[2]]
+        avg_prior_volume = sum(prior_volumes) / len(prior_volumes) if prior_volumes else 0.0
+        volume_ratio = (
+            float(latest_volume) / avg_prior_volume
+            if latest_volume and avg_prior_volume > 0
+            else None
+        )
+
+        reasons: list[str] = []
+        if abs(move_pct) >= 5.0:
+            reasons.append(f"{move_pct:+.1f}% last close")
+        if volume_ratio is not None and volume_ratio >= 1.5:
+            reasons.append(f"{volume_ratio:.1f}x volume")
+
+        if not reasons:
+            continue
+
+        pred = conn.execute(
+            "SELECT direction, prob_up, prob_up_calibrated, confidence, rationale, created_at"
+            " FROM predictions WHERE ticker = ? ORDER BY created_at DESC LIMIT 1",
+            (ticker,),
+        ).fetchone()
+        if pred:
+            direction, prob_up, prob_cal, confidence, rationale, created_at = pred
+            prob_bits = f"p={float(prob_up):.2f}"
+            if prob_cal is not None:
+                prob_bits += f"/cal={float(prob_cal):.2f}"
+            model_view = (
+                f"{direction} {prob_bits} conf={float(confidence):.2f}"
+                f" ({str(created_at)[:10]})"
+            )
+            rationale_text = str(rationale or "").replace("\n", " ")[:120]
+        else:
+            model_view = "no fresh prediction"
+            rationale_text = ""
+
+        news = conn.execute(
+            "SELECT title, ts FROM news WHERE ticker = ? ORDER BY ts DESC LIMIT 1",
+            (ticker,),
+        ).fetchone()
+        news_text = ""
+        if news:
+            title, news_ts = news
+            news_text = f"; latest news {str(news_ts)[:16]} {str(title)[:100]}"
+
+        vol_text = f"{volume_ratio:.1f}x" if volume_ratio is not None else "N/A"
+        why = "; ".join(reasons)
+        if rationale_text:
+            why += f"; model: {rationale_text}"
+        why += news_text
+        lines.append(
+            f"| {ticker} | {move_pct:+.1f}% ({str(latest_ts)[:10]}) | "
+            f"{vol_text} | {model_view} | {why} |"
+        )
+
+    if len(lines) == 2:
+        return "(no broad-watchlist ticker crossed the 5% price or 1.5x volume trigger)"
     return "\n".join(lines)
 
 
@@ -366,6 +429,7 @@ def generate_daily_research(
 
     # Assemble prompt context
     watchlist_block = _build_watchlist_block(conn)
+    watchlist_movers_block = _build_watchlist_movers_block(conn)
     news_block = _build_news_block(conn)
     performance_block = _build_performance_block(conn, days=7)
     focus_layer_players = format_layer_players(focus_layer)
@@ -464,6 +528,7 @@ def generate_daily_research(
         focus_layer_name=focus_layer.layer,
         focus_layer_function=focus_layer.function,
         watchlist_block=watchlist_block,
+        watchlist_movers_block=watchlist_movers_block,
         performance_block=performance_block,
         focus_layer_players=focus_layer_players,
         cross_layer_block=cross_layer_block,
@@ -493,7 +558,7 @@ def generate_daily_research(
         max_chars=max_chars,
     )
 
-    # Core backend is swappable via STOCK_CORE_BACKEND (minimax|claude_cli)
+    # Core backend is Codex-first via CORE_LLM_BACKEND.
     messages: list[ChatMessage] = [{"role": "user", "content": user_message}]
     response: ChatResponse = _core_chat(
         messages=messages,
@@ -969,7 +1034,7 @@ def _gather_web_grounding(question: str) -> str:
     if not hits:
         return ""
 
-    # Fetch the actual page text for each top hit so MiniMax sees real content,
+    # Fetch the actual page text for each top hit so the core backend sees real content,
     # not just snippets. Cheap (~2-3s per page, parallelism not worth the
     # complexity for N=4).
     urls = [h.url for h in hits if h.url]
@@ -1004,7 +1069,7 @@ def generate_reply(
     boss_reply: str,
     language: str | None = None,
 ) -> str:
-    """Compose a short MiniMax-driven reply to a single boss message."""
+    """Compose a short Codex-driven reply to a single boss message."""
     # Lazy imports to avoid top-level import cycles
     from stock.conversation import format_context_block, recent_turns
 
@@ -1063,7 +1128,7 @@ def generate_reply(
 
     messages: list[ChatMessage] = [{"role": "user", "content": user_message}]
 
-    # MiniMax M2.5-highspeed is a thinking model: sometimes burns the entire
+    # Some thinking models can burn the entire
     # max_tokens budget on <think>...</think> and emits nothing afterward.
     # strip_thinking() then leaves us with an empty body. Retry up to 2 times
     # before giving up and surfacing "(empty reply)" to the user.

@@ -23,6 +23,7 @@ companies:
   name: 工业富联 Foxconn Industrial
   priority: 1
   enabled: true
+  last_run: 2026-05-27T09:15
 - ticker: 002463.SZ
   name: 沪电股份 WUS PCB
   priority: 1
@@ -99,6 +100,10 @@ companies:
   name: Lumentum
   priority: 3
   enabled: true
+- ticker: AAOI
+  name: Applied Optoelectronics
+  priority: 2
+  enabled: true
 - ticker: VKTX
   name: Viking Therapeutics
   priority: 3
@@ -118,6 +123,18 @@ companies:
 - ticker: BESI.AS
   name: Besi (hybrid bonding)
   priority: 3
+  enabled: true
+- ticker: RMBS
+  name: Rambus (memory interface IP)
+  priority: 2
+  enabled: true
+- ticker: WDC
+  name: Western Digital (NAND/storage read-through)
+  priority: 2
+  enabled: true
+- ticker: SNDK
+  name: SanDisk (NAND/storage pure-play)
+  priority: 2
   enabled: true
 - ticker: STEM
   name: Stem Inc (AI battery SW)

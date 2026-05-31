@@ -12,8 +12,10 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     anthropic_api_key: str = ""
+    # Legacy only. Runtime LLM calls are Codex CLI first; do not set these
+    # unless intentionally testing the retired MiniMax client.
     minimax_api_key: str = ""
-    minimax_base_url: str = ""  # override if api.minimaxi.com is blocked / failing
+    minimax_base_url: str = ""
     stock_api_token: str = ""
     daily_cost_ceiling_usd: float = 0.50
     db_path: str = "data/stock.db"
@@ -58,7 +60,7 @@ class Settings(BaseSettings):
     # Hybrid local + Render-free architecture.
     # `local` (default): full pipeline runs
     #   (scheduler, ingest, predictions, research, GUI delivery).
-    # `cloud_proxy`: passive Render-side mode -- no scheduler, no MiniMax/Tavily calls.
+    # `cloud_proxy`: passive Render-side mode -- no scheduler, no Codex/Tavily calls.
     #   Just serves /channel/* (boss dashboard) and /sync/* (local laptop pushes data here).
     stock_mode: str = "local"
 
@@ -72,21 +74,19 @@ class Settings(BaseSettings):
     #     Falls back to `claude -p` automatically if codex is unavailable / times out.
     #     Requires `codex login` (and `claude login` for the fallback) on this machine.
     #   "claude_cli": same autopilot but skip the codex layer; use claude directly.
-    #   "minimax": auto-call MiniMax with the packet, log proposals to self_review_proposals
-    #   "both": write the packet AND auto-call MiniMax
     #   "claude_code": only write pipeline/daily_review_*.md, you run /improve manually
     #   "off": skip the daily-review job entirely
     self_review_backend: str = "codex_cli"
 
     # F17: core "thinking" backend for the user-facing flows (research, reply,
     # grading, deep-dive, health-check). Utility classifiers (intent,
-    # prompt_rewriter, thesis, discover, features) keep talking to MiniMax
-    # regardless -- they're high-frequency and don't need the upgrade.
+    # prompt_rewriter, thesis, discover, features) also route through this
+    # helper so small utility calls do not silently use a different provider.
     #   "codex_cli" (default): every core call spawns `codex exec` locally,
     #                          with claude_cli as automatic fallback on
     #                          timeout / missing binary. $0 metered.
     #   "claude_cli"         : every core call spawns `claude -p` locally only.
-    #   "minimax"            : every core call goes to MiniMax-M2.5-highspeed.
+    #   "minimax"            : legacy value; ignored and routed to codex_cli.
     core_llm_backend: str = "codex_cli"
     core_claude_model: str = "claude-opus-4-7"
     # Blank lets codex pick its own configured default (currently gpt-5.5).

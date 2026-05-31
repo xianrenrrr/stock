@@ -23,7 +23,7 @@ truth. Use `docs/runtime_source_of_truth.md` for active schedules and
 | F12 | Holdings, anomalies, health checks | DONE | Anomalies daily; health check weekly Saturday. |
 | F13 | Conversation memory and prompt rewrite | DONE | Feedback loop every 5 min. |
 | F16 | Thesis extraction/verification | DONE | Verification runs Mon-Fri after scoring. |
-| F17 | Core backend switch | DONE | `codex_cli`, `claude_cli`, `minimax`. |
+| F17 | Core backend switch | DONE | Runtime is `codex_cli` with `claude_cli` fallback; MiniMax is retired/fail-closed. |
 | F18 | Self-review/autopilot | DONE | Daily at 06:00 UTC. |
 | F19 | Forward discovery engine | DONE | Mon-Fri 23:00 UTC. |
 | F24 | Stops and entry zones | DONE | Used in research; entry scan weekly Sunday. |

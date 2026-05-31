@@ -1,7 +1,7 @@
-# STOCK — AI supply-chain research harness
+# STOCK - AI supply-chain research harness
 
 Python service that ingests news + prices for an AI supply-chain watchlist,
-generates twice-daily Chinese-language research notes via MiniMax + Tavily,
+generates twice-daily Chinese-language research notes via Codex CLI + Tavily,
 and learns from outcomes (memory, rules, bandit, calibration). Designed to
 run continuously either on a Windows laptop with WeChat GUI delivery or
 fully in the cloud (Render) with API-only output.
@@ -14,17 +14,17 @@ Historical roadmap docs live in `pipeline/`; they are not runtime truth.
 
 | Component | Local (Windows) | Cloud (Render) |
 |---|---|---|
-| News + price ingestion (yfinance, RSS, EDGAR) | ✅ | ✅ |
-| MiniMax LLM (features, predictions, research, deep dives) | ✅ | ✅ |
-| Tavily web discovery + LLM extraction | ✅ | ✅ |
-| Predictions, scoring, bandit, calibration, weekly reflection | ✅ | ✅ |
-| Action-queue auto-runner (F11) | ✅ | ✅ |
-| Anomaly flagger / holdings tracker / SEC Form 4 (F12) | ✅ | ✅ |
-| Conversation memory + intent + auto-rewrite (F13) | ✅ | ✅ |
-| FastAPI on `/stock/...` for skill / future APK | ✅ | ✅ |
-| **WeChat delivery via pyautogui** | ✅ | ❌ no desktop |
-| **OpenClaw subprocess trigger** | ✅ | ❌ |
-| **WeChat inbox screenshot pulls** | ✅ | ❌ |
+| News + price ingestion (yfinance, RSS, EDGAR) | yes | yes |
+| Codex CLI LLM (features, predictions, research, deep dives) | local only | cloud proxy does not run LLM jobs |
+| Tavily web discovery + LLM extraction | yes | yes |
+| Predictions, scoring, bandit, calibration, weekly reflection | yes | yes |
+| Action-queue auto-runner (F11) | yes | yes |
+| Anomaly flagger / holdings tracker / SEC Form 4 (F12) | yes | yes |
+| Conversation memory + intent + auto-rewrite (F13) | yes | yes |
+| FastAPI on `/stock/...` for skill / future APK | yes | yes |
+| **WeChat delivery via pyautogui** | yes | no desktop |
+| **OpenClaw subprocess trigger** | yes | no |
+| **WeChat inbox screenshot pulls** | yes | no |
 
 In cloud mode the orchestrator generates notes and persists them to the DB,
 exposed via `GET /stock/research/latest` for downstream consumers (custom APK
@@ -47,13 +47,13 @@ Step-by-step + troubleshooting: `pipeline/plan_G_render_deploy.md`.
 
 | Key | Required? | Purpose |
 |---|---|---|
-| `MINIMAX_API_KEY` | yes | LLM workhorse for features, predictions, research, discovery |
-| `ANTHROPIC_API_KEY` | optional | Claude Opus weekly reflection + auto-rewriter; falls back to MiniMax if absent |
+| `CORE_LLM_BACKEND` | default `codex_cli` | Codex-first LLM backend for every runtime LLM call |
+| `SELF_REVIEW_BACKEND` | default `codex_cli` | Daily auto-improve backend |
+| `ANTHROPIC_API_KEY` | optional | Fallback image vision OCR; Codex CLI image input is primary |
 | `STOCK_API_TOKEN` | yes (Render auto-generates) | Bearer auth for the FastAPI endpoints |
 | `TAVILY_API_KEY` | yes (or SERPER/BRAVE) | Web discovery |
 | `DAILY_COST_CEILING_USD` | default 10 | Hard kill switch on LLM spend per UTC day |
 | `RESEARCH_LANGUAGE` | default `zh` | `zh` or `en` |
-| `MINIMAX_BASE_URL` | default `https://api.minimaxi.com/v1` | Override if your MiniMax key was issued for the global host |
 | `DAILY_REPORT_EMAIL_TO` | default `2001liqiyangdaily@gmail.com` | Daily action report and failure-alert recipient |
 | `SMTP_FROM` | default `2001liqiyangdaily@gmail.com` | Sender address for daily reports and failure alerts |
 | `SMTP_HOST`, `SMTP_USERNAME`, `SMTP_PASSWORD` | optional | Required for actual email delivery |
@@ -74,7 +74,7 @@ copy .env.example .env
 .venv\Scripts\python.exe -m stock serve
 ```
 
-The `[gui]` extra adds `pyautogui`, `pyperclip`, `pyscreeze`, `pillow` — only
+The `[gui]` extra adds `pyautogui`, `pyperclip`, `pyscreeze`, `pillow` - only
 needed for the WeChat GUI delivery path on Windows. Skip it (`pip install -e .`)
 for headless / cloud installs.
 
@@ -123,4 +123,6 @@ Dockerfile + render.yaml        # cloud deploy
 
 ## License
 
-Private project — no public license. Do not redistribute.
+Private project - no public license. Do not redistribute.
+
+

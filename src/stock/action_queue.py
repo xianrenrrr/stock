@@ -14,12 +14,12 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_RUN_LIMIT: int = 4
 DEFAULT_DEDUP_HOURS: int = 24
-TOPIC_MAX_CHARS: int = 80
+TOPIC_MAX_CHARS: int = 160
 EXCERPT_MAX_CHARS: int = 280
 PREVIOUS_FOLLOWUPS_MAX_ITEMS: int = 4
 
 _HEADING_RE = re.compile(
-    r"(?im)^\s*\d?\.?\s*\**\s*(?:行动清单|action items|ai\s*自动跟进|auto-queued follow-ups)"
+    r"(?im)^\s*\d?\.?\s*\**\s*(?:行动清单|action items|ai\s*自动跟进|AI\s*自动跟进|AI助手自动跟进|Agent\s*auto-queued follow-ups|auto-queued follow-ups)"
 )
 _NEXT_HEADING_RE = re.compile(r"(?m)^\s*(?:\d+\.|#{1,3}\s)|^\s*Not financial advice\.")
 _BULLET_RE = re.compile(r"(?m)^\s*[-*\u2022]\s+(.+?)\s*$")
@@ -291,3 +291,4 @@ def clear(conn: sqlite3.Connection, *, status: str | None = None) -> int:
         )
     conn.commit()
     return int(cursor.rowcount or 0)
+

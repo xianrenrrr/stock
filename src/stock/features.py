@@ -76,7 +76,7 @@ def extract_single(
     truncated_body = body[:MAX_BODY_CHARS]
     prompt = template.format(ticker=ticker, title=title, body=truncated_body)
 
-    # Call the active core backend (claude_cli or minimax via CORE_LLM_BACKEND)
+    # Call the active Codex-first core backend.
     messages: list[ChatMessage] = [{"role": "user", "content": prompt}]
     client = get_core_client()
     model = get_core_model()
@@ -129,10 +129,10 @@ def extract_features(
             )
             break
         except json.JSONDecodeError as exc:
-            # MiniMax occasionally returns empty or truncated content even on 200 OK.
+            # LLMs can occasionally return empty or truncated content.
             # Skip just this news item rather than failing the whole ticker.
             logger.warning(
-                "Skipping news_id=%s: MiniMax returned unparseable JSON (%s)",
+                "Skipping news_id=%s: feature LLM returned unparseable JSON (%s)",
                 news_id, exc,
             )
             continue

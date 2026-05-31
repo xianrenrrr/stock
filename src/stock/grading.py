@@ -15,12 +15,9 @@ from stock import action_queue, emailer, holdings, prompt_rewriter, thesis
 from stock.config import get_settings
 from stock.ingest import fetch_prices
 from stock.models import (
-    MINIMAX_DEFAULT_MODEL,
     ChatMessage,
     ChatResponse,
-    ClaudeCliUnavailable,
     check_cost_ceiling,
-    get_client,
     get_core_client,
     get_core_model,
 )
@@ -449,7 +446,7 @@ def generate_grading_note(
     Pipeline: refresh prices -> score due predictions -> pull recent outcomes ->
     LLM grading note -> persist as research_reports row -> queue follow-ups.
     Idempotent in the sense that score_due is idempotent and a same-day re-run
-    just produces an additional grading note (cheap on MiniMax-highspeed).
+    just produces an additional grading note through the Codex-first backend.
     """
     settings = get_settings()
     lang = (language or settings.research_language or "zh").strip() or "zh"
@@ -510,33 +507,17 @@ def generate_grading_note(
         max_chars=GRADING_MAX_CHARS,
     )
 
-    # F17: route through the swappable core backend so the grading note can run
-    # under either MiniMax (cheap) or `claude -p` (Opus + built-in WebSearch).
-    # Falls back to MiniMax if claude_cli backend is selected but unreachable.
+    # F17: route through the Codex-first core backend.
     messages: list[ChatMessage] = [{"role": "user", "content": user_message}]
-    try:
-        primary = get_core_client()
-        response: ChatResponse = primary.chat(
-            messages=messages,
-            model=get_core_model(),
-            max_tokens=GRADING_MAX_TOKENS,
-            conn=conn,
-            caller="grading.generate_note",
-            cached_system=system_prompt,
-        )
-    except ClaudeCliUnavailable as exc:
-        logger.warning(
-            "grading: claude_cli unavailable (%s); falling back to MiniMax", exc,
-        )
-        fallback = get_client("minimax")
-        response = fallback.chat(
-            messages=messages,
-            model=MINIMAX_DEFAULT_MODEL,
-            max_tokens=GRADING_MAX_TOKENS,
-            conn=conn,
-            caller="grading.generate_note+fallback",
-            cached_system=system_prompt,
-        )
+    primary = get_core_client()
+    response: ChatResponse = primary.chat(
+        messages=messages,
+        model=get_core_model(),
+        max_tokens=GRADING_MAX_TOKENS,
+        conn=conn,
+        caller="grading.generate_note",
+        cached_system=system_prompt,
+    )
 
     body = response.content.strip()
     if not body:
