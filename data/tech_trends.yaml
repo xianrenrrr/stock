@@ -88,6 +88,29 @@ trends:
     ai_biopharma_combo: false
     enabled: true
 
+  - id: ai_production_chain_bottleneck_map
+    name: AI production chain bottleneck map from capex buyer to rack, power, optics, packaging, memory, and materials
+    sector: ai_compute
+    horizon: "1-3y"
+    why_now:
+      - "Daily work must track the whole production chain, not just NVDA/AI GPU headlines: buyer capex decisions at MSFT/GOOGL/META/AMZN/ORCL/xAI/sovereign AI decide whether every downstream layer keeps moving."
+      - "Compute silicon remains the core discovered layer: NVDA, AMD, AVGO, MRVL, TSM, ASML, AMAT, LRCX, and KLAC; the alpha should increasingly come from bottlenecks around that core."
+      - "Memory/storage remains important through HBM, DDR5, enterprise SSD, and HDD demand: MU, WDC, STX, SNDK, RMBS, CAMT, ONTO, and BESI; start watching 2027 oversupply signals."
+      - "Advanced packaging/substrates are still a real capacity gate: TSM, AMKR, ASX/ASE, CAMT, ONTO, BESI.AS, Ibiden, Unimicron, and Shinko; US-clean vehicles are CAMT, ONTO, AMKR, and BESI.AS."
+      - "Optical/network is still one of the best production-side lanes: AVGO, MRVL, ANET, CRDO, COHR, LITE, AAOI, AXTI, GLW, and CIEN; after big moves, prioritize pullbacks and smaller suppliers."
+      - "Rack/server integration has moved from thesis to order-book proof via DELL/SMCI/HPE/JBL/FII/Wiwynn; hidden read-through is less obvious suppliers such as JBL, NVT, MOD, AOSL, SITM, AXTI, CAMT, ONTO, GLW, and CIEN."
+      - "Power/cooling/grid may be the best remaining production-side wave because time-to-power and liquid-cooling constraints can outlast GPU shortages: VRT, ETN, GEV, CEG, VST, NVT, MOD, BE, OKLO, and SMR."
+      - "Materials are now part of the AI shortage chain: SUMCO, Shin-Etsu, GlobalWafers, 688783.SH, 688126.SS, AXTI, MP, USAR, UUUU, FCX, and AA; wafer tightness can raise wafer prices, margins, WFE demand, and China replacement demand."
+    falsification:
+      - "If hyperscaler and sovereign AI capex guides flatten for two consecutive quarters, the full-chain demand impulse weakens."
+      - "If AI server backlog rises but gross margins collapse across integrators, rack/server names become revenue traps rather than alpha vehicles."
+      - "If optical, power/cooling, and wafer suppliers guide inventories up while orders slow, the bottleneck thesis has shifted from shortage to oversupply."
+      - "If 2027 HBM/DDR5/SSD supply additions exceed demand and pricing rolls over, memory/storage should be downgraded from buyable bottleneck to cycle-risk watch."
+    vehicles_pure_play: [JBL, NVT, MOD, AOSL, SITM, AXTI, AAOI, CAMT, ONTO, AMKR, BESI.AS]
+    vehicles_diversified: [MSFT, GOOGL, META, AMZN, ORCL, NVDA, AMD, AVGO, MRVL, TSM, DELL, SMCI, VRT, ETN, GEV, CEG, VST]
+    ai_biopharma_combo: false
+    enabled: true
+
   - id: hbm4_hybrid_bonding
     name: HBM4 hybrid-bonding equipment ramp (BESI / Disco) -- pre-priced gap
     sector: ai_compute

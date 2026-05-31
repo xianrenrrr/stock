@@ -457,10 +457,11 @@ def test_create_scheduler_has_expected_jobs() -> None:
     + ai_loop (F39) + weekly_qa_dive (F40) + weekly_tech_dive (F43)
     + company_dd_dive (F44) + weekly_entry_scan (F45)
     + post_close_snapshot (F46) + daily_action_email
-    + intraday holding move alerts = 30.
+    + intraday holding move alerts + warning_dashboard_publish
+    + broker_snapshot_import = 32.
     """
     scheduler = create_scheduler()
-    assert len(scheduler.get_jobs()) == 30
+    assert len(scheduler.get_jobs()) == 32
 
 
 def test_create_scheduler_job_ids() -> None:
@@ -485,6 +486,8 @@ def test_create_scheduler_job_ids() -> None:
         "health_check_weekly",
         "learn_from_feedback",
         "sync_to_render",
+        "warning_dashboard_publish",
+        "broker_snapshot_import",
         "daily_self_review",
         "grade_and_reply",
         "thesis_verify",
@@ -528,7 +531,7 @@ def test_get_schedule_info_format() -> None:
     info = get_schedule_info(scheduler)
 
     assert isinstance(info, ScheduleInfo)
-    assert len(info.jobs) == 30
+    assert len(info.jobs) == 32
 
     # Each entry has name and next_run keys
     for entry in info.jobs:

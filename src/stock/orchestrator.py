@@ -16,7 +16,7 @@ import time
 import httpx
 import openai
 
-from stock import action_queue, ai_loop_monitor, alerts, anomaly, backup, conversation, discovery_engine, emailer, entry_signals, events, grading, holdings, intent, options as options_module, prompt_rewriter, self_review, smallcap_scanner, tech_dive, thesis
+from stock import action_queue, ai_loop_monitor, alerts, anomaly, backup, broker_sync, conversation, discovery_engine, emailer, entry_signals, events, grading, holdings, intent, options as options_module, prompt_rewriter, self_review, smallcap_scanner, tech_dive, thesis, warning_dashboard
 from stock.cloud_sync import run_local_sync
 from stock.config import get_settings
 from stock.db import get_conn
@@ -553,6 +553,13 @@ def _job_email_daily_action_report() -> None:
         subject = f"STOCK daily action report #{research_id} ({str(created_at)[:10]})"
         upload_link = _dashboard_upload_link(conn)
         email_body = str(body)
+        warning = warning_dashboard.build_warning_dashboard(conn, days=7, limit=12)
+        if warning.items:
+            email_body = (
+                f"{warning_dashboard.format_warning_dashboard(warning)}\n\n"
+                "---\n"
+                f"{email_body}"
+            )
         if upload_link:
             email_body = (
                 f"{email_body.rstrip()}\n\n"
@@ -570,6 +577,32 @@ def _job_email_daily_action_report() -> None:
                 research_id,
                 result.detail,
             )
+    finally:
+        conn.close()
+
+
+def _job_publish_warning_dashboard() -> None:
+    """Publish changed warnings to boss app/Render and email high-risk changes."""
+    conn = get_conn()
+    try:
+        result = warning_dashboard.publish_warning_dashboard(conn, days=7, limit=25)
+        if not result.changed:
+            return
+        logger.info(
+            "Warning dashboard published id=%s high=%d medium=%d",
+            result.research_id,
+            result.high_count,
+            result.medium_count,
+        )
+        if result.high_count > 0:
+            mail = emailer.send_email(
+                subject=f"STOCK warning dashboard: {result.high_count} high-risk item(s)",
+                body=result.body,
+            )
+            if not mail.sent:
+                logger.warning("warning dashboard email not sent: %s", mail.detail)
+    except Exception:
+        logger.exception("Warning dashboard publish failed")
     finally:
         conn.close()
 
@@ -1121,6 +1154,27 @@ def _job_sync_to_render() -> None:
         conn.close()
 
 
+def _job_import_broker_snapshot() -> None:
+    """Import filled broker positions from the local Robinhood snapshot bridge."""
+    conn = get_conn()
+    try:
+        result = broker_sync.import_snapshot_file(conn)
+        if result.missing:
+            return
+        if result.upserted or result.deactivated:
+            logger.info(
+                "Broker snapshot import: upserted=%d deactivated=%d skipped_empty=%d account=%s",
+                result.upserted,
+                result.deactivated,
+                result.skipped_empty,
+                result.account_number or "unknown",
+            )
+    except Exception:
+        logger.exception("Broker snapshot import failed")
+    finally:
+        conn.close()
+
+
 def create_scheduler() -> BlockingScheduler:
     """Create and configure the APScheduler instance with all pipeline jobs.
 
@@ -1317,6 +1371,25 @@ def create_scheduler() -> BlockingScheduler:
         CronTrigger(minute="*/5", timezone="UTC"),
         id="sync_to_render",
         name="Push state to Render free tier + pull boss replies",
+    )
+
+    # Publish changed warning dashboards as research_reports so the Boss app,
+    # Render sync, and email all see the same risk surface.
+    scheduler.add_job(
+        _job_publish_warning_dashboard,
+        CronTrigger(minute="*/15", timezone="UTC"),
+        id="warning_dashboard_publish",
+        name="Publish changed warning dashboard to app/email",
+    )
+
+    # Robinhood MCP bridge: Codex/RH MCP writes filled positions to
+    # data/robinhood_positions_snapshot.json; the orchestrator imports it into
+    # holdings every 5 minutes. Queued orders are not treated as holdings.
+    scheduler.add_job(
+        _job_import_broker_snapshot,
+        CronTrigger(minute="*/5", timezone="UTC"),
+        id="broker_snapshot_import",
+        name="Import filled Robinhood positions snapshot into holdings",
     )
 
     # F26: tracked-event verification at SCORE_HOUR:SCORE_MINUTE+20 (Mon-Fri).

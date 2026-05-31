@@ -46,10 +46,10 @@ class Settings(BaseSettings):
     brave_api_key: str = ""
     web_search_backend: str = ""  # explicit pin; blank = auto-select first set
 
-    # OpenClaw auto-trigger after each WeChat push. The orchestrator spawns
-    # `openclaw agent --agent <OPENCLAW_AGENT> --message ...` so the agent picks up
-    # pending outbox tasks and clicks them through WeChat via computer-use.
-    openclaw_auto_deliver: bool = True
+    # Legacy OpenClaw auto-trigger after each WeChat push.
+    # Default OFF: Render/Boss-app sync + email are the safe delivery paths.
+    # Enable only for an intentional manual GUI-delivery test.
+    openclaw_auto_deliver: bool = False
     openclaw_bin: str = "openclaw"     # binary on PATH; override with full path if needed
     openclaw_agent: str = "main"        # which OpenClaw agent has the delivery skill
 

@@ -4,11 +4,6 @@
 # this file manually and the next startup syncs it.
 
 holdings:
-  - ticker: AMD
-    qty: 50
-    cost_basis: 0
-    opened_at: '2026-05-27'
-    notes: 'Imported from Robinhood screenshot 20260527T070557Z_richard.png; avg cost basis not visible.'
   - ticker: GOOGL
     qty: 60
     cost_basis: 0
@@ -20,10 +15,10 @@ holdings:
     opened_at: '2026-05-27'
     notes: 'Imported from Robinhood screenshot 20260527T070557Z_richard.png; avg cost basis not visible.'
   - ticker: AMBA
-    qty: 258
+    qty: 158
     cost_basis: 0
     opened_at: '2026-05-27'
-    notes: 'Imported from Robinhood screenshot 20260527T070557Z_richard.png; avg cost basis not visible.'
+    notes: 'Imported from Robinhood screenshot 20260527T070557Z_richard.png; avg cost basis not visible. Qty corrected to 158 per operator message 2026-05-31.'
   - ticker: RXRX
     qty: 100
     cost_basis: 0
@@ -72,6 +67,9 @@ holdings:
 #
 #       UPDATE qty + cost_basis as soon as you have them:
 #         stock holding add SMCI <real_qty> <real_cost> --notes "..."
+
+# AMD -- SOLD per operator message on 2026-05-31.
+# Removed from active YAML holdings; DB row marked inactive manually the same day.
 
 # Example template (add more holdings here):
 # holdings:

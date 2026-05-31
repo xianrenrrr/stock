@@ -5,6 +5,9 @@
 - `prob_up` is the probability that the stock closes higher next session.
 - `prob_up > 0.50` is an up prediction. `prob_up < 0.50` is a down prediction.
 - Do not use catalysts whose expected impact is mainly quarterly, annual, or strategic unless they plausibly change next-session positioning.
+- Capital rule: never recommend borrowing money, margin, leverage, cash advances,
+  portfolio margin, or any trade requiring debt. Use available cash only and
+  preserve a cash reserve before new buys.
 
 ## Evidence Hierarchy
 1. Rank evidence in this order:

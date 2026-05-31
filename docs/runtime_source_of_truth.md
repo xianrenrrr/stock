@@ -1,6 +1,6 @@
 # STOCK Runtime Source Of Truth
 
-Last verified: 2026-05-25 from `src/stock/orchestrator.py:create_scheduler()`.
+Last verified: 2026-05-31 from `src/stock/orchestrator.py:create_scheduler()`.
 
 This file is the source of truth for what runs automatically. Older roadmap
 files describe design history and may be stale.
@@ -9,8 +9,22 @@ files describe design history and may be stale.
 
 | Mode | Setting | Behavior |
 |---|---|---|
-| Local full pipeline | `STOCK_MODE=local` | Scheduler runs all jobs below plus FastAPI/dashboard sync. |
+| Local full pipeline | `STOCK_MODE=local` | Scheduler runs all jobs below plus FastAPI/dashboard sync and email. OpenClaw auto-delivery is disabled by default. |
 | Render cloud proxy | `STOCK_MODE=cloud_proxy` | Scheduler is disabled. FastAPI only serves `/channel/*` and `/sync/*`. |
+
+## Delivery Policy
+
+Primary delivery is Boss app / Render sync plus SMTP email. The legacy OpenClaw
+GUI-delivery path is retained only for manual fallback testing and must stay
+disabled in normal orchestration:
+
+```env
+OPENCLAW_AUTO_DELIVER=false
+```
+
+The orchestrator should not spawn `openclaw agent --local` automatically. If
+OpenClaw is running separately, it is not required for reports, alerts, or
+emails.
 
 ## LLM Backend Policy
 
@@ -29,7 +43,7 @@ Runtime LLM calls are Codex-first:
 
 ## Active Scheduled Jobs
 
-There are 30 active APScheduler jobs in local mode.
+There are 32 active APScheduler jobs in local mode.
 
 | Job id | Cadence UTC | What it actually does | Main output |
 |---|---:|---|---|
@@ -40,6 +54,8 @@ There are 30 active APScheduler jobs in local mode.
 | `daily_action_email` | Mon-Fri 14:45 | Email the latest daily research/action report to `DAILY_REPORT_EMAIL_TO`. | SMTP email |
 | `learn_from_feedback` | every 5 min | Process boss replies, classify intent, queue follow-ups, apply prompt rewrites when safe. | `conversations`, `action_queue`, `prompt_rewrites` |
 | `sync_to_render` | every 5 min | Push local notes/tokens to Render and pull dashboard replies. No-op if `RENDER_SYNC_URL` is empty. | Render sync state |
+| `warning_dashboard_publish` | every 15 min | Publish changed warning dashboard snapshots to Boss app/Render and email high-risk changes. | `research_reports(kind='warning_dashboard')`, SMTP email |
+| `broker_snapshot_import` | every 5 min | Import filled Robinhood positions from `data/robinhood_positions_snapshot.json` into local holdings. Queued orders are ignored until filled. | `holdings` |
 | `intraday_holding_move_alerts` | Mon-Fri every 15 min, 13:00-20:59 | Live quote crash/spike alerts for active holdings; catches moves like AMBA -20% before close. | `research_reports(kind='alert')` |
 | `post_close_snapshot` | Mon-Fri 20:05 | Refresh settled daily bars and flag close/volume snapshots. | prices/anomaly context |
 | `score_daily` | Mon-Fri 21:30 | Score due predictions. | `outcomes`, bandit/calibration updates |
@@ -74,6 +90,48 @@ Daily research is now multi-field. Active manually configured fields include:
 - Space tech
 - AI compute cloud / miner-to-AI conversion
 - Critical materials / rare earths
+
+## Warning Dashboard
+
+Boss app `/channel/` now has a top warning panel backed by
+`/channel/api/warnings`.
+
+It aggregates:
+
+- active holding P&L and F24 stop distance from the local holdings/prices DB,
+- recent `research_reports(kind='alert')`,
+- recent price/volume anomalies for active holdings.
+- general AI-cycle crash warnings from `ai_loop_health`,
+- broad AI-production-chain breadth breakdowns from the prices table,
+- bearish options pressure from `option_ratio_snapshots` and unusual put
+  activity from `option_anomalies`.
+
+Every 15 minutes, changed warning content is also persisted as
+`research_reports(kind='warning_dashboard')`, which means it is synced to the
+Boss app / Render through the normal notes pipeline. If the changed warning set
+contains high-severity items, the same warning report is emailed through SMTP.
+The weekday daily action email also prepends the current warning dashboard above
+the daily action report.
+
+Real broker stop-loss order creation or edits are not automatic. The system can
+compute and display stop levels and alert on breaches; actual broker orders
+still require an explicit confirmed trading instruction.
+
+## Robinhood MCP Bridge
+
+Codex can access Robinhood through the `robinhood-trading` MCP in an interactive
+session. The background Python orchestrator cannot directly call Codex MCP
+tools, so the runtime bridge is file based:
+
+1. A Codex/RH MCP session writes a positions snapshot to
+   `data/robinhood_positions_snapshot.json`.
+2. `broker_snapshot_import` imports only non-zero filled positions into
+   `holdings`.
+3. Existing holding alerts, stop-loss tables, anomaly scans, daily research, and
+   the warning dashboard monitor those holdings.
+
+Queued/pending buy orders are not counted as holdings until Robinhood reports a
+filled non-zero position.
 - AI network equipment
 - Defense drones / autonomy
 - Robotics / autonomous systems

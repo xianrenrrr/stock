@@ -91,6 +91,46 @@
     padding: 18px 20px;
     margin-bottom: 18px;
   }
+  .warnings {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 18px;
+  }
+  .warnings h2 {
+    margin: 0 0 10px;
+    font-size: 15px;
+    color: var(--accent);
+  }
+  .warning-item {
+    border-top: 1px solid var(--border);
+    padding: 9px 0;
+  }
+  .warning-item:first-of-type { border-top: none; }
+  .warning-title {
+    font-size: 13px;
+    font-weight: 650;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .warning-detail {
+    margin-top: 3px;
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+  .sev {
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.2px;
+  }
+  .sev.high { color: #fff; background: var(--bad); }
+  .sev.medium { color: #1a1107; background: var(--accent); }
+  .sev.low { color: var(--text); background: var(--panel-2); border: 1px solid var(--border); }
+  .sev.info { color: var(--text-dim); background: transparent; border: 1px solid var(--border); }
   .latest .meta {
     color: var(--text-dim);
     font-size: 12px;
@@ -254,6 +294,11 @@
   <!-- dashboard -->
   <div id="dashPane" class="hidden">
 
+    <div class="warnings" id="warningPane">
+      <h2>Warning Dashboard</h2>
+      <div id="warningList">Loading...</div>
+    </div>
+
     <div class="latest" id="latestNote">
       <div class="meta">
         <span><b id="latestKind">—</b></span>
@@ -352,11 +397,34 @@ async function loadDashboard() {
   try {
     const me = await api("/me");
     showDash(me.recipient);
-    await Promise.all([loadLatest(), loadHistory()]);
+    await Promise.all([loadWarnings(), loadLatest(), loadHistory()]);
   } catch (e) {
     localStorage.removeItem("stock_token");
     TOKEN = null;
     showLogin("登录失效：" + e.message);
+  }
+}
+
+async function loadWarnings() {
+  const wrap = el("warningList");
+  try {
+    const data = await api("/warnings?days=7");
+    const items = data.items || [];
+    if (!items.length) {
+      wrap.innerHTML = "<em>No active warnings in the last 7 days.</em>";
+      return;
+    }
+    wrap.innerHTML = items.slice(0, 12).map(w => `
+      <div class="warning-item">
+        <div class="warning-title">
+          <span class="sev ${escapeHtml(w.severity || "info")}">${escapeHtml(w.severity || "info")}</span>
+          <span>${escapeHtml(w.title || "Warning")}</span>
+        </div>
+        <div class="warning-detail">${escapeHtml(w.detail || "")}</div>
+      </div>
+    `).join("");
+  } catch (e) {
+    wrap.innerHTML = "<em>Warning dashboard unavailable: " + escapeHtml(e.message) + "</em>";
   }
 }
 
@@ -428,6 +496,7 @@ function escapeHtml(s) {
 }
 
 function refreshAll() {
+  loadWarnings().catch(() => {});
   loadLatest().catch(() => {});
   loadHistory().catch(() => {});
 }

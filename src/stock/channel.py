@@ -33,6 +33,7 @@ from pydantic import BaseModel, Field
 
 from stock.config import get_settings
 from stock.db import get_conn
+from stock.warning_dashboard import WarningDashboard, build_warning_dashboard
 
 # F18: image upload feature -- the boss is lazy, snaps a screenshot, and the
 # system extracts content via a vision LLM and routes it to the same intent
@@ -276,6 +277,15 @@ def get_notes(
         for r in rows
     ]
     return NotesListResponse(notes=notes)
+
+
+def get_warnings(
+    days: int = Query(default=7, ge=1, le=30),
+    auth: tuple[str, str | None, sqlite3.Connection] = Depends(_require_recipient),
+) -> WarningDashboard:
+    """Return the top risk warnings for the dashboard."""
+    _recipient, _last_seen, conn = auth
+    return build_warning_dashboard(conn, days=days)
 
 
 def get_note(
@@ -525,6 +535,12 @@ def create_router() -> APIRouter:
         get_note,
         methods=["GET"],
         response_model=NoteDetail,
+    )
+    router.add_api_route(
+        "/api/warnings",
+        get_warnings,
+        methods=["GET"],
+        response_model=WarningDashboard,
     )
     router.add_api_route(
         "/api/reply",

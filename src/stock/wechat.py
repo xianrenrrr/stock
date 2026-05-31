@@ -274,9 +274,10 @@ def send_message(
             logger.info("WeChat push sent to %s (%s chars)", recipient, len(body))
         return SendResult(recipient=recipient, status=status, detail=detail, log_id=log_id)
 
-    # GUI-delivery mode: queue the task for OpenClaw to pick up and click through
+    # Legacy GUI-delivery mode: queue the task for manual pickup. OpenClaw
+    # auto-spawn is disabled by default because Boss-app sync + email are safer.
     backup = _log_outbox_file(recipient, body, research_id=research_id)
-    detail = f"queued for OpenClaw GUI delivery: {backup}"
+    detail = f"queued for manual GUI delivery: {backup}"
     log_id = _record_send(
         conn,
         recipient=recipient,
@@ -285,7 +286,7 @@ def send_message(
         detail=detail,
         research_id=research_id,
     )
-    logger.info("WeChat push queued for OpenClaw GUI: %s -> %s", recipient, backup)
+    logger.info("WeChat push queued for manual GUI delivery: %s -> %s", recipient, backup)
     return SendResult(recipient=recipient, status="queued", detail=detail, log_id=log_id)
 
 
@@ -414,13 +415,13 @@ def broadcast(
     *,
     recipients: list[Recipient] | None = None,
     research_id: int | None = None,
-    auto_trigger_openclaw: bool = True,
+    auto_trigger_openclaw: bool = False,
 ) -> BroadcastResult:
     """Send the same body to every enabled recipient.
 
-    When `auto_trigger_openclaw` is True (default) and outbox-mode is in use, also fire
+    When `auto_trigger_openclaw` is True and outbox-mode is in use, also fire
     the OpenClaw CLI so the agent picks up the freshly queued tasks and clicks them
-    through WeChat without manual intervention.
+    through WeChat without manual intervention. This is legacy and defaults OFF.
     """
     targets = recipients if recipients is not None else load_recipients()
     if not targets:

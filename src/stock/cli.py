@@ -9,7 +9,7 @@ from typing import Annotated
 
 import typer
 
-from stock import action_queue, anomaly, discovery_engine, grading, holdings, thesis as thesis_mod
+from stock import action_queue, anomaly, broker_sync, discovery_engine, grading, holdings, thesis as thesis_mod
 from stock.db import get_conn
 from stock.discover import (
     get_latest_discovery,
@@ -60,6 +60,8 @@ queue_app = typer.Typer(help="Inspect and run the auto-queued action items.")
 app.add_typer(queue_app, name="action-queue")
 holding_app = typer.Typer(help="Manage tracked portfolio holdings.")
 app.add_typer(holding_app, name="holding")
+broker_app = typer.Typer(help="Import broker snapshots into tracked holdings.")
+app.add_typer(broker_app, name="broker")
 channel_app = typer.Typer(help="Manage per-recipient dashboard tokens (channel.py).")
 app.add_typer(channel_app, name="channel-token")
 self_review_app = typer.Typer(help="Daily self-review packet + Codex CLI proposals.")
@@ -932,6 +934,32 @@ def holding_note_cmd(
             raise typer.Exit(code=1)
     except typer.Exit:
         raise
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
+@broker_app.command("import-snapshot")
+def broker_import_snapshot_cmd(
+    path: Annotated[
+        str,
+        typer.Argument(help="Robinhood MCP positions JSON snapshot path"),
+    ] = str(broker_sync.DEFAULT_SNAPSHOT_PATH),
+) -> None:
+    """Import filled Robinhood positions into holdings; ignores zero-qty rows."""
+    try:
+        conn = get_conn()
+        result = broker_sync.import_snapshot_file(conn, path)
+        if result.missing:
+            typer.echo(f"No snapshot found: {result.path}")
+            return
+        typer.echo(
+            "Broker snapshot imported: "
+            f"upserted={result.upserted} "
+            f"deactivated={result.deactivated} "
+            f"skipped_empty={result.skipped_empty} "
+            f"account={result.account_number or 'unknown'}"
+        )
     except Exception:
         typer.echo(traceback.format_exc(), err=True)
         raise typer.Exit(code=1)

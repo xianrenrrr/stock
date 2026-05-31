@@ -38,13 +38,18 @@ tickers:
   - AAOI   # Applied Optoelectronics -- smaller optical module / laser read-through
   - SMCI
   - DELL
+  - HPE    # AI server / Cray systems
+  - JBL    # less-obvious AI rack/system manufacturing read-through
   - VRT
   - ETN
+  - NVT    # power/cooling enclosure + infrastructure proxy
+  - MOD    # thermal management / data-center cooling read-through
   - CEG
   - VST
   - MSFT
   - GOOGL
   - META
+  - AMZN
   - ORCL
   # ---- Layer 2/3/Edge per 三层接力 framework (boss directive 2026-05-17) ----
   # The article's thesis: Layer 1 has moved; the next 10x is in
@@ -112,6 +117,11 @@ tickers:
   - 002371.SZ  # 北方华创 NAURA -- broadest equipment portfolio in China
   - 688126.SS  # 沪硅产业 SICC -- 300mm silicon wafers
   - 688783.SH  # Xi'an ESWIN -- China pure-play 12-inch silicon wafers
+  - 3436.T     # SUMCO -- Japan 300mm silicon wafers
+  - 4063.T     # Shin-Etsu Chemical -- Japan silicon wafer leader
+  - 6488.TWO   # GlobalWafers -- Taiwan silicon wafers
+  - 4062.T     # Ibiden -- ABF substrates
+  - 3037.TW    # Unimicron -- IC substrates / AI server PCB adjacency
   - 600584.SS  # 长电科技 JCET -- advanced packaging (HBM beneficiary)
   - 688981.SS  # 中芯国际 SMIC A -- foundry leader (mature node domestic)
   - 0981.HK    # 中芯国际 SMIC HK
@@ -141,7 +151,11 @@ tickers:
   - 688498.SH  # 源杰科技 Yuanjie -- ELS laser chip
   # US-listed adds
   - ACMR        # ACM Research US ADR of 盛美上海
+  - AMKR        # Amkor -- US-listed OSAT / advanced packaging
+  - ASX         # ASE Technology ADR -- OSAT / packaging
   - AXTI        # AXT Inc -- InP substrate
+  - AOSL        # Alpha & Omega Semi -- AI server power semis
+  - SITM        # SiTime -- AI server timing / oscillator layer
   - BE          # Bloom Energy -- SOFC
   - OKLO        # Oklo -- SMR
   - RXRX        # Recursion -- AI drug discovery
@@ -151,3 +165,5 @@ tickers:
   - STEM        # Stem Inc -- AI battery storage SW; $90M micro-cap, -66% from high
   - NPWR        # NET Power -- Allam-cycle gas zero-emission; $190M, -59% from high
   - VOR         # Vor Biopharma -- engineered HSC for post-BMT; $780M, -76% from high
+  - 6669.TW     # Wiwynn -- AI server ODM
+  - 8996.TW     # Kaori Heat Treatment -- CDU / cooling pure-play
