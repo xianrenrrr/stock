@@ -9,6 +9,7 @@ Then pushes to Render when configured and sends a completion email.
 from __future__ import annotations
 
 import logging
+import sys
 from datetime import datetime, timezone
 
 from stock import emailer, qa_deepdive
@@ -81,6 +82,8 @@ def main() -> int:
             "Open the Boss app / dashboard notes list to read and download/share."
         )
         emailer.send_email(subject="STOCK 长鑫/CXMT scheduled deep dive complete", body=body)
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         print(body)
         return 0
     finally:

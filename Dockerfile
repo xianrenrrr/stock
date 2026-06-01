@@ -35,8 +35,7 @@ WORKDIR /app
 COPY pyproject.toml ./
 RUN mkdir -p src/stock \
     && echo '"""stock package -- stub during dep install layer."""' > src/stock/__init__.py \
-    && pip install --upgrade pip \
-    && pip install -e .
+    && python -m pip install -e .
 
 # --- runtime stage ---
 # Now copy the real source. Editable install means imports resolve to /app/src/stock,
