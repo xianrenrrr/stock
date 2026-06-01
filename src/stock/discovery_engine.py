@@ -7,8 +7,9 @@ promotes top-N candidates onto the active watchlist for deep research.
 Universe sources, in priority order:
   1. Tickers in active watchlist (re-score them too)
   2. Holdings (always score)
-  3. Tickers that have appeared in news in the last N days (broader coverage)
-  4. Tickers in data/ai_supply_chain.yaml (the AI-supply-chain map)
+  3. Tickers that have appeared in news in the last N days (fresh signal)
+  4. Tickers in data/watchlist.yaml (curated bootstrap; fills remaining slots)
+  5. Tickers in data/ai_supply_chain.yaml (AI-supply-chain map backdrop)
 
 We dedupe + cap at MAX_UNIVERSE so the daily run stays bounded. Score updates
 are upserts -- we keep one row per ticker with `last_score_at` stamping the
@@ -136,8 +137,9 @@ def _load_yaml_watchlist() -> set[str]:
 def build_discovery_universe(conn: sqlite3.Connection) -> list[str]:
     """Build the deduped universe of tickers to score this run.
 
-    Order matters slightly because if MAX_UNIVERSE is hit we want watchlist +
-    holdings to always make the cut.
+    Order matters because of the MAX_UNIVERSE cap: DB watchlist, holdings, and
+    recent-news tickers (the fresh signal we don't want to drop) come first.
+    The YAML watchlist + supply-chain map then fill any remaining slots.
     """
     universe: list[str] = []
 
@@ -149,37 +151,38 @@ def build_discovery_universe(conn: sqlite3.Connection) -> list[str]:
         if t and t.upper() not in universe:
             universe.append(t.upper())
 
-    # YAML watchlist fallback
-    for t in _load_yaml_watchlist():
-        if t not in universe:
-            universe.append(t)
-
     # Active holdings -- always score
     for h in holdings.list_holdings(conn, active_only=True):
         if h.ticker.upper() not in universe:
             universe.append(h.ticker.upper())
 
-    # Recent-news tickers (broader coverage)
-    if len(universe) < MAX_UNIVERSE:
-        cutoff = (
-            datetime.now(timezone.utc) - timedelta(days=NEWS_LOOKBACK_DAYS)
-        ).isoformat()
-        rows = conn.execute(
-            "SELECT DISTINCT ticker FROM news WHERE ts >= ? ORDER BY ticker",
-            (cutoff,),
-        ).fetchall()
-        for (t,) in rows:
-            if t and t.upper() not in universe:
-                universe.append(t.upper())
-            if len(universe) >= MAX_UNIVERSE:
-                break
+    # Recent-news tickers (broader coverage). Always included -- the news
+    # lookback window bounds the size, and fresh-news signal must not lose
+    # priority to the static YAML/supply-chain backdrop.
+    cutoff = (
+        datetime.now(timezone.utc) - timedelta(days=NEWS_LOOKBACK_DAYS)
+    ).isoformat()
+    rows = conn.execute(
+        "SELECT DISTINCT ticker FROM news WHERE ts >= ? ORDER BY ticker",
+        (cutoff,),
+    ).fetchall()
+    for (t,) in rows:
+        if t and t.upper() not in universe:
+            universe.append(t.upper())
 
-    # Supply-chain map fills the remaining bounded slots.
-    for t in sorted(_load_supply_chain_tickers()):
-        if t not in universe:
-            universe.append(t)
+    # YAML watchlist fallback fills remaining bounded slots.
+    for t in sorted(_load_yaml_watchlist()):
         if len(universe) >= MAX_UNIVERSE:
             break
+        if t not in universe:
+            universe.append(t)
+
+    # Supply-chain map fills any remaining bounded slots.
+    for t in sorted(_load_supply_chain_tickers()):
+        if len(universe) >= MAX_UNIVERSE:
+            break
+        if t not in universe:
+            universe.append(t)
 
     return universe[:MAX_UNIVERSE]
 
