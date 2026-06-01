@@ -11,6 +11,7 @@ import pytest
 from stock.models import ChatResponse
 from stock.prompt_rewriter import (
     ALLOWED_TARGETS,
+    MAX_PENDING_PER_TARGET,
     RewriteProposal,
     apply_rewrite,
     parse_patches,
@@ -128,6 +129,44 @@ def test_apply_rewrite_dedups_pending_review(
         (str(target),),
     ).fetchone()[0]
     assert count == 1
+
+
+def test_apply_rewrite_caps_pending_per_target(
+    mem_db: sqlite3.Connection, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Once MAX_PENDING_PER_TARGET unapplied rows exist, new proposals are dropped."""
+    target = tmp_path / "research.txt"
+    target.write_text("foo bar baz", encoding="utf-8")
+    monkeypatch.setattr(
+        "stock.prompt_rewriter.ALLOWED_TARGETS",
+        (str(target),) + ALLOWED_TARGETS,
+    )
+
+    # Each proposal has a distinct before_text so dedup does not collapse them.
+    for i in range(MAX_PENDING_PER_TARGET):
+        proposal = RewriteProposal(
+            target_path=str(target),
+            before_text=f"anchor #{i} that is not in file",
+            after_text="x",
+            rationale=f"variant {i}",
+        )
+        rid = apply_rewrite(proposal, mem_db)
+        assert rid is not None
+
+    overflow = RewriteProposal(
+        target_path=str(target),
+        before_text="brand new anchor still not in file",
+        after_text="x",
+        rationale="overflow",
+    )
+    rid = apply_rewrite(overflow, mem_db)
+    assert rid is None
+
+    count = mem_db.execute(
+        "SELECT COUNT(*) FROM prompt_rewrites WHERE target_path = ? AND applied = 0",
+        (str(target),),
+    ).fetchone()[0]
+    assert count == MAX_PENDING_PER_TARGET
 
 
 def test_apply_rewrite_rejects_disallowed_path(

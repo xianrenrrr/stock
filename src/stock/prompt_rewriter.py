@@ -32,6 +32,7 @@ ALLOWED_TARGETS: tuple[str, ...] = (
 )
 RATE_LIMIT_HOURS: int = 24
 DIFF_SIZE_BUFFER: int = 2000
+MAX_PENDING_PER_TARGET: int = 5
 
 
 class RewriteProposal(BaseModel):
@@ -328,16 +329,30 @@ def _pending_rewrite_id(
     return int(row[0]) if row else None
 
 
+def _pending_count_for_path(
+    conn: sqlite3.Connection, target_path: str
+) -> int:
+    """Return how many unapplied (pending-review) rewrites exist for a path."""
+    row = conn.execute(
+        "SELECT COUNT(*) FROM prompt_rewrites"
+        " WHERE applied = 0 AND target_path = ?",
+        (target_path,),
+    ).fetchone()
+    return int(row[0]) if row else 0
+
+
 def _stage(
     conn: sqlite3.Connection, proposal: RewriteProposal, *, applied: bool
-) -> int:
-    """Insert a prompt_rewrites row and return its id.
+) -> int | None:
+    """Insert a prompt_rewrites row and return its id (or None when dropped).
 
     Unapplied (pending-review) rows are deduplicated per (target_path,
     before_text): if an equivalent rewrite already awaits review, return its id
-    instead of stacking byte-identical duplicates. This stops the every-5-minute
-    feedback loop from flooding the review queue when a patch cannot auto-apply
-    (e.g. the template anchor shifted under the rewriter).
+    instead of stacking byte-identical duplicates. As a backstop when the
+    rewriter rotates through *different* anchors of the same shifted template
+    each cycle (dedup misses, but pile-up still happens — see #397-#416 for
+    prompts/research.txt on 2026-05-28), drop new unapplied rows once the
+    pending queue for that path reaches MAX_PENDING_PER_TARGET.
     """
     if not applied:
         existing_id = _pending_rewrite_id(
@@ -349,6 +364,13 @@ def _stage(
                 proposal.target_path, existing_id,
             )
             return existing_id
+        pending_count = _pending_count_for_path(conn, proposal.target_path)
+        if pending_count >= MAX_PENDING_PER_TARGET:
+            logger.warning(
+                "prompt_rewrite cap: %d pending rewrites for %s (>= %d); dropping new proposal",
+                pending_count, proposal.target_path, MAX_PENDING_PER_TARGET,
+            )
+            return None
 
     now = datetime.now(timezone.utc).isoformat()
     cursor = conn.execute(
