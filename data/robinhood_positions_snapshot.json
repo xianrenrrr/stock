@@ -1,0 +1,66 @@
+{
+  "account_number": "641749338,643103732",
+  "as_of": "2026-06-02T16:30:44Z",
+  "positions": [
+    {
+      "symbol": "GOOGL",
+      "quantity": 60,
+      "average_buy_price": 382.0833,
+      "type": "long"
+    },
+    {
+      "symbol": "SMCI",
+      "quantity": 158,
+      "average_buy_price": 46,
+      "type": "long"
+    },
+    {
+      "symbol": "AMBA",
+      "quantity": 100,
+      "average_buy_price": 84.2093,
+      "type": "long"
+    },
+    {
+      "symbol": "RXRX",
+      "quantity": 100,
+      "average_buy_price": 3,
+      "type": "long"
+    },
+    {
+      "symbol": "VEEV",
+      "quantity": 2,
+      "average_buy_price": 161,
+      "type": "long"
+    },
+    {
+      "symbol": "SDGR",
+      "quantity": 10,
+      "average_buy_price": 13.4,
+      "type": "long"
+    },
+    {
+      "symbol": "ACMR",
+      "quantity": 5,
+      "average_buy_price": 82.9,
+      "type": "long"
+    },
+    {
+      "symbol": "NOK",
+      "quantity": 588,
+      "average_buy_price": 16.3,
+      "type": "long"
+    },
+    {
+      "symbol": "CAMT",
+      "quantity": 23,
+      "average_buy_price": 162,
+      "type": "long"
+    },
+    {
+      "symbol": "RKLB",
+      "quantity": 20,
+      "average_buy_price": 135,
+      "type": "long"
+    }
+  ]
+}
