@@ -5,8 +5,6 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from stock import discovery_engine
 from stock.discovery_engine import (
     build_discovery_universe,

@@ -198,6 +198,7 @@ def format_holdings_block(rows: list[Holding], conn: sqlite3.Connection) -> str:
 
     # Lazy imports to avoid cycles -- holdings is imported by many modules.
     from datetime import datetime, timedelta, timezone
+
     from stock.stops import compute_stop_loss
 
     lines: list[str] = [

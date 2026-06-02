@@ -7,8 +7,6 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from stock.stops import (
-    ATR_LOOKBACK_DAYS,
-    PERCENT_STOP,
     compute_stop_loss,
     format_stop_loss_block,
 )

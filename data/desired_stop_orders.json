@@ -1,0 +1,99 @@
+{
+  "generated_at": "2026-06-02T04:16:44+00:00",
+  "mode": "proposed",
+  "order_type": "stop_limit",
+  "count": 7,
+  "orders": [
+    {
+      "ticker": "ACMR",
+      "qty": 5.0,
+      "side": "sell",
+      "type": "stop_limit",
+      "stop_price": 70.04,
+      "limit_price": 69.34,
+      "time_in_force": "gtc",
+      "ref_id": "sl-ACMR-7004-2026-06-02",
+      "basis": "ATR-based stop $70.04 (14.6% below entry $82.05); ATR(20)=$6.01, swing-low(30d)=$47.50",
+      "last_close": 82.05,
+      "computed_at": "2026-06-02T04:16:44+00:00"
+    },
+    {
+      "ticker": "AMBA",
+      "qty": 158.0,
+      "side": "sell",
+      "type": "stop_limit",
+      "stop_price": 64.12,
+      "limit_price": 63.48,
+      "time_in_force": "gtc",
+      "ref_id": "sl-AMBA-6412-2026-06-02",
+      "basis": "ATR-based stop $64.12 (15.3% below entry $75.67); ATR(20)=$5.78, swing-low(30d)=$62.18",
+      "last_close": 75.67,
+      "computed_at": "2026-06-02T04:16:44+00:00"
+    },
+    {
+      "ticker": "GOOGL",
+      "qty": 60.0,
+      "side": "sell",
+      "type": "stop_limit",
+      "stop_price": 357.78,
+      "limit_price": 354.2,
+      "time_in_force": "gtc",
+      "ref_id": "sl-GOOGL-35778-2026-06-02",
+      "basis": "ATR-based stop $357.78 (4.9% below entry $376.37); ATR(20)=$9.29, swing-low(30d)=$331.35",
+      "last_close": 376.37,
+      "computed_at": "2026-06-02T04:16:44+00:00"
+    },
+    {
+      "ticker": "MSFT",
+      "qty": 12.0,
+      "side": "sell",
+      "type": "stop_limit",
+      "stop_price": 437.36,
+      "limit_price": 432.99,
+      "time_in_force": "gtc",
+      "ref_id": "sl-MSFT-43736-2026-06-02",
+      "basis": "ATR-based stop $437.36 (5.0% below entry $460.52); ATR(20)=$11.58, swing-low(30d)=$398.01",
+      "last_close": 460.52,
+      "computed_at": "2026-06-02T04:16:44+00:00"
+    },
+    {
+      "ticker": "RXRX",
+      "qty": 100.0,
+      "side": "sell",
+      "type": "stop_limit",
+      "stop_price": 3.34,
+      "limit_price": 3.31,
+      "time_in_force": "gtc",
+      "ref_id": "sl-RXRX-334-2026-06-02",
+      "basis": "ATR-based stop $3.34 (12.0% below entry $3.79); ATR(20)=$0.23, swing-low(30d)=$2.77",
+      "last_close": 3.79,
+      "computed_at": "2026-06-02T04:16:44+00:00"
+    },
+    {
+      "ticker": "SDGR",
+      "qty": 10.0,
+      "side": "sell",
+      "type": "stop_limit",
+      "stop_price": 14.27,
+      "limit_price": 14.13,
+      "time_in_force": "gtc",
+      "ref_id": "sl-SDGR-1427-2026-06-02",
+      "basis": "ATR-based stop $14.27 (9.7% below entry $15.80); ATR(20)=$0.76, swing-low(30d)=$11.55",
+      "last_close": 15.8,
+      "computed_at": "2026-06-02T04:16:44+00:00"
+    },
+    {
+      "ticker": "VEEV",
+      "qty": 2.0,
+      "side": "sell",
+      "type": "stop_limit",
+      "stop_price": 174.41,
+      "limit_price": 172.67,
+      "time_in_force": "gtc",
+      "ref_id": "sl-VEEV-17441-2026-06-02",
+      "basis": "ATR-based stop $174.41 (7.6% below entry $188.66); ATR(20)=$7.12, swing-low(30d)=$152.81",
+      "last_close": 188.66,
+      "computed_at": "2026-06-02T04:16:44+00:00"
+    }
+  ]
+}

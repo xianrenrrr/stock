@@ -22,6 +22,8 @@ from stock import action_queue, anomaly, holdings
 from stock.channel import (
     ChannelHTTPError,
     channel_exception_handler,
+)
+from stock.channel import (
     create_router as create_channel_router,
 )
 from stock.cloud_sync import create_router as create_sync_router
@@ -43,7 +45,6 @@ from stock.research import (
 from stock.score import OutcomeDetail, build_report
 from stock.supply_chain import (
     chain_summary_for_log,
-    format_layer_players,
     list_layer_names,
     load_chain,
 )

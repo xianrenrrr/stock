@@ -13,8 +13,8 @@ from pydantic import BaseModel
 from stock.models import (
     ChatMessage,
     CostCeilingError,
-    get_core_client,
-    get_core_model,
+    get_utility_client,
+    get_utility_model,
     parse_llm_json,
 )
 
@@ -76,10 +76,11 @@ def extract_single(
     truncated_body = body[:MAX_BODY_CHARS]
     prompt = template.format(ticker=ticker, title=title, body=truncated_body)
 
-    # Call the active Codex-first core backend.
+    # Feature extraction is a cheap, high-frequency classifier -> fast utility
+    # lane (Claude haiku) instead of the slow codex core backend.
     messages: list[ChatMessage] = [{"role": "user", "content": prompt}]
-    client = get_core_client()
-    model = get_core_model()
+    client = get_utility_client()
+    model = get_utility_model()
     response = client.chat(
         messages=messages,
         model=model,

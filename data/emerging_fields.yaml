@@ -3,71 +3,84 @@ fields:
   name: Space Tech
   status: active
   source: manual_seed
-  rationale: "New first-class field requested by operator: space infrastructure, satellite data, launch cadence, space defense, and AI-enabled geospatial intelligence."
+  rationale: 'New first-class field requested by operator: space infrastructure, satellite data, launch cadence, space defense, and AI-enabled geospatial intelligence.'
   evidence_count: 1
-  first_seen: "2026-05-25T00:00:00+00:00"
-  last_seen: "2026-05-25T00:00:00+00:00"
+  first_seen: '2026-05-25T00:00:00+00:00'
+  last_seen: '2026-05-25T00:00:00+00:00'
   suggested_queries:
-  - "space tech public companies AI geospatial intelligence"
-  - "satellite launch cadence supply chain bottleneck public companies"
-  - "space defense small cap satellite communications stocks"
+  - space tech public companies AI geospatial intelligence
+  - satellite launch cadence supply chain bottleneck public companies
+  - space defense small cap satellite communications stocks
 - id: ai_compute_cloud
   name: AI Compute Cloud / Miner-to-AI
   status: active
   source: youtube_personal_message_2026-05-07
-  rationale: "External rotation hypothesis: after semis/memory/optics, capital may rotate into AI compute clouds and bitcoin miners converting cheap power sites into GPU hosting."
+  rationale: 'External rotation hypothesis: after semis/memory/optics, capital may rotate into AI compute clouds and bitcoin miners converting cheap power sites into GPU hosting.'
   evidence_count: 1
-  first_seen: "2026-05-07T00:00:00+00:00"
-  last_seen: "2026-05-28T00:00:00+00:00"
+  first_seen: '2026-05-07T00:00:00+00:00'
+  last_seen: '2026-05-28T00:00:00+00:00'
   suggested_queries:
-  - "bitcoin miners converting to AI data centers GPU hosting IREN CIFR WULF CORZ"
-  - "AI compute cloud public companies Nebius CoreWeave capacity backlog"
-  - "GPU hosting power contracts miner AI data center conversion"
+  - bitcoin miners converting to AI data centers GPU hosting IREN CIFR WULF CORZ
+  - AI compute cloud public companies Nebius CoreWeave capacity backlog
+  - GPU hosting power contracts miner AI data center conversion
 - id: critical_materials_rare_earths
   name: Critical Materials / Rare Earths
   status: active
   source: youtube_personal_message_2026-05-07
-  rationale: "External rotation hypothesis: AI data centers stress copper, aluminum, uranium, rare earth magnets, and domestic refining bottlenecks."
+  rationale: 'External rotation hypothesis: AI data centers stress copper, aluminum, uranium, rare earth magnets, and domestic refining bottlenecks.'
   evidence_count: 1
-  first_seen: "2026-05-07T00:00:00+00:00"
-  last_seen: "2026-05-28T00:00:00+00:00"
+  first_seen: '2026-05-07T00:00:00+00:00'
+  last_seen: '2026-05-28T00:00:00+00:00'
   suggested_queries:
-  - "AI data center copper aluminum rare earth demand bottleneck public stocks"
-  - "US rare earth supply chain MP Materials USA Rare Earth Energy Fuels"
-  - "data center grid buildout copper aluminum demand FCX AA"
+  - AI data center copper aluminum rare earth demand bottleneck public stocks
+  - US rare earth supply chain MP Materials USA Rare Earth Energy Fuels
+  - data center grid buildout copper aluminum demand FCX AA
 - id: ai_network_equipment
   name: AI Network Equipment
   status: active
   source: youtube_personal_message_2026-05-07
-  rationale: "External rotation hypothesis: 800G/1.6T optics and AI clusters pull switching, routing, and optical-network equipment beyond chip suppliers."
+  rationale: 'External rotation hypothesis: 800G/1.6T optics and AI clusters pull switching, routing, and optical-network equipment beyond chip suppliers.'
   evidence_count: 1
-  first_seen: "2026-05-07T00:00:00+00:00"
-  last_seen: "2026-05-28T00:00:00+00:00"
+  first_seen: '2026-05-07T00:00:00+00:00'
+  last_seen: '2026-05-28T00:00:00+00:00'
   suggested_queries:
-  - "AI data center Ethernet switch demand ANET CSCO AVGO MRVL"
-  - "800G 1.6T optical networking Ciena Nokia AI data center"
-  - "hyperscaler AI cluster network equipment capex switching routing"
+  - AI data center Ethernet switch demand ANET CSCO AVGO MRVL
+  - 800G 1.6T optical networking Ciena Nokia AI data center
+  - hyperscaler AI cluster network equipment capex switching routing
 - id: defense_drones_autonomy
   name: Defense Drones / Autonomy
   status: active
   source: youtube_personal_message_2026-05-07
-  rationale: "External rotation hypothesis: AI-enabled autonomy, drone swarms, and defense procurement may become a follow-on wave after AI infrastructure."
+  rationale: 'External rotation hypothesis: AI-enabled autonomy, drone swarms, and defense procurement may become a follow-on wave after AI infrastructure.'
   evidence_count: 1
-  first_seen: "2026-05-07T00:00:00+00:00"
-  last_seen: "2026-05-28T00:00:00+00:00"
+  first_seen: '2026-05-07T00:00:00+00:00'
+  last_seen: '2026-05-28T00:00:00+00:00'
   suggested_queries:
-  - "defense drone swarm public companies KTOS AVAV ONDS AI autonomy"
-  - "Pentagon Replicator drone procurement public market beneficiaries"
-  - "AI autonomy defense small cap unmanned systems contracts"
+  - defense drone swarm public companies KTOS AVAV ONDS AI autonomy
+  - Pentagon Replicator drone procurement public market beneficiaries
+  - AI autonomy defense small cap unmanned systems contracts
 - id: robotics_autonomous_systems
   name: Robotics / Autonomous Systems
   status: active
   source: youtube_personal_message_2026-05-07
-  rationale: "External rotation hypothesis: AI model capability may rotate into embodied automation, warehouse robotics, RPA, delivery robots, and autonomous driving."
+  rationale: 'External rotation hypothesis: AI model capability may rotate into embodied automation, warehouse robotics, RPA, delivery robots, and autonomous driving.'
   evidence_count: 1
-  first_seen: "2026-05-07T00:00:00+00:00"
-  last_seen: "2026-05-28T00:00:00+00:00"
+  first_seen: '2026-05-07T00:00:00+00:00'
+  last_seen: '2026-05-28T00:00:00+00:00'
   suggested_queries:
-  - "AI robotics public companies warehouse automation Symbotic Serve Robotics Tesla"
-  - "enterprise automation RPA AI agents UiPath revenue inflection"
-  - "autonomous systems robotics AI capital rotation public stocks"
+  - AI robotics public companies warehouse automation Symbotic Serve Robotics Tesla
+  - enterprise automation RPA AI agents UiPath revenue inflection
+  - autonomous systems robotics AI capital rotation public stocks
+- id: fusion_energy
+  name: Fusion Energy
+  status: candidate
+  source: web_discovery.auto_field_detection
+  rationale: '- Hybrid bonding and HBM equipment Source excerpts point to hybrid bonding, fusion bonding, die-to-wafer overlay metrology, layer transfer, and maskless lithography as equipment categories
+    tied to HBM and advanced packagin'
+  evidence_count: 1
+  first_seen: '2026-06-01T14:00:59+00:00'
+  last_seen: '2026-06-01T14:00:59+00:00'
+  suggested_queries:
+  - fusion energy public companies AI technology shift
+  - fusion energy hidden gem small cap stocks
+  - fusion energy supply chain bottleneck listed companies

@@ -8,7 +8,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from stock import thesis
 from stock.thesis import (
     ThesisStats,
     compute_thesis_stats,

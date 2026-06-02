@@ -2,19 +2,18 @@
 from __future__ import annotations
 
 import sqlite3
-from unittest.mock import patch
 
 import pytest
 
 from stock import db
 from stock.smallcap_scanner import (
     SmallCapCandidate,
-    _UniverseRow,
     _composite_score,
     _flag_reason,
     _mkt_cap_score,
     _news_sparsity_score,
     _revenue_inflection_score,
+    _UniverseRow,
     format_smallcap_block,
     persist,
     scan_universe,

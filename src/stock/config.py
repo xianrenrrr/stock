@@ -92,6 +92,12 @@ class Settings(BaseSettings):
     # Blank lets codex pick its own configured default (currently gpt-5.5).
     # Override in .env if you want to pin a specific codex-supported model.
     core_codex_model: str = ""
+    # Fast lane for high-frequency utility classifiers (feature extraction +
+    # intent). These are cheap JSON tasks that benefit from low latency far
+    # more than frontier reasoning, so they route to a fast Claude haiku model
+    # via claude_cli instead of paying 20-50s codex latency per call. Set blank
+    # to fall back to the core backend.
+    utility_claude_model: str = "claude-haiku-4-5-20251001"
 
 
 @lru_cache(maxsize=1)

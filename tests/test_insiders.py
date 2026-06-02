@@ -10,7 +10,6 @@ import pytest
 from stock import db
 from stock.ingest import insiders
 
-
 SAMPLE_FORM4_XML = """<?xml version="1.0"?>
 <ownershipDocument>
   <reportingOwner>

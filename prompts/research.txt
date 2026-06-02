@@ -65,6 +65,15 @@ SAY SO and explain what it means for the vehicles. The "证伪信号" bullets
 are what would make us cut conviction on the names below.
 {trend_radar_block}
 
+## 跨领域研究优先级 / Cross-field research-priority leaderboard (Chokepoint 5-dim)
+Recent weekly tech dives scored on the Chokepoint framework (industry trend +
+supply bottleneck + company validation + valuation mismatch - risk). Higher
+composite = dig here first. Buyer-side (ai_demand) fields score the "bottleneck"
+dimension as moat/defensibility, not physical supply; early-phase fields (space,
+pre-revenue bio) carry HIGH VARIANCE -- treat their scores as option-value, not
+settled conviction. **Use this to decide which field deserves more airtime today.**
+{chokepoint_block}
+
 ## 重点跟踪 / Conviction watchlist (F42 -- 10 deeply-tracked names)
 These are the focused conviction names, one per tech trend, with live close
 + F24 recommended stop. **At least 3-4 of today's output sections must cite
@@ -249,6 +258,6 @@ Produce a forward-looking multi-field research note with the following sections,
 
 7. **长期受益 / Secular long picks (today's rotating theme)** — pick 1-2 names from the secular theme block above. For each: ticker | 论点 | catalyst window (5-10y) | 监控指标 (1-2 leading indicators) | 止损价格.
 
-8. **AI助手自动跟进 / Agent auto-queued follow-ups** — 2-4 concrete deep-dive topics you want the system to research before the next push. Phrase each as a standalone topic (e.g. "688082.SS Q1 order book vs SMIC capex disclosure", "Bloom Energy fuel-cell unit economics at scale"). One of the 4 must be a `qa-dive` follow-up that re-interrogates yesterday's lowest-confidence name.
+8. **AI助手自动跟进 / Agent auto-queued follow-ups** — 2-4 concrete deep-dive topics you want the system to research before the next push. Phrase each as a standalone topic (e.g. "688082.SS Q1 order book vs SMIC capex disclosure", "Bloom Energy fuel-cell unit economics at scale"). One of the 4 must be a `qa-dive` follow-up that re-interrogates yesterday's lowest-confidence name. If recent feedback flags political-trading / `pol` risk (for example DELL tied to Trump disclosure timing and a later federal contract), add a separate political-trading deep-dive follow-up instead of upgrading the ticker to a buy on that evidence alone.
 
 Keep the whole note under {max_chars} characters total so it fits cleanly in a WeChat message. End with "Not financial advice." on its own line.

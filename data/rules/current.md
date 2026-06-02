@@ -4,6 +4,7 @@
 - Predict only the next trading session’s close-to-close direction.
 - `prob_up` is the probability that the stock closes higher next session.
 - `prob_up > 0.50` is an up prediction. `prob_up < 0.50` is a down prediction.
+- If the same ticker/session has duplicate opposite-direction predictions, merge them into one prediction before scoring or publishing; when the merged up/down probability gap is below `0.04`, force the final `prob_up` back to neutral `0.50-0.51`.
 - Do not use catalysts whose expected impact is mainly quarterly, annual, or strategic unless they plausibly change next-session positioning.
 - Capital rule: never recommend borrowing money, margin, leverage, cash advances,
   portfolio margin, or any trade requiring debt. Use available cash only and
@@ -19,7 +20,8 @@
    - Macro/rates/futures/geopolitical backdrop.
    - Analyst notes, institutional-positioning headlines, product launches, partnerships, listicles, and AI/theme articles.
 2. A product launch, partnership, MOU, index inclusion, analyst target hike, or “AI beneficiary” article is not a hard catalyst unless it includes explicit near-term revenue, order size, margin, guidance, or regulatory financial impact.
-3. Duplicate articles about one event count once. Do not raise probability or confidence because multiple headlines repeat the same catalyst.
+3. Political-trading disclosures, congressional/executive portfolio headlines, and ethics/timing controversy are soft headline-risk inputs only unless a filing or regulator confirms insider-trading evidence; after the related contract or award is already public and the stock has repriced, treat the setup as chase risk rather than a buy catalyst.
+4. Duplicate articles about one event count once. Do not raise probability or confidence because multiple headlines repeat the same catalyst.
 
 ## Fresh Hard Catalysts
 1. Treat fresh hard catalysts as active for three trading sessions, with decay:
@@ -34,6 +36,7 @@
 ## Sector Breadth Override
 1. For semiconductors, memory/storage, AI servers, AI infrastructure, optical networking, and data-center power names, calculate same-group breadth from the prior session.
 2. If at least 65% of same-group peers closed up and at least one sector leader or direct peer closed non-negative, do not assign `prob_up < 0.49` unless there is a fresh company-specific negative hard catalyst.
+3. When a DELL, SMCI, or NVDA-level hard catalyst is confirmed and same-group AI-infrastructure or optics breadth is supportive, do not assign `prob_up < 0.50` to AAOI, CRWV, LITE, COHR, CIEN, CORZ, or NBIS unless there is a fresh company-specific negative hard catalyst.
 3. A failed gap-up, bottom-quartile close, or reversal-down tag does not defeat this override by itself.
 4. To make a down call below `0.49` in a supportive-breadth tape, require at least two of:
    - Fresh company-specific negative hard catalyst.
@@ -111,6 +114,7 @@
 5. Use `0.42-0.45` only for failed gap-up or breakdown setups with elevated downside volume and no supportive sector override.
 6. Do not use probabilities above `0.62` or below `0.38` unless there is an exceptional event: takeover, fraud, accounting issue, guidance withdrawal, regulatory ban, major contract, or severe earnings shock.
 7. Review evidence showed routine `0.55+` calls on soft catalysts were too aggressive. Soft-catalyst predictions must remain below `0.54`.
+8. For small contract, order, partnership, or policy headlines with low disclosed dollar value, no guidance change, and an already extended-up stock, prohibit `prob_up >= 0.55`; cap at `0.52`, and if continuation has already failed, use `0.48-0.50`.
 
 ## Confidence Calibration
 1. Confidence measures signal quality, not conviction.

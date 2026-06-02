@@ -14,8 +14,8 @@ from stock.models import (
     ChatResponse,
     CostCeilingError,
     check_cost_ceiling,
-    get_core_client,
-    get_core_model,
+    get_utility_client,
+    get_utility_model,
     parse_llm_json,
 )
 
@@ -83,10 +83,10 @@ def classify(
 
     messages: list[ChatMessage] = [{"role": "user", "content": user_message}]
     try:
-        client = get_core_client()
+        client = get_utility_client()
         response: ChatResponse = client.chat(
             messages=messages,
-            model=get_core_model(),
+            model=get_utility_model(),
             max_tokens=INTENT_MAX_TOKENS,
             conn=conn,
             caller="intent.classify",

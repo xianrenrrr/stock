@@ -11,6 +11,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 
 from stock.models import CostCeilingError
 from stock.orchestrator import (
+    TECH_DIVE_SECTORS,
     ScheduleInfo,
     _get_active_tickers,
     _job_email_daily_action_report,
@@ -19,6 +20,7 @@ from stock.orchestrator import (
     _job_run_predictions,
     _job_score_daily,
     _job_weekly_qa_dive,
+    _pop_next_topic,
     create_scheduler,
     get_schedule_info,
     run_orchestrator,
@@ -458,10 +460,10 @@ def test_create_scheduler_has_expected_jobs() -> None:
     + company_dd_dive (F44) + weekly_entry_scan (F45)
     + post_close_snapshot (F46) + daily_action_email
     + intraday holding move alerts + warning_dashboard_publish
-    + broker_snapshot_import = 32.
+    + broker_snapshot_import + stop_order_propose = 33.
     """
     scheduler = create_scheduler()
-    assert len(scheduler.get_jobs()) == 32
+    assert len(scheduler.get_jobs()) == 33
 
 
 def test_create_scheduler_job_ids() -> None:
@@ -502,6 +504,7 @@ def test_create_scheduler_job_ids() -> None:
         "company_dd_dive",
         "weekly_entry_scan",
         "post_close_snapshot",
+        "stop_order_propose",
     }
     assert job_ids == expected
 
@@ -531,7 +534,7 @@ def test_get_schedule_info_format() -> None:
     info = get_schedule_info(scheduler)
 
     assert isinstance(info, ScheduleInfo)
-    assert len(info.jobs) == 32
+    assert len(info.jobs) == 33
 
     # Each entry has name and next_run keys
     for entry in info.jobs:
@@ -662,3 +665,58 @@ def test_run_orchestrator_startup(monkeypatch: pytest.MonkeyPatch) -> None:
 
     # Should not raise -- KeyboardInterrupt is handled gracefully
     run_orchestrator()
+
+
+# -- tech-dive sector rotation + phase tests ---------------------------------
+
+
+def test_tech_dive_sectors_include_buyer_side_and_space() -> None:
+    """The weekly rotation must give airtime to ai_demand and space_tech."""
+    assert "ai_demand" in TECH_DIVE_SECTORS
+    assert "space_tech" in TECH_DIVE_SECTORS
+    # Legacy three sectors stay covered.
+    for s in ("information", "biopharma_ai", "energy"):
+        assert s in TECH_DIVE_SECTORS
+
+
+def test_pop_next_topic_returns_phase(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    """_pop_next_topic returns (sector, topic, phase) and defaults phase to mature."""
+    import yaml
+
+    queue = tmp_path / "topic_queue.yaml"
+    queue.write_text(yaml.safe_dump({"topics": [
+        {"sector": "ai_demand", "topic": "buyer side dive", "enabled": True,
+         "last_run": "", "phase": "emerging"},
+        {"sector": "information", "topic": "no-phase topic", "enabled": True,
+         "last_run": ""},
+    ]}, allow_unicode=True), encoding="utf-8")
+    monkeypatch.setattr("stock.orchestrator.TOPIC_QUEUE_PATH", str(queue))
+
+    sector, topic, phase = _pop_next_topic("ai_demand")
+    assert sector == "ai_demand"
+    assert topic == "buyer side dive"
+    assert phase == "emerging"
+
+    # Topic without an explicit phase defaults to mature.
+    _, _, default_phase = _pop_next_topic("information")
+    assert default_phase == "mature"
+
+    # last_run was written back so the next call rotates.
+    data = yaml.safe_load(queue.read_text(encoding="utf-8"))
+    assert data["topics"][0]["last_run"] != ""
+
+
+def test_pop_next_topic_empty_sector_returns_none(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    import yaml
+
+    queue = tmp_path / "topic_queue.yaml"
+    queue.write_text(yaml.safe_dump({"topics": [
+        {"sector": "information", "topic": "x", "enabled": True, "last_run": ""},
+    ]}, allow_unicode=True), encoding="utf-8")
+    monkeypatch.setattr("stock.orchestrator.TOPIC_QUEUE_PATH", str(queue))
+
+    assert _pop_next_topic("ai_demand") is None

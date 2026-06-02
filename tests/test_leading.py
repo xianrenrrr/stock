@@ -18,7 +18,6 @@ from stock.leading import (
     fetch_apewisdom_snapshot,
 )
 
-
 # -- fixtures + helpers -----------------------------------------------------
 
 

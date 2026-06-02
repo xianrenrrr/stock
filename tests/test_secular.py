@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 
 from stock.secular import (
-    SecularTheme,
     all_secular_tickers,
     format_theme_block,
     load_themes,

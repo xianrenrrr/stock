@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import sqlite3
 from datetime import datetime, timezone
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -19,7 +18,6 @@ from stock.action_queue import (
 )
 from stock.models import CostCeilingError
 from stock.research import ResearchReport
-
 
 _NOTE_ZH = """\
 1. 今日主线 / Theme of the day

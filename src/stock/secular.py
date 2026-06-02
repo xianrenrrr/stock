@@ -20,7 +20,6 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 
 import yaml
 from pydantic import BaseModel
@@ -124,7 +123,7 @@ def format_theme_block(theme: SecularTheme | None, *, max_picks: int = 4) -> str
     lines: list[str] = []
     lines.append(f"**主题 / Theme**: {theme.theme} (horizon {theme.horizon_years}y)")
     lines.append("")
-    lines.append(f"**论点 / Thesis**:")
+    lines.append("**论点 / Thesis**:")
     lines.append(theme.thesis.strip())
     lines.append("")
 

@@ -43,7 +43,7 @@ Runtime LLM calls are Codex-first:
 
 ## Active Scheduled Jobs
 
-There are 32 active APScheduler jobs in local mode.
+There are 33 active APScheduler jobs in local mode.
 
 | Job id | Cadence UTC | What it actually does | Main output |
 |---|---:|---|---|
@@ -58,6 +58,7 @@ There are 32 active APScheduler jobs in local mode.
 | `broker_snapshot_import` | every 5 min | Import filled Robinhood positions from `data/robinhood_positions_snapshot.json` into local holdings. Queued orders are ignored until filled. | `holdings` |
 | `intraday_holding_move_alerts` | Mon-Fri every 15 min, 13:00-20:59 | Live quote crash/spike alerts for active holdings; catches moves like AMBA -20% before close. | `research_reports(kind='alert')` |
 | `post_close_snapshot` | Mon-Fri 20:05 | Refresh settled daily bars and flag close/volume snapshots. | prices/anomaly context |
+| `stop_order_propose` | Mon-Fri 20:10 | Compute desired SELL stop-limit orders for active holdings and PROPOSE them (human-armed). Writes `data/desired_stop_orders.json` + an alert note. NEVER places. | `research_reports(kind='alert')`, proposal file |
 | `score_daily` | Mon-Fri 21:30 | Score due predictions. | `outcomes`, bandit/calibration updates |
 | `anomaly_compute` | Mon-Fri 21:35 | Recompute price/volume anomalies. | `price_anomalies` |
 | `thesis_verify` | Mon-Fri 21:40 | Verify prediction theses after outcomes are scored. | `prediction_theses` verdicts |
@@ -72,7 +73,7 @@ There are 32 active APScheduler jobs in local mode.
 | `reflect_weekly` | Sat 06:00 | Weekly prediction-rules reflection. | `data/rules/vNNN.md`, `data/rules/current.md` |
 | `health_check_weekly` | Sat 07:00 | Per-holding weekly health-check deep dive. | `research_reports(kind='health_check')` |
 | `weekly_qa_dive` | Sat 07:00 | Q&A deep dive on top forward-discovery candidates. | `research_reports(kind='deep_qa')` |
-| `weekly_tech_dive` | Sun 04:30 | F43 sector-rotated tech-trend deep dive from `data/topic_queue.yaml`. | `research_reports(kind='tech_dive')`, `tech_dive_runs` |
+| `weekly_tech_dive` | Sun 04:30 | F43 tech-trend deep dive from `data/topic_queue.yaml`, now sector-rotated by ISO week across information / biopharma_ai / energy / ai_demand (buyer-side) / space_tech, and ending with a Chokepoint 5-dim research-priority score. The topic's `phase` (early/emerging/mature) flows into scoring. | `research_reports(kind='tech_dive')`, `tech_dive_runs` (now incl. `phase` + `score_*` columns) |
 | `insiders_pull` | Sun 05:00 | Pull SEC Form 4 insider filings. | `insider_filings` |
 | `weekly_entry_scan` | Sun 06:00 | Scan conviction/DD names for pullback entry zones. | `research_reports(kind='entry_signals')` |
 | `ai_loop_measure` | Mon 06:30 | Measure AI commercial-loop risk panel. | `ai_loop_health` |
@@ -90,6 +91,22 @@ Daily research is now multi-field. Active manually configured fields include:
 - Space tech
 - AI compute cloud / miner-to-AI conversion
 - Critical materials / rare earths
+- AI demand / buyer-side (who consumes AI compute to produce value at scale —
+  the demand that justifies the capex; "if AI can't find a buyer, it's a bubble").
+  Seeded in `data/tech_trends.yaml` + `data/topic_queue.yaml` under sector
+  `ai_demand`. In the Chokepoint score, the "supply bottleneck" dimension is
+  scored as moat/defensibility (proprietary data, distribution, lock-in).
+
+### Chokepoint research-priority score
+
+Every weekly tech dive ends with a 5-dimension Chokepoint score (industry trend
+25% + supply-bottleneck/moat 25% + company validation 25% + valuation mismatch
+15% − risk 15%). The composite is recomputed server-side (the LLM's own number is
+ignored) and persisted in `tech_dive_runs.score_*`. The daily research note shows a
+cross-field research-priority leaderboard built from the last 21 days of scored
+dives. Early/emerging `phase` fields score validation + valuation on an
+option-value basis and are flagged high-variance, so pre-revenue names (space,
+early bio) are not penalized like mature-cap misses.
 
 ## Warning Dashboard
 
@@ -116,6 +133,30 @@ the daily action report.
 Real broker stop-loss order creation or edits are not automatic. The system can
 compute and display stop levels and alert on breaches; actual broker orders
 still require an explicit confirmed trading instruction.
+
+## Human-Armed Stop-Loss Orders
+
+`src/stock/stop_orders.py` adds an OPTIONAL, human-armed path to actually place
+stop-loss orders via the `robinhood-trading` MCP (which exposes
+`place_equity_order` with `type=stop_limit`, `review_equity_order` for dry-run,
+`get_equity_orders`, and `cancel_equity_order`). It is a file bridge, the placing
+mirror of `broker_snapshot_import`:
+
+1. `stop_order_propose` (Mon-Fri 20:10 UTC) computes a SELL stop-limit order per
+   active holding from `stops.compute_stop_loss` (stop_price = F24 recommended
+   stop; limit_price = 1% below the stop). It writes `data/desired_stop_orders.json`
+   (mode=`proposed`) and an alert note. **It never places an order.**
+2. The operator arms placement explicitly:
+   - `stock stops propose` — recompute + write the proposal.
+   - `stock stops place` — dry-run REVIEW only (`review_equity_order`); no orders.
+   - `stock stops place --confirm` — spawns a codex / RH-MCP session that places
+     the REAL sell stop-limit orders (review -> dedup via `get_equity_orders` +
+     `ref_id` idempotency -> `place_equity_order`), writing
+     `data/stop_orders_result.json`.
+   - `stock stops status` — show the last proposal + placement result.
+
+Nothing in the background orchestrator places an order. Live placement requires
+the explicit `--confirm` CLI path and an "agentic-allowed" Robinhood account.
 
 ## Robinhood MCP Bridge
 

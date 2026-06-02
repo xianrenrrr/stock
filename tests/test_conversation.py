@@ -2,20 +2,17 @@
 from __future__ import annotations
 
 import sqlite3
-from unittest.mock import MagicMock
 
 import pytest
 
-from stock import conversation
 from stock.conversation import (
-    ConversationTurn,
     format_context_block,
     get_run_id,
     has_entry,
-    record_inbound,
-    record_outbound,
     recent_instruction_ids,
     recent_turns,
+    record_inbound,
+    record_outbound,
     set_intent,
 )
 

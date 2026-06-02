@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 
 from stock.holdings import (
-    Holding,
     add_holding,
     format_holdings_block,
     list_holdings,

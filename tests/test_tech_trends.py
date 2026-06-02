@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from stock import db, tech_trends
+from stock import db
 from stock.tech_trends import (
     ConvictionName,
     TechTrend,

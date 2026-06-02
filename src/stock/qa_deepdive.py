@@ -241,7 +241,7 @@ def render_markdown(dive: QADeepDive) -> str:
     """Render a QADeepDive as a clean Q&A markdown transcript."""
     lines = [
         f"# {dive.ticker} 深度问答 / Q&A deep-dive",
-        f"",
+        "",
         f"_Generated {dive.created_at} -- {len(dive.rounds)} rounds_",
         "",
     ]

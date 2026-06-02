@@ -8,7 +8,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from stock import vision
 from stock.config import get_settings
 from stock.vision import (
     ImageExtraction,

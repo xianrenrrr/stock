@@ -5,7 +5,6 @@ import json
 import logging
 import re
 import sqlite3
-import subprocess
 import sys
 import threading
 import time
@@ -91,7 +90,11 @@ _CODEX_CREDIT_LIMIT_RE = re.compile(
     r"|weekly[ ]?limit"
     r"|HTTP[ ]?429"
     r"|too[ ]many[ ]requests"
-    r"|exceeded[ ]your",
+    r"|exceeded[ ]your"
+    r"|reached[ ]your"               # "you've reached your ... limit"
+    r"|out[ ]of[ ](credit|quota|token)"  # "out of credits/quota/tokens"
+    r"|run[ ]out[ ]of"               # "you've run out of ..."
+    r"|insufficient[ ](credit|quota|balance)",
     re.IGNORECASE,
 )
 
@@ -846,3 +849,80 @@ def get_core_model() -> str:
     if backend == "claude_cli":
         return (settings.core_claude_model or CLAUDE_CLI_CORE_DEFAULT_MODEL).strip()
     return (getattr(settings, "core_codex_model", "") or CODEX_CLI_CORE_DEFAULT_MODEL).strip()
+
+
+# Fast lane for high-frequency utility classifiers (feature extraction, intent
+# classification). gpt-5.5 reasoning is overkill for cheap JSON tasks and the
+# per-news / per-reply fan-out paid 20-50s of codex latency each. These route to
+# a fast Claude haiku model via claude_cli, which is also the most reliable
+# backend (it's the fallback for everything), so no extra fallback layer needed.
+FAST_UTILITY_CLAUDE_MODEL: str = "claude-haiku-4-5-20251001"
+
+
+class FastUtilityClient:
+    """Fast Claude haiku for cheap high-frequency classifiers, with the core
+    backend (codex -> claude) as a backstop.
+
+    The primary is `claude -p` on a fast model. If that subprocess fails
+    (ClaudeCliUnavailable: missing binary / timeout / non-zero exit), we fall
+    back to the full core backend so a utility call is NEVER left without a
+    safety net -- the same "claude is always behind it" guarantee the core
+    path has, applied to the fast lane.
+    """
+
+    def __init__(self) -> None:
+        self._fast = ClaudeCliClient()
+
+    @property
+    def provider(self) -> str:
+        """Return the provider name (matches LLMClient API)."""
+        return "claude_cli"
+
+    def chat(
+        self,
+        messages: list[ChatMessage],
+        model: str,
+        max_tokens: int,
+        conn: sqlite3.Connection,
+        caller: str,
+        cached_system: str | None = None,
+    ) -> ChatResponse:
+        """Try fast haiku; on failure fall back to the core backend."""
+        try:
+            return self._fast.chat(
+                messages=messages, model=model, max_tokens=max_tokens,
+                conn=conn, caller=caller, cached_system=cached_system,
+            )
+        except ClaudeCliUnavailable as exc:
+            logger.warning(
+                "utility claude_cli unavailable (%s); falling back to core backend"
+                " for caller=%s", exc, caller,
+            )
+            core = get_core_client()
+            return core.chat(
+                messages=messages, model=get_core_model(), max_tokens=max_tokens,
+                conn=conn, caller=f"{caller}.utility_fallback_core",
+                cached_system=cached_system,
+            )
+
+
+def get_utility_client() -> FastUtilityClient | CodexWithClaudeFallback | ClaudeCliClient:
+    """Return a fast, low-latency client for high-frequency utility classifiers.
+
+    Defaults to a fast claude_cli (haiku) lane WITH the core backend as a
+    backstop. If `utility_claude_model` is set blank, fall back to the active
+    core backend so the switch is reversible.
+    """
+    settings = get_settings()
+    if (getattr(settings, "utility_claude_model", "") or "").strip():
+        return FastUtilityClient()
+    return get_core_client()
+
+
+def get_utility_model() -> str:
+    """Return the model id for the utility fast lane (haiku by default)."""
+    settings = get_settings()
+    configured = (getattr(settings, "utility_claude_model", "") or "").strip()
+    if configured:
+        return configured
+    return get_core_model()

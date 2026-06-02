@@ -3,51 +3,87 @@ topics:
   topic: 'OCS optical circuit switch (Google Jupiter) vs CPO + traditional optical modules: which wins the rack-level photonic interconnect, and the public-company chain that benefits'
   enabled: false
   last_run: '2026-05-06'
+  phase: mature
 - sector: information
   topic: 'HBM4 stacking yield bottleneck: who solves it (Micron 1ynm vs SK hynix 1cnm vs Samsung 1c), what''s the equipment + materials chain (e.g. ASMPT TCB, Disco SDH grinder, Nagase polishing slurry),
     and the public-company beneficiaries'
   enabled: true
   last_run: '2026-05-07'
+  phase: mature
 - sector: information
   topic: 'TSMC CoWoS-L vs Intel EMIB vs Samsung X-Cube: 2.5D advanced packaging capacity bottleneck for AI accelerators in 2026-2027 -- what''s the equipment + bridge-die + organic-substrate chain, and
     the listed beneficiaries'
   enabled: true
   last_run: '2026-05-07'
+  phase: mature
 - sector: information
   topic: 'China semi domesticization deep-dive: 盛美 ACMR + 中微 AMEC + 北方华创 NAURA + 长电 JCET -- which equipment vendor is closest to non-Pluggable parity at SMIC''s 5nm-class node, and what''s the realistic
     2027 revenue path'
   enabled: true
   last_run: '2026-05-07'
+  phase: mature
 - sector: biopharma_ai
   topic: 'AI antibody discovery commercial inflection: AbCellera (ABCL) + Recursion (RXRX) + Schrödinger (SDGR) -- which platform has the cleanest first-in-class IND from AI design, what''s the validation
     evidence, and how to size the pre-clinical pipeline'
   enabled: true
   last_run: '2026-05-07'
+  phase: early
 - sector: biopharma_ai
   topic: 'Foundation models for protein structure prediction post-AlphaFold2: who has commercialized AlphaFold-class capability (DeepMind Isomorphic, Recursion, Insilico, Tempus), the public-company chain,
     and where revenue actually accrues'
   enabled: true
   last_run: '2026-05-07'
+  phase: early
 - sector: biopharma_ai
   topic: 'AI clinical trials operations: Tempus AI (TEM) + Veeva (VEEV) + IQV (IQVIA) -- can AI cut Phase 3 trial cost 30%+, what''s the actual workflow that gets compressed, and which name has the cleanest
     revenue model'
   enabled: true
   last_run: '2026-05-07'
+  phase: emerging
 - sector: energy
   topic: 'SOFC unit economics at scale: Bloom Energy (BE) -- what''s the capex per MW today vs 2030, fuel cost sensitivity at $4-8 natural gas, degradation rate (target <0.5%/1000h), and the supply chain
     (Ceres Power, ENN Group, 安泰科技 China stack maker) that matters'
   enabled: true
   last_run: '2026-05-07'
+  phase: emerging
 - sector: energy
   topic: 'Small modular nuclear (SMR) commercial deployment: Oklo (OKLO) + NuScale + BWXT + GE-Hitachi BWRX-300 -- NRC license decision timeline, fuel sourcing constraints (HALEU bottleneck, Centrus CCJ
     Cameco), and which company actually ships first MW in 2029-2030'
   enabled: true
   last_run: '2026-05-07'
+  phase: early
 - sector: energy
   topic: 'Immersion cooling for AI-DC: who''s winning the dielectric fluid + tank chain (Vertiv VRT + Submer + LiquidStack + 3M Novec replacement) as 1MW+ rack densities arrive in 2026-2027, and which name
     is the listed pure-play'
   enabled: true
   last_run: '2026-05-31'
+  phase: emerging
 - sector: space_tech
   topic: 'AI-enabled geospatial intelligence: Planet Labs (PL) + BlackSky (BKSY) + Rocket Lab (RKLB) -- which public company captures the most value as satellite imagery becomes a queryable AI data layer'
   enabled: true
+  last_run: ''
+  phase: early
+- sector: ai_demand
+  topic: 'AI compute BUYERS -- who actually monetizes the GPUs: enterprise/vertical software (PLTR, NOW, CRM) that resells AI as priced product. Which has proprietary data + workflow lock-in so AI margin
+    sticks instead of being competed away, and where does the demand prove the AI capex is not a bubble'
+  enabled: true
+  last_run: ''
+  phase: emerging
+- sector: ai_demand
+  topic: 'Ad/recommendation AI as the cleanest AI demand sink: META + GOOGL + AMZN -- how much incremental revenue per dollar of AI capex (ranking, creative gen, agentic ads), and is the ROI durable enough
+    to keep funding the buildout'
+  enabled: true
+  last_run: ''
+  phase: emerging
+- sector: ai_demand
+  topic: 'Consumer apps that turn AI into mass-market value: UBER + DASH + SPOT + DUOL + ABNB -- which one converts AI (routing, pricing, personalization, support automation) into margin or engagement at
+    population scale, and how to tell real productivity gain from a feature checkbox'
+  enabled: true
+  last_run: ''
+  phase: emerging
+- sector: ai_demand
+  topic: 'Vertical AI adopters with a data moat: fintech (financial fraud/underwriting) + healthcare (coding/diagnosis) + legal/insurance back-office -- which public names have proprietary data the incumbents
+    can''t copy, making them the durable buyers of AI compute'
+  enabled: true
+  last_run: ''
+  phase: early

@@ -123,7 +123,7 @@ def render_pdf(md_text: str, *, title: str | None = None, out_path: str | Path) 
 
     # Try weasyprint (best output) -> xhtml2pdf (pure Python fallback)
     try:
-        from weasyprint import HTML, CSS
+        from weasyprint import CSS, HTML
         HTML(string=full_html).write_pdf(str(out), stylesheets=[CSS(string=_BASE_CSS)])
         return out
     except (OSError, ImportError) as exc:

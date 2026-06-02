@@ -10,8 +10,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from stock.config import get_settings
 from stock import models as stock_models
+from stock.config import get_settings
 from stock.models import (
     CLAUDE_CLI_CORE_MODEL_NAME,
     CODEX_CLI_CORE_MODEL_NAME,
@@ -21,11 +21,13 @@ from stock.models import (
     CodexCliClient,
     CodexCliUnavailable,
     CodexWithClaudeFallback,
-    LLMClient,
+    FastUtilityClient,
     _codex_circuit_reset,
     _is_codex_circuit_open,
     get_core_client,
     get_core_model,
+    get_utility_client,
+    get_utility_model,
 )
 
 
@@ -135,6 +137,64 @@ def test_get_core_client_unknown_backend_falls_back_to_codex(
     try:
         client = get_core_client()
         assert client.provider == "codex_cli"
+    finally:
+        get_settings.cache_clear()
+
+
+def test_get_utility_client_defaults_to_fast_claude(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Utility fast lane -> ClaudeCliClient + haiku model, regardless of core backend."""
+    _seed_settings(monkeypatch)  # core stays codex_cli default
+    try:
+        client = get_utility_client()
+        assert isinstance(client, FastUtilityClient)
+        assert client.provider == "claude_cli"
+        assert get_utility_model() == "claude-haiku-4-5-20251001"
+    finally:
+        get_settings.cache_clear()
+
+
+def test_utility_fast_lane_falls_back_to_core_when_claude_fails(
+    mem_db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """If the fast haiku call fails, the utility lane drops to the core backend.
+
+    Guarantees the fast lane is never a single point of failure -- a utility
+    call always has a backstop, same as the core path.
+    """
+    _seed_settings(monkeypatch)
+    util = FastUtilityClient()
+    rescue = MagicMock(content="core rescue", cost_usd=0.0)
+    fake_core = MagicMock()
+    fake_core.chat.return_value = rescue
+    with (
+        patch.object(
+            util._fast, "chat", side_effect=ClaudeCliUnavailable("haiku down"),
+        ),
+        patch("stock.models.get_core_client", return_value=fake_core),
+        patch("stock.models.get_core_model", return_value=""),
+    ):
+        msgs: list[ChatMessage] = [{"role": "user", "content": "classify"}]
+        resp = util.chat(
+            messages=msgs, model="claude-haiku-4-5-20251001", max_tokens=10,
+            conn=mem_db, caller="features.extract_single",
+        )
+    assert resp.content == "core rescue"
+    fake_core.chat.assert_called_once()
+    assert fake_core.chat.call_args.kwargs["caller"].endswith(".utility_fallback_core")
+
+
+def test_get_utility_client_blank_falls_back_to_core(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Blank utility_claude_model -> utility lane reuses the active core backend."""
+    _seed_settings(monkeypatch, UTILITY_CLAUDE_MODEL="", CORE_LLM_BACKEND="claude_cli")
+    try:
+        client = get_utility_client()
+        # Falls back to core, which is claude_cli here -> a pure ClaudeCliClient.
+        assert isinstance(client, ClaudeCliClient)
+        assert get_utility_model() == "claude-opus-4-7"  # core model, not haiku
     finally:
         get_settings.cache_clear()
 

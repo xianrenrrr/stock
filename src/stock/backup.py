@@ -10,7 +10,6 @@ at 23:00 and the morning research push at 02:30).
 from __future__ import annotations
 
 import logging
-import shutil
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path

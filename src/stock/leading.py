@@ -16,12 +16,10 @@ docs/research_notes/2026-05-03_forward_discovery_papers.md for the citation map.
 """
 from __future__ import annotations
 
-import json
 import logging
 import math
 import sqlite3
 from datetime import datetime, timedelta, timezone
-from typing import Any
 
 import httpx
 from pydantic import BaseModel

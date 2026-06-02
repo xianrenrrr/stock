@@ -7,6 +7,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
+
 from pydantic import BaseModel
 
 from stock import emerging_fields

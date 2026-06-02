@@ -12,9 +12,6 @@ import ast
 import re
 from pathlib import Path
 
-import pytest
-
-
 _PLACEHOLDER_RE = re.compile(r"\{([a-zA-Z_][a-zA-Z0-9_]*)\}")
 
 

@@ -5,9 +5,6 @@ import sqlite3
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
-from stock import backtest_winners
 from stock.backtest_winners import (
     KNOWN_WINNERS,
     WinnerCase,

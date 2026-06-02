@@ -1,8 +1,6 @@
 """tests.test_channel_upload -- F18 POST /channel/api/upload_image endpoint."""
 from __future__ import annotations
 
-import io
-import json
 import sqlite3
 from pathlib import Path
 from typing import Generator
@@ -13,7 +11,6 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from stock import channel
-from stock.config import get_settings
 from stock.db import _ensure_schema
 
 

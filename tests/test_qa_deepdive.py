@@ -143,7 +143,7 @@ def test_run_qa_deepdive_substitutes_when_no_followup(conn: sqlite3.Connection) 
 
 def test_run_qa_deepdive_stops_on_cost_ceiling(conn: sqlite3.Connection) -> None:
     """Cost ceiling mid-chain -> return whatever rounds completed; no exception."""
-    from stock.models import CostCeilingError, ChatResponse
+    from stock.models import ChatResponse, CostCeilingError
 
     call_count = {"n": 0}
 

@@ -411,3 +411,47 @@ trends:
     vehicles_diversified: [TSLA]
     ai_biopharma_combo: false
     enabled: true
+
+  # =====================================================================
+  # AI demand / buyer side -- who CONSUMES the compute (boss directive
+  # 2026-06-01, "Chokepoint"/Serenity post). The supply side (compute,
+  # semis, optics, power) is crowded; the bull case only holds if real
+  # buyers monetize AI at scale. "If AI can't find a buyer, it's a bubble."
+  # On this side the "supply bottleneck" dimension is scored as MOAT /
+  # defensibility (proprietary data, distribution, workflow lock-in), not
+  # physical supply. Seed list -- boss to edit tickers.
+  # =====================================================================
+
+  - id: ai_demand_enterprise_software
+    name: Enterprise/vertical software reselling AI as a priced product (the demand that pays for the compute)
+    sector: ai_demand
+    horizon: "1-3y"
+    why_now:
+      - "The AI-capex bull case requires buyers who turn GPUs into revenue; enterprise/vertical SaaS is the cleanest pass-through layer"
+      - "PLTR/NOW/CRM embed AI into priced workflows; the test is whether proprietary data + workflow lock-in keep the AI margin instead of competing it away"
+      - "Durable AI demand here is the falsification check on the whole AI-supply thesis: flat seat-expansion or AI features given away free = demand-side crack"
+    falsification:
+      - "If AI-attached revenue does not show up as net-new ARR / seat expansion for two consecutive quarters"
+      - "If AI features are commoditized into the base price (no pricing power) across the cohort"
+      - "If customers cite AI ROI shortfalls and pause rollouts"
+    vehicles_pure_play: [PLTR, NOW]
+    vehicles_diversified: [CRM, MSFT]
+    ai_biopharma_combo: false
+    enabled: true
+
+  - id: ai_demand_consumer_scale
+    name: Consumer + ad/recommendation AI converting compute into population-scale value
+    sector: ai_demand
+    horizon: "1-3y"
+    why_now:
+      - "Ad/recommendation AI (META/GOOGL/AMZN) is the largest proven AI demand sink -- measurable incremental revenue per dollar of AI capex"
+      - "Consumer apps (UBER/DASH/SPOT/DUOL) can turn AI routing/pricing/personalization/support-automation into margin or engagement at mass scale"
+      - "Distinguishes real productivity gain from a feature checkbox: watch margin and engagement, not press releases"
+    falsification:
+      - "If hyperscaler ad-AI ROI commentary weakens or capex outruns incremental ad revenue"
+      - "If consumer-app AI shows no margin/engagement lift versus the cost of the compute"
+      - "If demand-side names guide AI spend down while supply-side capex keeps rising (bubble signal)"
+    vehicles_pure_play: [META, UBER]
+    vehicles_diversified: [GOOGL, AMZN, SPOT]
+    ai_biopharma_combo: false
+    enabled: true

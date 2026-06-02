@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from stock import db, daily_zh
+from stock import daily_zh, db
 from stock.daily_zh import generate_daily_zh_report
 
 

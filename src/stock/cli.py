@@ -9,10 +9,10 @@ from typing import Annotated
 
 import typer
 
-from stock import action_queue, anomaly, broker_sync, discovery_engine, grading, holdings, thesis as thesis_mod
+from stock import action_queue, anomaly, broker_sync, discovery_engine, grading, holdings
+from stock import thesis as thesis_mod
 from stock.db import get_conn
 from stock.discover import (
-    get_latest_discovery,
     run_discovery,
 )
 from stock.ingest import fetch_news, fetch_prices
@@ -62,6 +62,8 @@ holding_app = typer.Typer(help="Manage tracked portfolio holdings.")
 app.add_typer(holding_app, name="holding")
 broker_app = typer.Typer(help="Import broker snapshots into tracked holdings.")
 app.add_typer(broker_app, name="broker")
+stops_app = typer.Typer(help="Human-armed auto stop-loss orders (compute -> propose -> place).")
+app.add_typer(stops_app, name="stops")
 channel_app = typer.Typer(help="Manage per-recipient dashboard tokens (channel.py).")
 app.add_typer(channel_app, name="channel-token")
 self_review_app = typer.Typer(help="Daily self-review packet + Codex CLI proposals.")
@@ -939,6 +941,90 @@ def holding_note_cmd(
         raise typer.Exit(code=1)
 
 
+@stops_app.command("propose")
+def stops_propose_cmd() -> None:
+    """Compute desired SELL stop-limit orders for active holdings + write proposal.
+
+    Never places anything -- writes data/desired_stop_orders.json and prints the
+    table. Arm placement with `stock stops place --confirm`.
+    """
+    from stock import stop_orders
+    try:
+        conn = get_conn()
+        orders = stop_orders.compute_desired_stops(conn)
+        stop_orders.write_proposal(orders)
+        typer.echo(stop_orders.format_proposal_block(orders))
+        typer.echo(f"\nProposed {len(orders)} order(s) -> {stop_orders.PROPOSAL_PATH}")
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
+@stops_app.command("place")
+def stops_place_cmd(
+    confirm: Annotated[
+        bool,
+        typer.Option("--confirm", help="ARM real placement of live sell stop-limit orders."),
+    ] = False,
+) -> None:
+    """Place (or dry-run review) the proposed stop-limit orders via codex + RH MCP.
+
+    Default (no --confirm) is a REVIEW-ONLY dry run (review_equity_order). Passing
+    --confirm places REAL live orders on Robinhood. Requires an agentic-allowed
+    Robinhood account and a working `codex login`.
+    """
+    import json
+
+    from stock import stop_orders
+    try:
+        proposal = stop_orders.load_proposal()
+        if not proposal or not proposal.get("orders"):
+            typer.echo(
+                "No proposal found. Run `stock stops propose` first.", err=True,
+            )
+            raise typer.Exit(code=1)
+        n = len(proposal["orders"])
+        if confirm:
+            typer.echo(f"⚠️  PLACING {n} REAL sell stop-limit order(s) on Robinhood...")
+        else:
+            typer.echo(f"Dry-run REVIEW of {n} stop-limit order(s) (no orders placed)...")
+        result = stop_orders.place_via_codex(proposal, confirm=confirm)
+        parsed = result.get("parsed")
+        if isinstance(parsed, (dict, list)):
+            typer.echo(json.dumps(parsed, indent=2))
+        else:
+            typer.echo(result.get("raw_text") or "(no output)")
+        typer.echo(f"\nmode={result.get('mode')} -> {result.get('written_to')}")
+    except typer.Exit:
+        raise
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
+@stops_app.command("status")
+def stops_status_cmd() -> None:
+    """Show the last stop-order proposal + placement result, if any."""
+    from stock import stop_orders
+    try:
+        proposal = stop_orders.load_proposal()
+        result = stop_orders.load_result()
+        if proposal:
+            typer.echo(f"Proposal ({proposal.get('generated_at')}): "
+                       f"{proposal.get('count')} order(s), mode={proposal.get('mode')}")
+            for o in proposal.get("orders", []):
+                typer.echo(f"  - {o['ticker']} qty={o['qty']:g} stop=${o['stop_price']:.2f} "
+                           f"limit=${o['limit_price']:.2f} ref={o['ref_id']}")
+        else:
+            typer.echo("No proposal on file.")
+        if result:
+            typer.echo(f"\nLast placement: mode={result.get('mode')} "
+                       f"confirmed={result.get('confirmed')} at {result.get('ran_at')}")
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
 @broker_app.command("import-snapshot")
 def broker_import_snapshot_cmd(
     path: Annotated[
@@ -1528,6 +1614,7 @@ def summary_cmd(
     """
     try:
         from datetime import datetime, timedelta, timezone
+
         from stock import discovery_engine
         from stock.events import event_calibration_summary, list_events
         from stock.holdings import format_holdings_block, list_holdings
@@ -1547,7 +1634,7 @@ def summary_cmd(
         typer.echo("--- latest daily research note ---")
         if row:
             typer.echo(f"  id={row[0]}  layer={row[1]}  created={row[2]} UTC")
-            typer.echo(f"  Read in full: APK / dashboard /channel/, or `stock research`")
+            typer.echo("  Read in full: APK / dashboard /channel/, or `stock research`")
         else:
             typer.echo("  (none yet)")
 
@@ -1634,8 +1721,8 @@ def summary_cmd(
                 )
         if cal["total_resolved"] == 0:
             typer.echo("  - Calibration has no resolved events yet; system will fill in over time")
-        typer.echo(f"  - Next morning research push: 02:30 UTC = 10:30 Beijing tomorrow")
-        typer.echo(f"  - Next autopilot: 06:00 UTC = 14:00 Beijing tomorrow")
+        typer.echo("  - Next morning research push: 02:30 UTC = 10:30 Beijing tomorrow")
+        typer.echo("  - Next autopilot: 06:00 UTC = 14:00 Beijing tomorrow")
     except Exception:
         typer.echo(traceback.format_exc(), err=True)
         raise typer.Exit(code=1)
@@ -1653,6 +1740,7 @@ def check_cmd(
     try:
         ticker = ticker.upper()
         from datetime import datetime, timedelta, timezone
+
         from stock.events import list_events
         from stock.stops import compute_stop_loss
 
@@ -1717,7 +1805,7 @@ def check_cmd(
             (f"{ticker}%", week_iso),
         ).fetchall()
         typer.echo("")
-        typer.echo(f"--- sell-trigger alerts (last 7d, F28) ---")
+        typer.echo("--- sell-trigger alerts (last 7d, F28) ---")
         if alert_rows:
             for r in alert_rows:
                 typer.echo(f"  [#{r[0]}] {r[2]}  {r[1]}")
@@ -2146,20 +2234,24 @@ def daily_zh_cmd() -> None:
 @app.command("tech-dive")
 def tech_dive_cmd(
     topic: str = typer.Argument(..., help="What to mine, e.g. 'OCS optical circuit switch vs CPO'"),
-    sector: str = typer.Option("information", help="information | biopharma_ai | energy"),
+    sector: str = typer.Option("information", help="information | biopharma_ai | energy | ai_demand | space_tech"),
     language: str = typer.Option("zh-en", help="zh | en | zh-en"),
+    phase: str = typer.Option("mature", help="early | emerging | mature (early/emerging score validation+valuation on option-value basis)"),
 ) -> None:
-    """F43: structured 4-round tech-trend deep-dive (free via claude_cli)."""
+    """F43: structured tech-trend deep-dive + Chokepoint 5-dim score (free via claude_cli)."""
     from stock import tech_dive
     try:
         conn = get_conn()
         dive = tech_dive.run_and_persist(
-            topic=topic, sector=sector, conn=conn, language=language,
+            topic=topic, sector=sector, conn=conn, language=language, phase=phase,
         )
         if not dive.rounds:
             typer.echo("No rounds completed (cost ceiling or backend down).", err=True)
             raise typer.Exit(code=1)
-        typer.echo(f"\nDive complete: {len(dive.rounds)} rounds, research_id={dive.research_id}")
+        cp_note = (
+            f", chokepoint={dive.chokepoint.composite:.2f}" if dive.chokepoint else ""
+        )
+        typer.echo(f"\nDive complete: {len(dive.rounds)} rounds, research_id={dive.research_id}{cp_note}")
         typer.echo(f"Read with: python -c \"from stock.db import get_conn; "
                    f"print(get_conn().execute('SELECT body FROM research_reports WHERE id={dive.research_id}').fetchone()[0])\"")
     except Exception:

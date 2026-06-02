@@ -3,20 +3,40 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+import httpx
+import openai
 import yaml
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 from pydantic import BaseModel
 
-import time
-
-import httpx
-import openai
-
-from stock import action_queue, ai_loop_monitor, alerts, anomaly, backup, broker_sync, conversation, discovery_engine, emailer, entry_signals, events, grading, holdings, intent, options as options_module, prompt_rewriter, self_review, smallcap_scanner, tech_dive, thesis, warning_dashboard
+from stock import (
+    action_queue,
+    ai_loop_monitor,
+    alerts,
+    anomaly,
+    backup,
+    broker_sync,
+    conversation,
+    discovery_engine,
+    emailer,
+    entry_signals,
+    events,
+    grading,
+    holdings,
+    intent,
+    prompt_rewriter,
+    self_review,
+    smallcap_scanner,
+    tech_dive,
+    thesis,
+    warning_dashboard,
+)
+from stock import options as options_module
 from stock.cloud_sync import run_local_sync
 from stock.config import get_settings
 from stock.db import get_conn
@@ -34,7 +54,6 @@ from stock.research import (
 )
 from stock.score import score_due
 from stock.websearch import WebSearchUnavailable
-from stock.wechat import broadcast, send_message
 from stock.wechat_inbox import pull_chat_screenshots, read_feedback_entries
 
 logger = logging.getLogger(__name__)
@@ -653,13 +672,15 @@ def _job_backup_db() -> None:
 TOPIC_QUEUE_PATH: str = "data/topic_queue.yaml"
 
 
-def _pop_next_topic(sector: str) -> tuple[str, str] | None:
+def _pop_next_topic(sector: str) -> tuple[str, str, str] | None:
     """Pick the longest-untouched enabled topic for a sector from topic_queue.yaml.
 
     Updates last_run on the picked topic so the next run rotates through.
-    Returns (sector, topic) or None if no enabled topics for that sector.
+    Returns (sector, topic, phase) or None if no enabled topics for that sector.
+    `phase` is the topic's early|emerging|mature tag (defaults to 'mature').
     """
     from pathlib import Path
+
     import yaml
     p = Path(TOPIC_QUEUE_PATH)
     if not p.exists():
@@ -680,6 +701,7 @@ def _pop_next_topic(sector: str) -> tuple[str, str] | None:
     topic = str(picked.get("topic", "")).strip()
     if not topic:
         return None
+    phase = str(picked.get("phase") or "mature").strip().lower()
 
     picked["last_run"] = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     topics[idx] = picked
@@ -688,7 +710,7 @@ def _pop_next_topic(sector: str) -> tuple[str, str] | None:
         yaml.safe_dump(data, sort_keys=False, allow_unicode=True, default_flow_style=False, width=200),
         encoding="utf-8",
     )
-    return (sector, topic)
+    return (sector, topic, phase)
 
 
 COMPANY_DIVE_QUEUE_PATH: str = "data/company_dive_queue.yaml"
@@ -701,6 +723,7 @@ def _pop_next_company() -> str | None:
     in the YAML file so the next call rotates to the next company.
     """
     from pathlib import Path
+
     import yaml
     p = Path(COMPANY_DIVE_QUEUE_PATH)
     if not p.exists():
@@ -755,43 +778,58 @@ def _job_company_dd_dive() -> None:
         conn.close()
 
 
+# Sector rotation for the weekly tech dive. Ordered list rotated by ISO week
+# number so every tracked field gets periodic airtime -- including the buyer-side
+# `ai_demand` sector and early-phase `space_tech`. (The old day-of-week map only
+# ever fired on Sunday, so it always picked `energy` and the other sectors never
+# ran via cron.)
+TECH_DIVE_SECTORS: list[str] = [
+    "information",
+    "biopharma_ai",
+    "energy",
+    "ai_demand",
+    "space_tech",
+]
+
+
 def _job_daily_tech_dive() -> None:
-    """F43 daily cron: rotate sector by day-of-year, pick next topic, dive.
+    """F43 weekly cron (Sun 04:30 UTC): rotate sector by ISO week, dive next topic.
 
-    Day rotation: Mon/Thu = information, Tue/Fri = biopharma_ai,
-    Wed/Sat/Sun = energy. Yields ~2 dives per sector per week.
+    Picks the rotation-selected sector first, then falls back through the rest in
+    order so an empty queue for one sector does not waste the week. The chosen
+    topic's phase (early|emerging|mature) flows into the chokepoint scoring round.
     """
-    sector_by_dow = {
-        0: "information",   # Mon
-        1: "biopharma_ai",  # Tue
-        2: "energy",        # Wed
-        3: "information",   # Thu
-        4: "biopharma_ai",  # Fri
-        5: "energy",        # Sat
-        6: "energy",        # Sun
-    }
-    dow = datetime.now(timezone.utc).weekday()
-    sector = sector_by_dow[dow]
+    week = datetime.now(timezone.utc).isocalendar().week
+    n = len(TECH_DIVE_SECTORS)
+    order = [TECH_DIVE_SECTORS[(week + i) % n] for i in range(n)]
 
-    pick = _pop_next_topic(sector)
+    pick: tuple[str, str, str] | None = None
+    for sector in order:
+        pick = _pop_next_topic(sector)
+        if pick:
+            break
     if not pick:
-        logger.info("Daily tech dive: no enabled topics for %s today", sector)
+        logger.info("Weekly tech dive: no enabled topics in any sector")
         return
 
-    sector, topic = pick
-    logger.info("Daily tech dive starting: sector=%s topic=%s", sector, topic[:80])
+    sector, topic, phase = pick
+    logger.info(
+        "Weekly tech dive starting: sector=%s phase=%s topic=%s",
+        sector, phase, topic[:80],
+    )
     conn = get_conn()
     try:
         dive = tech_dive.run_and_persist(
-            topic=topic, sector=sector, conn=conn, language="zh",
+            topic=topic, sector=sector, conn=conn, language="zh", phase=phase,
         )
         if dive.rounds:
             logger.info(
-                "Daily tech dive done: research_id=%s rounds=%d",
+                "Weekly tech dive done: research_id=%s rounds=%d composite=%s",
                 dive.research_id, len(dive.rounds),
+                dive.chokepoint.composite if dive.chokepoint else "n/a",
             )
     except Exception:
-        logger.exception("Daily tech dive failed (sector=%s)", sector)
+        logger.exception("Weekly tech dive failed (sector=%s)", sector)
     finally:
         conn.close()
 
@@ -818,6 +856,40 @@ def _job_post_close_snapshot() -> None:
     else:
         logger.error("Post-close snapshot failed (rc=%d): %s",
                      proc.returncode, (proc.stderr or "")[:300])
+
+
+def _job_propose_stop_orders() -> None:
+    """Compute desired SELL stop-limit orders for active holdings and PROPOSE them.
+
+    Human-armed by design: writes data/desired_stop_orders.json and an alert note
+    so the boss sees the proposed stops, but NEVER places an order. Placement is
+    only done via the explicit `stock stops place --confirm` path. Runs after the
+    post-close snapshot so stops use settled daily bars.
+    """
+    from stock import stop_orders
+    conn = get_conn()
+    try:
+        orders = stop_orders.compute_desired_stops(conn)
+        stop_orders.write_proposal(orders)
+        if not orders:
+            logger.info("Stop-order propose: no eligible active holdings")
+            return
+        block = stop_orders.format_proposal_block(orders)
+        now = datetime.now(timezone.utc).isoformat()
+        conn.execute(
+            "INSERT INTO research_reports (kind, topic, body, created_at)"
+            " VALUES ('alert', ?, ?, ?)",
+            (f"⚠️ 止损挂单建议 / {len(orders)} proposed stop orders", block, now),
+        )
+        conn.commit()
+        logger.info(
+            "Stop-order propose: %d proposed (arm with `stock stops place --confirm`)",
+            len(orders),
+        )
+    except Exception:
+        logger.exception("Stop-order propose job failed")
+    finally:
+        conn.close()
 
 
 def _job_weekly_entry_scan() -> None:
@@ -1501,6 +1573,16 @@ def create_scheduler() -> BlockingScheduler:
         CronTrigger(hour=20, minute=5, day_of_week="mon-fri", timezone="UTC"),
         id="post_close_snapshot",
         name="F46 post-close volume + price snapshot (4:05 PM ET)",
+    )
+
+    # Human-armed stop-loss: compute + PROPOSE sell stop-limit orders after the
+    # post-close snapshot (settled bars). Writes the proposal + an alert note;
+    # never places. Operator arms placement with `stock stops place --confirm`.
+    scheduler.add_job(
+        _job_propose_stop_orders,
+        CronTrigger(hour=20, minute=10, day_of_week="mon-fri", timezone="UTC"),
+        id="stop_order_propose",
+        name="Propose human-armed stop-limit orders for active holdings",
     )
 
     # F19: forward-discovery engine daily at 23:00 UTC (07:00 Beijing). Runs

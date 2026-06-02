@@ -25,9 +25,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Iterable
 
 from pydantic import BaseModel
 

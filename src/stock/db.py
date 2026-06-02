@@ -1,12 +1,15 @@
 """stock.db -- SQLite connection factory and schema creation."""
 from __future__ import annotations
 
+import logging
 import sqlite3
 from pathlib import Path
 
 import sqlite_vec
 
 from stock.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS news (
@@ -199,7 +202,16 @@ CREATE TABLE IF NOT EXISTS tech_dive_runs (
     research_id INTEGER REFERENCES research_reports(id),
     rounds INTEGER NOT NULL,
     cost_usd REAL NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    -- Chokepoint 5-dim research-priority score (boss "Serenity" directive).
+    -- Nullable: a dive that omits the SCORES line still persists with NULLs.
+    phase TEXT,
+    score_trend INTEGER,
+    score_bottleneck INTEGER,
+    score_validation INTEGER,
+    score_valuation INTEGER,
+    score_risk INTEGER,
+    score_composite REAL
 );
 
 CREATE TABLE IF NOT EXISTS ai_loop_health (
@@ -438,9 +450,37 @@ CREATE INDEX IF NOT EXISTS idx_self_review_applied
 """
 
 
+# Columns added to existing tables after their initial ship date. CREATE TABLE
+# IF NOT EXISTS never alters a live table, so we add any missing column here.
+# Format: table -> [(column, sql_type), ...]. Idempotent and logged.
+_ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
+    "tech_dive_runs": [
+        ("phase", "TEXT"),
+        ("score_trend", "INTEGER"),
+        ("score_bottleneck", "INTEGER"),
+        ("score_validation", "INTEGER"),
+        ("score_valuation", "INTEGER"),
+        ("score_risk", "INTEGER"),
+        ("score_composite", "REAL"),
+    ],
+}
+
+
 def _ensure_schema(conn: sqlite3.Connection) -> None:
-    """Create all tables if they do not exist."""
+    """Create all tables if they do not exist, then backfill new columns."""
     conn.executescript(_SCHEMA_SQL)
+
+    # Backfill columns added to pre-existing tables in live databases.
+    for table, columns in _ADDED_COLUMNS.items():
+        existing = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+        for name, sql_type in columns:
+            if name in existing:
+                continue
+            try:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {sql_type}")
+            except sqlite3.OperationalError as exc:
+                logger.warning("ALTER TABLE %s ADD COLUMN %s failed: %s", table, name, exc)
+    conn.commit()
 
 
 def get_conn(db_path: str | None = None) -> sqlite3.Connection:

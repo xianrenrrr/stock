@@ -12,16 +12,23 @@ from typing import Any, Callable
 from pydantic import BaseModel
 
 from stock import action_queue
+from stock.ai_loop_monitor import format_loop_block
 from stock.anomaly import format_anomaly_block, recent_anomalies
 from stock.config import get_settings
-from stock.holdings import Holding, format_holdings_block, list_holdings
-from stock.ingest.insiders import format_insider_block, recent_for_ticker
 from stock.conversation import format_context_block, recent_turns
 from stock.discover import (
     format_extractions_for_research,
     get_recent_extractions,
 )
-from stock.wechat_inbox import recent_feedback_block
+from stock.discovery_engine import format_candidates_block, list_candidates
+from stock.emerging_fields import format_fields_block, load_fields
+from stock.events import (
+    event_calibration_summary,
+    extract_events_from_research,
+    recent_events_block,
+)
+from stock.holdings import Holding, format_holdings_block, list_holdings
+from stock.ingest.insiders import format_insider_block, recent_for_ticker
 from stock.models import (
     ChatMessage,
     ChatResponse,
@@ -29,31 +36,15 @@ from stock.models import (
     get_core_client,
     get_core_model,
 )
+from stock.options import format_ratio_block, format_uoa_block
 from stock.score import build_report, format_report
-from stock.discovery_engine import format_candidates_block, list_candidates
-from stock.events import (
-    event_calibration_summary,
-    extract_events_from_research,
-    recent_events_block,
-)
-from stock.emerging_fields import format_fields_block, load_fields
 from stock.secular import (
     format_theme_block,
     load_themes,
     pick_focus_theme,
 )
-from stock.stops import format_stop_loss_block
-from stock.ai_loop_monitor import format_loop_block
-from stock.options import format_ratio_block, format_uoa_block
 from stock.smallcap_scanner import format_smallcap_block
-from stock.tech_trends import (
-    format_conviction_watchlist_block,
-    format_trend_radar_block,
-    load_conviction,
-    load_trends,
-    pick_focus_trend,
-)
-from stock.thesis import compute_thesis_stats, format_thesis_block
+from stock.stops import format_stop_loss_block
 from stock.supply_chain import (
     Layer,
     SupplyChain,
@@ -63,6 +54,15 @@ from stock.supply_chain import (
     load_chain,
     pick_focus_layer,
 )
+from stock.tech_trends import (
+    format_conviction_watchlist_block,
+    format_trend_radar_block,
+    load_conviction,
+    load_trends,
+    pick_focus_trend,
+)
+from stock.thesis import compute_thesis_stats, format_thesis_block
+from stock.wechat_inbox import recent_feedback_block
 
 logger = logging.getLogger(__name__)
 
@@ -500,6 +500,11 @@ def generate_daily_research(
     enabled_trends = load_trends(enabled_only=True)
     focus_trend = pick_focus_trend(enabled_trends, now=now)
     trend_radar_block = format_trend_radar_block(focus_trend)
+    # Chokepoint 5-dim cross-field research-priority leaderboard from recent
+    # weekly tech dives. Function-local import: tech_dive imports research._core_chat,
+    # so a module-level import here would create a cycle.
+    from stock.tech_dive import format_chokepoint_leaderboard_block
+    chokepoint_block = format_chokepoint_leaderboard_block(conn, days=21)
     # F42: conviction watchlist (~10 names) -- the deeply-tracked layer
     # above the 39-ticker ingest universe. Live prices + F24 stops.
     conviction_block = format_conviction_watchlist_block(
@@ -555,6 +560,7 @@ def generate_daily_research(
         ai_loop_block=ai_loop_block or "(AI loop monitor not yet measured this cycle)",
         trend_radar_block=trend_radar_block,
         conviction_block=conviction_block or "(no conviction watchlist names enabled)",
+        chokepoint_block=chokepoint_block or "(no scored tech dives in the last 21 days)",
         max_chars=max_chars,
     )
 
