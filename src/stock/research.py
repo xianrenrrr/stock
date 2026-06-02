@@ -7,7 +7,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from pydantic import BaseModel
 
@@ -779,6 +779,7 @@ def generate_health_check(
 REPLY_WEB_SEARCH_RESULTS: int = 4
 REPLY_WEB_FETCH_PER_RESULT_CHARS: int = 1500
 REPLY_WEB_BLOCK_MAX_CHARS: int = 6000
+LiveQuoteProvider = Callable[[str], tuple[float, float, float] | None]
 
 
 @lru_cache(maxsize=1)
@@ -944,7 +945,9 @@ _REPLY_TICKER_STOPWORDS: frozenset[str] = frozenset({
 _REPLY_TICKER_MAX: int = 2  # cap how many fresh predictions we generate per reply
 
 
-def _detect_tickers_in_text(text: str) -> list[str]:
+def _detect_tickers_in_text(
+    text: str, *, known_tickers: set[str] | None = None
+) -> list[str]:
     """Extract ticker-shaped tokens from a boss reply, deduped + stopword-filtered.
 
     Returns up to _REPLY_TICKER_MAX tickers in first-seen order. Used by
@@ -963,7 +966,41 @@ def _detect_tickers_in_text(text: str) -> list[str]:
         seen.append(tok)
         if len(seen) >= _REPLY_TICKER_MAX:
             break
+
+    # Boss messages often use lowercase tickers ("crdo", "arm"). Only accept
+    # lowercase-like tokens when they match a known portfolio/watchlist/price
+    # ticker so ordinary words are not promoted into fake symbols.
+    known = {t.upper() for t in (known_tickers or set()) if t}
+    if known and len(seen) < _REPLY_TICKER_MAX:
+        for match in _re_thesis.finditer(
+            r"(?<![A-Za-z0-9])([A-Za-z]{2,5}|[0-9]{4,6}\.(?:ss|sz|hk|tw))(?![A-Za-z0-9])",
+            text,
+        ):
+            tok = match.group(1).upper()
+            if tok in _REPLY_TICKER_STOPWORDS or tok not in known or tok in seen:
+                continue
+            seen.append(tok)
+            if len(seen) >= _REPLY_TICKER_MAX:
+                break
     return seen
+
+
+def _known_reply_tickers(conn: sqlite3.Connection) -> set[str]:
+    """Return tickers safe to match case-insensitively in boss replies."""
+    tickers: set[str] = set()
+    queries = [
+        "SELECT ticker FROM watchlist WHERE active = 1",
+        "SELECT ticker FROM holdings WHERE active = 1",
+        "SELECT DISTINCT ticker FROM prices",
+        "SELECT DISTINCT ticker FROM predictions",
+    ]
+    for query in queries:
+        try:
+            rows = conn.execute(query).fetchall()
+        except sqlite3.Error:
+            continue
+        tickers.update(str(r[0]).upper() for r in rows if r and r[0])
+    return tickers
 
 
 def _build_ticker_prediction_block(
@@ -976,7 +1013,9 @@ def _build_ticker_prediction_block(
     persists to the predictions table and triggers thesis extraction via the
     predict_ticker hook -- so the reply is *traceable* and gradeable later.
     """
-    tickers = _detect_tickers_in_text(boss_reply)
+    tickers = _detect_tickers_in_text(
+        boss_reply, known_tickers=_known_reply_tickers(conn)
+    )
     if not tickers:
         return "(no tickers in boss reply)"
 
@@ -1062,6 +1101,49 @@ def _gather_web_grounding(question: str) -> str:
     return "\n".join(parts)
 
 
+def _build_live_quote_block(
+    conn: sqlite3.Connection,
+    *,
+    boss_reply: str,
+    provider: LiveQuoteProvider | None = None,
+) -> str:
+    """Quote-style live price context for reply grounding.
+
+    Web pages and local daily bars can lag around earnings. This block gives the
+    reply model an explicit price source, or tells it not to cite stale levels.
+    """
+    tickers = _detect_tickers_in_text(
+        boss_reply, known_tickers=_known_reply_tickers(conn)
+    )
+    if not tickers:
+        return ""
+
+    if provider is None:
+        from stock.alerts import _live_pct_change_yfinance
+
+        quote_provider = _live_pct_change_yfinance
+    else:
+        quote_provider = provider
+
+    lines = [
+        "Live quote context (PRIMARY price grounding -- prefer over stale web snippets):"
+    ]
+    for ticker in tickers:
+        quote = quote_provider(ticker)
+        if quote is None:
+            lines.append(
+                f"- {ticker}: live quote unavailable; "
+                "do not cite a stale price as current."
+            )
+            continue
+        last_price, previous_close, pct_change = quote
+        lines.append(
+            f"- {ticker}: last=${last_price:.2f}; previous_close=${previous_close:.2f}; "
+            f"change={pct_change * 100:+.2f}%."
+        )
+    return "\n".join(lines)
+
+
 def generate_reply(
     conn: sqlite3.Connection,
     *,
@@ -1098,7 +1180,11 @@ def generate_reply(
     # Live web grounding via Tavily/Serper/Brave: search the boss's question text
     # and fetch the top pages so the LLM sees real source material instead of
     # making up specifics from training-data memory.
-    web_grounding_block = _gather_web_grounding(boss_reply) or "(none)"
+    live_quote_block = _build_live_quote_block(conn, boss_reply=boss_reply)
+    web_grounding = _gather_web_grounding(boss_reply)
+    web_grounding_block = "\n\n".join(
+        block for block in [live_quote_block, web_grounding] if block
+    ) or "(none)"
 
     # F16: if the boss mentioned a ticker, run a fresh prediction (which also
     # triggers thesis extraction) so the reply has a verifiable thesis attached.
