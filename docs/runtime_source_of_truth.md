@@ -180,6 +180,17 @@ tools, so the runtime bridge is file based:
 
 Queued/pending buy orders are not counted as holdings until Robinhood reports a
 filled non-zero position.
+
+### Holdings source of truth (2026-06-02)
+
+Live Robinhood is now the SOLE source of truth for holdings. `data/holdings.yaml`
+is intentionally EMPTY (`holdings: []`) so startup `sync_from_yaml()` is a no-op
+and does not fight the live pull. Previously a populated yaml re-added stale names
+(e.g. MSFT) and culled live-only positions on every restart. Do NOT repopulate
+`holdings.yaml` to "fix" it — to force-track a non-Robinhood name use
+`stock holding add <TICKER> <qty> <cost>`. The `broker_positions_pull` job keeps
+the holdings table in sync with the live account; `broker_snapshot_import`
+deactivates exited positions.
 - AI network equipment
 - Defense drones / autonomy
 - Robotics / autonomous systems

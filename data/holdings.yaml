@@ -1,80 +1,32 @@
-# Tracked portfolio holdings -- single source of truth for the holdings table.
-# On orchestrator startup, sync_from_yaml() upserts each row and marks any
-# DB-only ticker as inactive. CLI/API mutations write to the DB; ops can edit
-# this file manually and the next startup syncs it.
+# Tracked portfolio holdings.
+#
+# SOURCE OF TRUTH = LIVE ROBINHOOD (since 2026-06-02). The `broker_positions_pull`
+# orchestrator job (Mon-Fri every 30 min) pulls live positions via the codex/RH
+# MCP and imports them into the `holdings` table; `broker_snapshot_import`
+# deactivates positions you have exited. Holdings are NO LONGER managed here.
+#
+# This list is intentionally EMPTY so startup `sync_from_yaml()` is a no-op and
+# does NOT fight the live pull (a populated list here would re-add stale names and
+# cull live-only positions on every restart). To force-track a name that is NOT in
+# Robinhood, add it via `stock holding add <TICKER> <qty> <cost>` instead of here.
+holdings: []
 
-holdings:
-  - ticker: GOOGL
-    qty: 60
-    cost_basis: 0
-    opened_at: '2026-05-27'
-    notes: 'Imported from Robinhood screenshot 20260527T070557Z_richard.png; avg cost basis not visible.'
-  - ticker: MSFT
-    qty: 12
-    cost_basis: 0
-    opened_at: '2026-05-27'
-    notes: 'Imported from Robinhood screenshot 20260527T070557Z_richard.png; avg cost basis not visible.'
-  - ticker: AMBA
-    qty: 158
-    cost_basis: 0
-    opened_at: '2026-05-27'
-    notes: 'Imported from Robinhood screenshot 20260527T070557Z_richard.png; avg cost basis not visible. Qty corrected to 158 per operator message 2026-05-31.'
-  - ticker: RXRX
-    qty: 100
-    cost_basis: 0
-    opened_at: '2026-05-27'
-    notes: 'Imported from Robinhood screenshot 20260527T070557Z_richard.png; avg cost basis not visible.'
-  - ticker: VEEV
-    qty: 2
-    cost_basis: 0
-    opened_at: '2026-05-27'
-    notes: 'Imported from Robinhood screenshot 20260527T070557Z_richard.png; avg cost basis not visible.'
-  - ticker: SDGR
-    qty: 10
-    cost_basis: 0
-    opened_at: '2026-05-27'
-    notes: 'Imported from Robinhood screenshot 20260527T070557Z_richard.png; avg cost basis not visible.'
-  - ticker: ACMR
-    qty: 5
-    cost_basis: 0
-    opened_at: '2026-05-27'
-    notes: 'Imported from Robinhood screenshot 20260527T070557Z_richard.png; avg cost basis not visible.'
-
-# SMCI -- CLOSED 2026-05-05 AH at $32.50 from $28 cost (~$20k position,
-# +16.07% realized in 1 trading day on the Q3 fiscal 26 earnings pop).
-# Marked inactive in holdings table; trade_log persisted as research_id=29.
-# When you re-enter SMCI or open any new position, add a block back here.
+# ---------------------------------------------------------------------------
+# REFERENCE -- SMCI sell/take-profit triggers (kept for trading discipline).
+# SMCI is currently held again per the live Robinhood pull; these triggers from
+# the prior position still apply as a checklist:
 #
 #       === SELL TRIGGERS (any one = re-evaluate; multiple = exit) ===
 #       1. Q3 print: margin stuck < 11% -> thesis broken, cut.
-#       2. Hyperscaler 5月 capex guidance NOT upgraded by MSFT/META/GOOGL/
-#          AMZN -> integration layer pre-priced; trim half.
-#       3. GB200 NVL72 shipment cadence delay (NVDA earnings or channel
-#          check) -> entire integration thesis pushes out -> exit.
+#       2. Hyperscaler capex guidance NOT upgraded by MSFT/META/GOOGL/AMZN
+#          -> integration layer pre-priced; trim half.
+#       3. GB200 NVL72 shipment cadence delay -> integration thesis pushes out -> exit.
 #       4. Auditor / 10-K compliance event reignites -> unconditional exit.
-#       5. DELL liquid-cooling rack price war disclosed -> SMCI first-mover
-#          premium evaporates -> trim 50%.
-#       6. Single-day pct_change <= -8% on volume_ratio >= 2.0 -> stop-loss
-#          check (F12 anomaly flagger fires automatically).
+#       5. DELL liquid-cooling rack price war disclosed -> trim 50%.
+#       6. Single-day pct_change <= -8% on volume_ratio >= 2.0 -> stop-loss check.
 #
 #       === TAKE-PROFIT TRIGGERS ===
 #       7. +30% from cost_basis with no new catalyst -> trim 1/3.
-#       8. META or xAI announces SMCI as DLC vendor of record -> trim 1/2
-#          + raise stop to entry.
+#       8. META or xAI names SMCI as DLC vendor of record -> trim 1/2 + raise stop to entry.
 #
-#       === RECOMMENDED MAX POSITION SIZE: 5% of portfolio. ===
-#       One bad quarter = potential 30%+ drawdown.
-#
-#       UPDATE qty + cost_basis as soon as you have them:
-#         stock holding add SMCI <real_qty> <real_cost> --notes "..."
-
-# AMD -- SOLD per operator message on 2026-05-31.
-# Removed from active YAML holdings; DB row marked inactive manually the same day.
-
-# Example template (add more holdings here):
-# holdings:
-#   - ticker: NVDA
-#     qty: 100
-#     cost_basis: 480.00
-#     opened_at: '2025-12-01'
-#     notes: 'core AI compute exposure'
+#       RECOMMENDED MAX POSITION SIZE: 5% of portfolio.
