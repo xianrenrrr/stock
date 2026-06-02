@@ -16,6 +16,19 @@ When files conflict, trust:
 4. `WORKFLOW.md`.
 5. Historical docs in `pipeline/`, `md/`, and old design files.
 
+## Git Workflow (solo project)
+
+This is a single-developer project for the owner's personal use. There is ONE
+long-lived branch: `main`.
+
+- **Commit directly to `main`.** Do NOT create feature, review, `auto-review-*`,
+  or worktree branches, and do NOT ask to branch first — the general "branch off
+  the default branch" guidance is overridden here.
+- If you find stray non-`main` branches, it is fine to fast-forward/merge them
+  into `main` and delete them (after confirming `main` contains their commits).
+- Only `git push` when the owner explicitly asks (pushing `main` triggers the
+  Render + APK rebuild).
+
 ## Non-Negotiables
 
 - Preserve user work in the dirty tree. Never revert unrelated changes.
