@@ -1247,6 +1247,43 @@ def _job_import_broker_snapshot() -> None:
         conn.close()
 
 
+def _job_pull_broker_positions() -> None:
+    """Pull LIVE Robinhood positions via codex/RH-MCP, import them, refresh prices.
+
+    Read-only (get_equity_positions). This is what keeps the holdings table -- and
+    therefore the warning dashboard -- in sync with the real account instead of a
+    stale data/holdings.yaml. After import it refreshes daily bars for the held
+    tickers so P&L and stop-distance reflect the latest stock data. The warning
+    dashboard (every 15 min) then re-evaluates on this fresh data.
+    """
+    from stock.ingest import fetch_prices
+    conn = get_conn()
+    try:
+        try:
+            pull = broker_sync.pull_positions_via_codex()
+        except broker_sync.BrokerPullError as exc:
+            logger.warning("Broker positions pull skipped: %s", exc)
+            return
+        imp = broker_sync.import_snapshot_file(conn)
+        # Refresh latest daily bars for held tickers so the warning is current.
+        refreshed = 0
+        for h in holdings.list_holdings(conn, active_only=True):
+            try:
+                fetch_prices(h.ticker, conn)
+                refreshed += 1
+            except Exception as exc:  # noqa: BLE001 -- isolate per-ticker failures
+                logger.warning("price refresh failed for %s: %s", h.ticker, exc)
+        logger.info(
+            "Broker positions pull: %d live positions, upserted=%d deactivated=%d,"
+            " refreshed prices for %d holdings",
+            pull.get("count", 0), imp.upserted, imp.deactivated, refreshed,
+        )
+    except Exception:
+        logger.exception("Broker positions pull job failed")
+    finally:
+        conn.close()
+
+
 def create_scheduler() -> BlockingScheduler:
     """Create and configure the APScheduler instance with all pipeline jobs.
 
@@ -1462,6 +1499,17 @@ def create_scheduler() -> BlockingScheduler:
         CronTrigger(minute="*/5", timezone="UTC"),
         id="broker_snapshot_import",
         name="Import filled Robinhood positions snapshot into holdings",
+    )
+
+    # Pull LIVE Robinhood positions via codex/RH-MCP every 30 min during the US
+    # session, then refresh held-ticker prices, so the holdings table + warning
+    # dashboard reflect the real account and latest stock data (not a stale
+    # holdings.yaml). Read-only; never places orders.
+    scheduler.add_job(
+        _job_pull_broker_positions,
+        CronTrigger(minute="*/30", hour="12-21", day_of_week="mon-fri", timezone="UTC"),
+        id="broker_positions_pull",
+        name="Pull live Robinhood positions + refresh holding prices",
     )
 
     # F26: tracked-event verification at SCORE_HOUR:SCORE_MINUTE+20 (Mon-Fri).

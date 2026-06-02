@@ -43,7 +43,7 @@ Runtime LLM calls are Codex-first:
 
 ## Active Scheduled Jobs
 
-There are 33 active APScheduler jobs in local mode.
+There are 34 active APScheduler jobs in local mode.
 
 | Job id | Cadence UTC | What it actually does | Main output |
 |---|---:|---|---|
@@ -56,6 +56,7 @@ There are 33 active APScheduler jobs in local mode.
 | `sync_to_render` | every 5 min | Push local notes/tokens to Render and pull dashboard replies. No-op if `RENDER_SYNC_URL` is empty. | Render sync state |
 | `warning_dashboard_publish` | every 15 min | Publish changed warning dashboard snapshots to Boss app/Render and email high-risk changes. | `research_reports(kind='warning_dashboard')`, SMTP email |
 | `broker_snapshot_import` | every 5 min | Import filled Robinhood positions from `data/robinhood_positions_snapshot.json` into local holdings. Queued orders are ignored until filled. | `holdings` |
+| `broker_positions_pull` | Mon-Fri every 30 min, 12:00-21:00 | Pull LIVE Robinhood positions via a codex/RH-MCP session (read-only `get_equity_positions`), write the snapshot, import it, and refresh daily bars for held tickers. Keeps the holdings table + warning dashboard in sync with the real account + latest prices. | `data/robinhood_positions_snapshot.json`, `holdings`, `prices` |
 | `intraday_holding_move_alerts` | Mon-Fri every 15 min, 13:00-20:59 | Live quote crash/spike alerts for active holdings; catches moves like AMBA -20% before close. | `research_reports(kind='alert')` |
 | `post_close_snapshot` | Mon-Fri 20:05 | Refresh settled daily bars and flag close/volume snapshots. | prices/anomaly context |
 | `stop_order_propose` | Mon-Fri 20:10 | Compute desired SELL stop-limit orders for active holdings and PROPOSE them (human-armed). Writes `data/desired_stop_orders.json` + an alert note. NEVER places. | `research_reports(kind='alert')`, proposal file |
@@ -165,11 +166,17 @@ session. The background Python orchestrator cannot directly call Codex MCP
 tools, so the runtime bridge is file based:
 
 1. A Codex/RH MCP session writes a positions snapshot to
-   `data/robinhood_positions_snapshot.json`.
-2. `broker_snapshot_import` imports only non-zero filled positions into
-   `holdings`.
+   `data/robinhood_positions_snapshot.json`. This is now AUTOMATED: the
+   `broker_positions_pull` job (Mon-Fri every 30 min) spawns a read-only codex
+   session (`broker_sync.pull_positions_via_codex`) that calls
+   `get_equity_positions` and writes the snapshot. Run on demand with
+   `stock broker pull`.
+2. `broker_snapshot_import` (and the pull job) import only non-zero filled
+   positions into `holdings`, and `broker_positions_pull` then refreshes daily
+   bars for the held tickers.
 3. Existing holding alerts, stop-loss tables, anomaly scans, daily research, and
-   the warning dashboard monitor those holdings.
+   the warning dashboard monitor those holdings -- now backed by LIVE positions +
+   latest prices rather than a stale `holdings.yaml`.
 
 Queued/pending buy orders are not counted as holdings until Robinhood reports a
 filled non-zero position.

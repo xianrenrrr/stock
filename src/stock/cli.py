@@ -1051,6 +1051,37 @@ def broker_import_snapshot_cmd(
         raise typer.Exit(code=1)
 
 
+@broker_app.command("pull")
+def broker_pull_cmd() -> None:
+    """Pull LIVE Robinhood positions via codex/RH-MCP, import them, refresh prices.
+
+    Read-only (get_equity_positions); never places orders. This is what keeps the
+    holdings table + warning dashboard in sync with the real account.
+    """
+    try:
+        conn = get_conn()
+        pull = broker_sync.pull_positions_via_codex()
+        result = broker_sync.import_snapshot_file(conn)
+        refreshed = 0
+        for h in holdings.list_holdings(conn, active_only=True):
+            try:
+                fetch_prices(h.ticker, conn)
+                refreshed += 1
+            except Exception:
+                pass
+        typer.echo(
+            f"Pulled {pull.get('count', 0)} live position(s); "
+            f"upserted={result.upserted} deactivated={result.deactivated}; "
+            f"refreshed prices for {refreshed} holding(s)."
+        )
+    except broker_sync.BrokerPullError as exc:
+        typer.echo(f"Pull failed: {exc}", err=True)
+        raise typer.Exit(code=1)
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
 @app.command("grade")
 def grade_cmd(
     hours: Annotated[

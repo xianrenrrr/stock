@@ -9,7 +9,11 @@ from __future__ import annotations
 
 import json
 import logging
+import shutil
 import sqlite3
+import subprocess
+import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -22,6 +26,9 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_SNAPSHOT_PATH = Path("data/robinhood_positions_snapshot.json")
 BROKER_TAG = "[broker:robinhood"
+
+CODEX_BIN: str = "codex"
+CODEX_PULL_TIMEOUT_SECS: int = 300
 
 
 class BrokerSyncResult(BaseModel):
@@ -145,3 +152,104 @@ def import_snapshot_file(
     if not isinstance(raw, dict):
         raise ValueError(f"broker snapshot must be a JSON object: {snapshot_path}")
     return import_snapshot(conn, raw, path=str(snapshot_path))
+
+
+# --- Robinhood positions PULL bridge (read-only) ---------------------------
+# The background orchestrator cannot call the robinhood-trading MCP directly, so
+# we spawn a codex session to READ live positions (get_equity_positions) and
+# write them to the snapshot file, which import_snapshot_file() then ingests.
+# This is the pull mirror of the broker snapshot import -- strictly read-only,
+# never places or cancels an order.
+
+class BrokerPullError(RuntimeError):
+    """Raised when the codex / RH-MCP positions-pull subprocess fails."""
+
+
+def build_positions_pull_instruction() -> str:
+    """Read-only codex/RH-MCP instruction: fetch current positions as a snapshot."""
+    return (
+        "Using the robinhood-trading MCP, fetch the operator's CURRENT open "
+        "equity positions. Call `get_accounts` to get the account_number if "
+        "needed, then `get_equity_positions`. Output ONLY a JSON object in "
+        "EXACTLY this shape (numbers as numbers, not strings):\n"
+        '{"account_number": "<acct>", "as_of": "<iso8601 utc>", '
+        '"positions": [ {"symbol": "AAPL", "quantity": 10, '
+        '"average_buy_price": 150.0, "type": "long"} ... ]}\n\n'
+        "ABSOLUTE SAFETY RULES: this is READ-ONLY. Do NOT call "
+        "place_equity_order or cancel_equity_order. Do NOT place, modify, or "
+        "cancel any order. Only read positions. Include every open position with "
+        "a non-zero quantity."
+    )
+
+
+def pull_positions_via_codex(
+    *,
+    snapshot_path: str | Path = DEFAULT_SNAPSHOT_PATH,
+    codex_bin: str = CODEX_BIN,
+    timeout_secs: int = CODEX_PULL_TIMEOUT_SECS,
+) -> dict:
+    """Spawn a codex / RH-MCP session to read live positions; write the snapshot.
+
+    Returns {count, account_number, written_to, raw}. Raises BrokerPullError if
+    codex is missing / times out / exits non-zero / returns unparseable output.
+    The written file is the same shape import_snapshot_file() expects.
+    """
+    instruction = build_positions_pull_instruction()
+    resolved = shutil.which(codex_bin) or codex_bin
+    out_handle = tempfile.NamedTemporaryFile(
+        mode="w", suffix=".json", delete=False, encoding="utf-8",
+    )
+    out_file = out_handle.name
+    out_handle.close()
+
+    argv = [
+        resolved, "exec",
+        "--skip-git-repo-check",
+        "--dangerously-bypass-approvals-and-sandbox",
+        "-o", out_file,
+    ]
+    creation_flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+    try:
+        try:
+            proc = subprocess.run(
+                argv, input=instruction, capture_output=True, text=True,
+                encoding="utf-8", timeout=timeout_secs, creationflags=creation_flags,
+            )
+        except FileNotFoundError as exc:
+            raise BrokerPullError(
+                f"`{resolved}` not on PATH; install Codex CLI + `codex login`"
+            ) from exc
+        except subprocess.TimeoutExpired as exc:
+            raise BrokerPullError(
+                f"codex positions pull timed out after {timeout_secs}s"
+            ) from exc
+
+        try:
+            raw_text = Path(out_file).read_text(encoding="utf-8").strip()
+        except OSError:
+            raw_text = ""
+        if proc.returncode != 0:
+            raise BrokerPullError(
+                f"codex exit={proc.returncode}: {(proc.stderr or '').strip()[:400]}"
+            )
+        try:
+            payload = json.loads(raw_text) if raw_text else None
+        except json.JSONDecodeError as exc:
+            raise BrokerPullError(f"codex returned non-JSON positions: {exc}") from exc
+        if not isinstance(payload, dict) or "positions" not in payload:
+            raise BrokerPullError("codex output missing a 'positions' list")
+
+        sp = Path(snapshot_path)
+        sp.parent.mkdir(parents=True, exist_ok=True)
+        sp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        return {
+            "count": len(payload.get("positions") or []),
+            "account_number": payload.get("account_number"),
+            "written_to": str(sp),
+            "raw": payload,
+        }
+    finally:
+        try:
+            Path(out_file).unlink()
+        except OSError:
+            pass
