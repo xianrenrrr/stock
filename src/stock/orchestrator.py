@@ -465,7 +465,7 @@ def _job_learn_from_feedback() -> None:
                     )
             elif result.intent == "instruction":
                 try:
-                    topic = result.suggested_topic or entry.text
+                    topic = entry.text
                     action_queue.enqueue_actions(
                         conn, source_research_id=None, raw_items=[topic]
                     )

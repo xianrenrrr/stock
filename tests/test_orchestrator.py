@@ -634,9 +634,10 @@ def test_job_learn_from_feedback_routes_intents(
     ).fetchall()
     assert any("TER" in row[0] for row in reply_rows)
 
-    # Instruction routed to action_queue
+    # Instruction routed to action_queue with the original boss text, not the
+    # classifier's lossy suggested_topic.
     rows = mock_conn.execute(
-        "SELECT topic FROM action_queue WHERE topic LIKE 'shorter%'"
+        "SELECT topic FROM action_queue WHERE topic = 'Make notes shorter'"
     ).fetchall()
     assert len(rows) == 1
 
