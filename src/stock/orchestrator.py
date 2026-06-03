@@ -12,6 +12,7 @@ import openai
 import yaml
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 from pydantic import BaseModel
 
 from stock import (
@@ -1472,16 +1473,20 @@ def create_scheduler() -> BlockingScheduler:
         name="Email latest daily action report",
     )
 
-    # Sync every minute so dashboard replies are pulled + processed with ~1 min
-    # latency (was every 5 min). APScheduler skips overlapping ticks while F13 is
-    # mid-call. Doubles as keepalive on Render free tier. The sync is a cheap HTTP
-    # round-trip; LLM work only fires when a reply is actually pulled. No-op when
-    # render_sync_url is unset.
+    # Sync every 5 seconds so dashboard replies are pulled + processed near-
+    # instantly (a human can't tell it from real-time). The sync is a cheap HTTP
+    # round-trip (no LLM cost on an empty poll; LLM only fires when a reply is
+    # actually pulled), and it doubles as keepalive that stops the Render free
+    # tier from spinning down (cold-start ~30s otherwise). max_instances=1 +
+    # coalesce skip/merge ticks while a previous sync is still mid-call, so a slow
+    # Render round-trip can't pile up. No-op when render_sync_url is unset.
     scheduler.add_job(
         _job_sync_to_render,
-        CronTrigger(minute="*", timezone="UTC"),
+        IntervalTrigger(seconds=5, timezone="UTC"),
         id="sync_to_render",
         name="Push state to Render free tier + pull boss replies",
+        max_instances=1,
+        coalesce=True,
     )
 
     # Publish changed warning dashboards as research_reports so the Boss app,

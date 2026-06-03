@@ -53,7 +53,7 @@ There are 34 active APScheduler jobs in local mode.
 | `research_push_evening` | Mon-Fri 14:30 | Generate evening research note and push/sync it. | `research_reports(kind='daily')` |
 | `daily_action_email` | Mon-Fri 14:45 | Email the latest daily research/action report to `DAILY_REPORT_EMAIL_TO`. | SMTP email |
 | `learn_from_feedback` | every 5 min | Process boss replies, classify intent, queue follow-ups, apply prompt rewrites when safe. | `conversations`, `action_queue`, `prompt_rewrites` |
-| `sync_to_render` | every 1 min | Push local notes/tokens to Render and pull dashboard replies (~1 min reply latency). No-op if `RENDER_SYNC_URL` is empty. | Render sync state |
+| `sync_to_render` | every 5 sec | Push local notes/tokens to Render and pull dashboard replies (near-instant reply latency; also keeps the Render free tier warm). No-op if `RENDER_SYNC_URL` is empty. | Render sync state |
 | `warning_dashboard_publish` | every 15 min | Publish changed warning dashboard snapshots to Boss app/Render and email high-risk changes. | `research_reports(kind='warning_dashboard')`, SMTP email |
 | `broker_snapshot_import` | every 5 min | Import filled Robinhood positions from `data/robinhood_positions_snapshot.json` into local holdings. Queued orders are ignored until filled. | `holdings` |
 | `broker_positions_pull` | Mon-Fri every 30 min, 12:00-21:00 | Pull LIVE Robinhood positions via a codex/RH-MCP session (read-only `get_equity_positions`), write the snapshot, import it, and refresh daily bars for held tickers. Keeps the holdings table + warning dashboard in sync with the real account + latest prices. | `data/robinhood_positions_snapshot.json`, `holdings`, `prices` |
