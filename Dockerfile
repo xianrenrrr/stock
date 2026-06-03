@@ -4,13 +4,18 @@
 FROM python:3.12-slim AS base
 
 # OS packages: build tools for compiled deps (sqlite-vec, sentence-transformers,
-# httpx[h2], etc.), plus tzdata for cron triggers.
+# httpx[h2], etc.), plus tzdata for cron triggers. pkg-config + libcairo2-dev are
+# required to build pycairo from sdist -- it has no Linux wheel and is pulled in
+# transitively by xhtml2pdf -> svglib -> rlpycairo -> pycairo (PDF export). Without
+# them the deps layer fails with "Run-time dependency cairo found: NO".
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
         ca-certificates \
         curl \
         git \
         tzdata \
+        pkg-config \
+        libcairo2-dev \
     && rm -rf /var/lib/apt/lists/*
 
 ENV PYTHONUNBUFFERED=1 \
