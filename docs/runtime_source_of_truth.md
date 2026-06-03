@@ -43,7 +43,7 @@ Runtime LLM calls are Codex-first:
 
 ## Active Scheduled Jobs
 
-There are 34 active APScheduler jobs in local mode.
+There are 35 active APScheduler jobs in local mode.
 
 | Job id | Cadence UTC | What it actually does | Main output |
 |---|---:|---|---|
@@ -69,7 +69,8 @@ There are 34 active APScheduler jobs in local mode.
 | `smallcap_scan` | Mon-Fri 22:15 | Score curated small-cap universe. | `smallcap_candidates` |
 | `discovery_engine` | Mon-Fri 23:00 | Forward-looking candidate scoring and auto-promotion. | `discovery_candidates`, watchlist adds |
 | `backup_db` | daily 23:30 | SQLite online backup. | `data/backups/` |
-| `action_queue_runner` | daily 00:00, 12:00 | Drain pending follow-up topics into deep dives. | `research_reports(kind='deep_dive')` |
+| `action_queue_runner` | daily 00:00, 12:00 | Drain pending follow-up topics into deep dives (auto-generated follow-ups). | `research_reports(kind='deep_dive')` |
+| `action_queue_expedite` | every 5 min | Fast-track ONE user-initiated (dashboard-typed) pending item into a deep dive so boss research requests are answered in minutes, not at the 00:00/12:00 batch. The instruction path also posts an instant ack note. | `research_reports(kind='deep_dive')` |
 | `daily_self_review` | daily 06:00 | Compile operational self-review packet and run configured autopilot. | `pipeline/daily_review_YYYY-MM-DD.md` |
 | `reflect_weekly` | Sat 06:00 | Weekly prediction-rules reflection. | `data/rules/vNNN.md`, `data/rules/current.md` |
 | `health_check_weekly` | Sat 07:00 | Per-holding weekly health-check deep dive. | `research_reports(kind='health_check')` |

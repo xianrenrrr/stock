@@ -13,6 +13,7 @@ from stock.action_queue import (
     format_previous_followups,
     normalize_topic,
     pending_items,
+    pending_user_initiated,
     recent_completed,
     run_pending,
 )
@@ -178,6 +179,52 @@ def test_run_pending_marks_done(
     assert completed[0].status == "done"
     assert completed[0].deep_dive_id == int(fake_id)
     assert pending_items(mem_db) == []
+
+
+def _insert_research_row(conn: sqlite3.Connection) -> int:
+    """Insert a research_reports row and return its id (for FK references)."""
+    conn.execute(
+        "INSERT INTO research_reports (kind, topic, body, layer_focus, cost_usd, created_at)"
+        " VALUES ('deep_dive', 't', 'b', NULL, 0.0, ?)",
+        (datetime.now(timezone.utc).isoformat(),),
+    )
+    rid = int(conn.execute("SELECT last_insert_rowid()").fetchone()[0])
+    conn.commit()
+    return rid
+
+
+def test_pending_user_initiated_excludes_auto_followups(
+    mem_db: sqlite3.Connection,
+) -> None:
+    """Only source_research_id IS NULL (dashboard-typed) rows are user-initiated."""
+    src = _insert_research_row(mem_db)
+    enqueue_actions(mem_db, source_research_id=None, raw_items=["boss typed this"])
+    enqueue_actions(mem_db, source_research_id=src, raw_items=["grading follow-up"])
+
+    user = pending_user_initiated(mem_db)
+    assert [i.topic for i in user] == ["boss typed this"]
+    # The auto follow-up is still pending (it waits for the batch runner).
+    assert len(pending_items(mem_db)) == 2
+
+
+def test_run_pending_with_explicit_items_drains_only_those(
+    mem_db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The expedite path runs only the supplied user item; the follow-up stays pending."""
+    src = _insert_research_row(mem_db)
+    enqueue_actions(mem_db, source_research_id=None, raw_items=["boss topic"])
+    enqueue_actions(mem_db, source_research_id=src, raw_items=["auto topic"])
+    fake_id = _insert_research_row(mem_db)
+    monkeypatch.setattr(
+        "stock.research.generate_deep_dive",
+        lambda conn, **kw: _stub_research(research_id=int(fake_id)),
+    )
+
+    completed = run_pending(mem_db, items=pending_user_initiated(mem_db)[:1])
+
+    assert [i.topic for i in completed] == ["boss topic"]
+    # The auto follow-up was NOT drained by the expedite path.
+    assert [i.topic for i in pending_items(mem_db)] == ["auto topic"]
 
 
 def test_run_pending_cost_ceiling_requeues(

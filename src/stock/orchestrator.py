@@ -454,6 +454,32 @@ def _job_learn_from_feedback() -> None:
                     action_queue.enqueue_actions(
                         conn, source_research_id=None, raw_items=[topic]
                     )
+                    # Instant acknowledgment so the boss sees the request landed.
+                    # The action_queue_expedite job runs the deep-dive within
+                    # ~5 min and posts the real answer, instead of waiting for the
+                    # 00:00/12:00 UTC batch drain.
+                    topic_short = str(topic).strip().replace("\n", " ")[:120]
+                    ack_body = (
+                        f"已排队深度研究：{topic_short} — 结果稍后推送（约5分钟内）。\n\n"
+                        "Not financial advice."
+                    )
+                    cursor = conn.execute(
+                        "INSERT INTO research_reports"
+                        " (kind, topic, layer_focus, body, cost_usd, created_at)"
+                        " VALUES ('reply', ?, NULL, ?, 0, ?)",
+                        (topic_short, ack_body, datetime.now(timezone.utc).isoformat()),
+                    )
+                    conn.commit()
+                    ack_rid = int(cursor.lastrowid or 0) or None
+                    run_id = conversation.get_run_id(conn, inbound_id)
+                    conversation.record_outbound(
+                        entry.recipient, ack_body, conn,
+                        run_id=run_id, related_research_id=ack_rid,
+                    )
+                    logger.info(
+                        "Instruction queued + ack sent for %s: topic=%r",
+                        entry.recipient, topic_short,
+                    )
                 except Exception:
                     logger.exception(
                         "action_queue.enqueue_actions failed for instruction %s",
@@ -487,6 +513,30 @@ def _job_run_action_queue() -> None:
         logger.warning("Cost ceiling reached during action_queue run, skipping")
     except Exception:
         logger.exception("action_queue runner failed")
+    finally:
+        conn.close()
+
+
+def _job_expedite_user_action_queue() -> None:
+    """Fast-track dashboard-requested deep dives: run one user-initiated pending
+    item per tick so a boss research request is answered in ~minutes, not at the
+    00:00/12:00 UTC batch drain. Auto-generated follow-ups still wait for the
+    batch runner. One item per tick bounds the LLM load (a deep dive is slow)."""
+    conn = get_conn()
+    try:
+        pending = action_queue.pending_user_initiated(conn)
+        if not pending:
+            return
+        completed = action_queue.run_pending(conn, items=pending[:1])
+        if completed:
+            logger.info(
+                "Expedited dashboard deep-dive: %s -> research_id=%s",
+                completed[0].topic[:60], completed[0].deep_dive_id,
+            )
+    except CostCeilingError:
+        logger.warning("Cost ceiling reached during expedited drain, skipping")
+    except Exception:
+        logger.exception("Expedited action_queue drain failed")
     finally:
         conn.close()
 
@@ -1439,6 +1489,20 @@ def create_scheduler() -> BlockingScheduler:
         ),
         id="action_queue_runner",
         name="Run pending auto-queued action items",
+    )
+
+    # Fast-track dashboard-typed research requests: drain one user-initiated
+    # pending item every 5 min so the boss gets the deep-dive answer in minutes
+    # (the instruction path posts an instant ack note too). Auto-generated
+    # follow-ups still wait for action_queue_runner above. max_instances=1 +
+    # coalesce prevent overlap while a slow deep-dive is mid-run.
+    scheduler.add_job(
+        _job_expedite_user_action_queue,
+        CronTrigger(minute="*/5", timezone="UTC"),
+        id="action_queue_expedite",
+        name="Expedite dashboard-requested deep dives",
+        max_instances=1,
+        coalesce=True,
     )
 
     # Twice-daily AI-supply-chain research push on weekdays. Weekend market scans

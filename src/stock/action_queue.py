@@ -158,6 +158,19 @@ def pending_items(conn: sqlite3.Connection) -> list[ActionItem]:
     return [_row_to_item(r) for r in rows]
 
 
+def pending_user_initiated(conn: sqlite3.Connection) -> list[ActionItem]:
+    """Pending rows that came from a user dashboard message (source_research_id IS
+    NULL), oldest first. Auto-generated follow-ups (which carry a source_research_id)
+    are excluded so the expedite drain only fast-tracks what the boss typed."""
+    rows = conn.execute(
+        "SELECT id, source_research_id, raw_text, topic, status, deep_dive_id,"
+        " error, queued_at, started_at, completed_at"
+        " FROM action_queue WHERE status = 'pending' AND source_research_id IS NULL"
+        " ORDER BY queued_at ASC, id ASC"
+    ).fetchall()
+    return [_row_to_item(r) for r in rows]
+
+
 def recent_completed(
     conn: sqlite3.Connection, *, hours: int = 18
 ) -> list[ActionItem]:
@@ -220,17 +233,20 @@ def run_pending(
     conn: sqlite3.Connection,
     *,
     max_items: int = DEFAULT_RUN_LIMIT,
+    items: list[ActionItem] | None = None,
 ) -> list[ActionItem]:
     """Drain up to max_items pending rows by running them as deep-dives.
 
-    Imports `generate_deep_dive` lazily to avoid an import cycle with
-    `stock.research`.
+    If `items` is given, drain exactly those (already selected/capped by the
+    caller, e.g. the user-initiated expedite drain); otherwise use the oldest
+    pending rows up to max_items. Imports `generate_deep_dive` lazily to avoid
+    an import cycle with `stock.research`.
     """
     # Lazy import: action_queue is consumed by research.py's persist path
     from stock.research import generate_deep_dive
 
     completed: list[ActionItem] = []
-    items = pending_items(conn)[:max_items]
+    items = items if items is not None else pending_items(conn)[:max_items]
 
     for item in items:
         if item.id is None:
