@@ -1,6 +1,6 @@
 {
-  "account_number": "641749338,643103732",
-  "as_of": "2026-06-02T16:30:44Z",
+  "account_number": "641749338",
+  "as_of": "2026-06-02T21:00:35Z",
   "positions": [
     {
       "symbol": "GOOGL",
@@ -46,20 +46,8 @@
     },
     {
       "symbol": "NOK",
-      "quantity": 588,
+      "quantity": 288,
       "average_buy_price": 16.3,
-      "type": "long"
-    },
-    {
-      "symbol": "CAMT",
-      "quantity": 23,
-      "average_buy_price": 162,
-      "type": "long"
-    },
-    {
-      "symbol": "RKLB",
-      "quantity": 20,
-      "average_buy_price": 135,
       "type": "long"
     }
   ]

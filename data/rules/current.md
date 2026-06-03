@@ -32,11 +32,12 @@
 3. If that catalyst is company-specific and measurable, allow `0.56-0.61` when price action, volume, or sector also confirms.
 4. If the stock already traded after the catalyst and then closed in the bottom 25% of its range or below the open, classify as `post-catalyst fade`; cap `prob_up` at `0.50`.
 5. Fresh earnings/guidance beats worked when not yet faded or when price confirmed, such as SMTC and MRVL. Failed post-catalyst reactions worked better as fades, such as SMTC after its gap-up reversal.
+6. For post-earnings day-2 setups, model continuation separately from exhaustion using first-day reaction size, gap magnitude, close location, next-day premarket action, peer breadth, and volume; if the first-day earnings reaction was already above 8%-10% and there is no new information on day 2, cap `prob_up` at `0.52` unless same-group leader direction and volume continue to confirm.
 
 ## Sector Breadth Override
 1. For semiconductors, memory/storage, AI servers, AI infrastructure, optical networking, and data-center power names, calculate same-group breadth from the prior session.
-2. If at least 65% of same-group peers closed up and at least one sector leader or direct peer closed non-negative, do not assign `prob_up < 0.49` unless there is a fresh company-specific negative hard catalyst.
-3. When a DELL, SMCI, or NVDA-level hard catalyst is confirmed and same-group AI-infrastructure or optics breadth is supportive, do not assign `prob_up < 0.50` to AAOI, CRWV, LITE, COHR, CIEN, CORZ, or NBIS unless there is a fresh company-specific negative hard catalyst.
+2. If at least 65% of same-group peers closed up and at least one sector leader or direct peer closed non-negative, do not assign `prob_up < 0.50` to AI-infrastructure, optics, or semiconductor names unless there is a fresh company-specific negative hard catalyst.
+3. When a DELL, SMCI, NVDA, MRVL, CRDO, or COHR-level hard catalyst is confirmed and same-group AI-infrastructure or optics breadth is supportive, do not assign `prob_up < 0.50` to AAOI, CRWV, LITE, COHR, CIEN, CAMT, ACMR, AOSL, CORZ, or NBIS unless there is a fresh company-specific negative hard catalyst.
 3. A failed gap-up, bottom-quartile close, or reversal-down tag does not defeat this override by itself.
 4. To make a down call below `0.49` in a supportive-breadth tape, require at least two of:
    - Fresh company-specific negative hard catalyst.
@@ -62,7 +63,8 @@
    - If weak close or failed gap-up, use `0.45-0.49`.
    - If sector breadth is strongly supportive, use `0.49-0.53`.
 5. For extended-down stocks with no fresh negative catalyst:
-   - Do not assign `prob_up < 0.46`.
+   - Do not assign `prob_up < 0.49` when sector breadth is mixed or supportive.
+   - If intraday action recovers into the upper half of the range after a selloff, use `0.51-0.53`.
    - If close is top-quartile after a selloff, use `0.51-0.54`.
 6. Extreme extension in A-share/HK names is more fade-prone. If a stock is up more than 12% over 2-5 sessions with no same-day hard catalyst, cap any up call at `0.51`; if it also fails intraday or volume fades, prefer down `0.45-0.49`.
 

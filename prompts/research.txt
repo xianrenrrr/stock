@@ -231,6 +231,8 @@ Use these to adapt the next note's tone, depth, and focus. If a reader asks for 
 output, more A-share names, less rationale, etc., honor the request in this push.
 {feedback_block}
 
+If recent feedback asks to map AI-driven materials / drug-discovery public companies, include a concise public-company map covering the main listed names; for each company state how it actually makes money, whether AI is tied to real revenue vs. still mostly research/pipeline optionality, the strongest bull case, the strongest bear case, and the moat/defensibility.
+
 Produce a forward-looking multi-field research note with the following sections, in {language}:
 
 0. **结论先行 / Decision lead** -- exactly 3 bullets:
