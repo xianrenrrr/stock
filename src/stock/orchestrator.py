@@ -1472,12 +1472,14 @@ def create_scheduler() -> BlockingScheduler:
         name="Email latest daily action report",
     )
 
-    # Sync every 5 seconds to match the APK burst-poll cadence. APScheduler skips
-    # overlapping ticks while F13 is mid-call. Doubles as keepalive on Render free
-    # tier. No-op when render_sync_url is unset.
+    # Sync every minute so dashboard replies are pulled + processed with ~1 min
+    # latency (was every 5 min). APScheduler skips overlapping ticks while F13 is
+    # mid-call. Doubles as keepalive on Render free tier. The sync is a cheap HTTP
+    # round-trip; LLM work only fires when a reply is actually pulled. No-op when
+    # render_sync_url is unset.
     scheduler.add_job(
         _job_sync_to_render,
-        CronTrigger(minute="*/5", timezone="UTC"),
+        CronTrigger(minute="*", timezone="UTC"),
         id="sync_to_render",
         name="Push state to Render free tier + pull boss replies",
     )
