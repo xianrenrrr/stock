@@ -60,6 +60,8 @@ from stock.wechat_inbox import pull_chat_screenshots, read_feedback_entries
 logger = logging.getLogger(__name__)
 
 WATCHLIST_PATH: str = "data/watchlist.yaml"
+# Window for dropping accidental duplicate boss re-sends (same message body).
+DUP_INBOUND_WINDOW_HOURS: int = 6
 MARKET_HOURS_START: int = 14
 MARKET_HOURS_END: int = 21
 SCORE_HOUR: int = 21
@@ -398,6 +400,19 @@ def _job_learn_from_feedback() -> None:
                 logger.exception("conversation.record_inbound failed")
                 continue
             recorded_ids.append(inbound_id)
+
+            # Drop accidental re-sends: if the boss sent the same message again
+            # within the window, record it for history but skip reprocessing so
+            # we don't queue a duplicate deep-dive or generate a duplicate reply.
+            if conversation.is_duplicate_inbound(
+                conn, recipient=entry.recipient, body=entry.text,
+                exclude_id=inbound_id, hours=DUP_INBOUND_WINDOW_HOURS,
+            ):
+                logger.info(
+                    "Duplicate inbound from %s within %dh; skipping reprocess: %r",
+                    entry.recipient, DUP_INBOUND_WINDOW_HOURS, (entry.text or "")[:60],
+                )
+                continue
 
             try:
                 result = intent.classify(

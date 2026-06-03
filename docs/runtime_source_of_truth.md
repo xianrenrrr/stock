@@ -71,6 +71,12 @@ There are 35 active APScheduler jobs in local mode.
 | `backup_db` | daily 23:30 | SQLite online backup. | `data/backups/` |
 | `action_queue_runner` | daily 00:00, 12:00 | Drain pending follow-up topics into deep dives (auto-generated follow-ups). | `research_reports(kind='deep_dive')` |
 | `action_queue_expedite` | every 5 min | Fast-track ONE user-initiated (dashboard-typed) pending item into a deep dive so boss research requests are answered in minutes, not at the 00:00/12:00 batch. The instruction path also posts an instant ack note. | `research_reports(kind='deep_dive')` |
+
+Dashboard message handling: identical re-sends within 6h are de-duplicated
+(`conversation.is_duplicate_inbound`) so a repeated boss message does not queue a
+second deep-dive or generate a duplicate reply. Deep dives (`generate_deep_dive`)
+prepend live yfinance quotes for any tickers named in the request so answers cite
+current prices, not stale local bars.
 | `daily_self_review` | daily 06:00 | Compile operational self-review packet and run configured autopilot. | `pipeline/daily_review_YYYY-MM-DD.md` |
 | `reflect_weekly` | Sat 06:00 | Weekly prediction-rules reflection. | `data/rules/vNNN.md`, `data/rules/current.md` |
 | `health_check_weekly` | Sat 07:00 | Per-holding weekly health-check deep dive. | `research_reports(kind='health_check')` |

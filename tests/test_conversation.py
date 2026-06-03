@@ -9,6 +9,7 @@ from stock.conversation import (
     format_context_block,
     get_run_id,
     has_entry,
+    is_duplicate_inbound,
     recent_instruction_ids,
     recent_turns,
     record_inbound,
@@ -46,6 +47,30 @@ def test_record_inbound_inserts_row(
         (cid,),
     ).fetchone()
     assert emb[0] == 1
+
+
+def test_is_duplicate_inbound_detects_resends(
+    mem_db: sqlite3.Connection, mock_embed: None
+) -> None:
+    """A second identical inbound is flagged a duplicate; a unique one is not."""
+    first = record_inbound("boss", "map the AI drug discovery names", mem_db)
+    # Only one inbound so far -> scanning it (excluding itself) finds no prior.
+    assert is_duplicate_inbound(
+        mem_db, recipient="boss", body="map the AI drug discovery names",
+        exclude_id=first, hours=6,
+    ) is False
+
+    # Boss re-sends the same message -> now it's a duplicate of `first`.
+    second = record_inbound("boss", "map the AI drug discovery names", mem_db)
+    assert is_duplicate_inbound(
+        mem_db, recipient="boss", body="map the AI drug discovery names",
+        exclude_id=second, hours=6,
+    ) is True
+    # A different message body is never a duplicate.
+    assert is_duplicate_inbound(
+        mem_db, recipient="boss", body="something totally different",
+        exclude_id=second, hours=6,
+    ) is False
 
 
 def test_record_outbound_joins_run_id(

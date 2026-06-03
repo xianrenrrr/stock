@@ -651,7 +651,14 @@ def generate_deep_dive(
     chain_context = gather_chain_context(chain, topic=topic)
     predictions_block = _build_predictions_block_for_topic(conn, topic)
     news_block = _build_news_block_for_topic(conn, topic)
-    extra_block = (extra_context or "").strip() or "(none)"
+    # Live-data grounding: inject real-time quotes for any tickers named in the
+    # request (topic or extra context) so the deep-dive cites CURRENT prices, not
+    # stale local daily bars. Empty when no tickers are mentioned.
+    live_block = _build_live_quote_block(
+        conn, boss_reply=f"{topic}\n{extra_context or ''}"
+    )
+    extra_parts = [p for p in (live_block, (extra_context or "").strip()) if p]
+    extra_block = "\n\n".join(extra_parts) or "(none)"
 
     check_cost_ceiling(conn, settings)
 

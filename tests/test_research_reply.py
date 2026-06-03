@@ -61,3 +61,31 @@ def test_known_reply_tickers_reads_watchlist_and_holdings() -> None:
     conn.commit()
 
     assert {"CRDO", "RKLB"}.issubset(_known_reply_tickers(conn))
+
+
+def test_generate_deep_dive_injects_live_quotes(monkeypatch) -> None:
+    """Deep dives prepend live-quote grounding into the prompt's extra context."""
+    from stock import research
+    from stock.models import ChatResponse
+
+    conn: sqlite3.Connection = db.get_conn(":memory:")
+    captured: dict[str, str] = {}
+
+    def fake_core_chat(*, messages, max_tokens, conn, caller, cached_system=None):
+        captured["prompt"] = messages[0]["content"]
+        return ChatResponse(
+            content="deep dive body. Not financial advice.",
+            input_tokens=1, output_tokens=1, cost_usd=0.0, model="x",
+        )
+
+    monkeypatch.setattr(research, "_core_chat", fake_core_chat)
+    monkeypatch.setattr(
+        research, "_build_live_quote_block",
+        lambda conn, *, boss_reply: "LIVEQUOTE: NVDA last=$123.45",
+    )
+
+    report = research.generate_deep_dive(conn, topic="NVDA outlook")
+
+    assert report.kind == "deep_dive"
+    # The live-quote grounding made it into the prompt sent to the model.
+    assert "LIVEQUOTE: NVDA last=$123.45" in captured["prompt"]

@@ -177,6 +177,33 @@ def has_entry(
     return row is not None
 
 
+def is_duplicate_inbound(
+    conn: sqlite3.Connection,
+    *,
+    recipient: str,
+    body: str,
+    exclude_id: int,
+    hours: int = 6,
+) -> bool:
+    """Return True if an identical inbound message was already recorded recently.
+
+    Matches on trimmed body + recipient within the last `hours`, excluding
+    `exclude_id` (the just-recorded row). Used to drop accidental re-sends so a
+    repeated boss message does not queue a second deep-dive or duplicate reply.
+    """
+    norm = (body or "").strip()
+    if not norm:
+        return False
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+    row = conn.execute(
+        "SELECT 1 FROM conversations"
+        " WHERE recipient = ? AND direction = 'inbound' AND id != ?"
+        " AND TRIM(body) = ? AND created_at >= ? LIMIT 1",
+        (recipient, exclude_id, norm, cutoff),
+    ).fetchone()
+    return row is not None
+
+
 def recent_turns(
     conn: sqlite3.Connection,
     *,
