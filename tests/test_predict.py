@@ -164,6 +164,59 @@ def test_probability_guardrails_floor_ai_bearish_positive_breadth(
     assert "Probability floored" in adjusted.rationale
 
 
+def test_probability_guardrails_require_strong_ai_group_median(
+    mem_db: sqlite3.Connection,
+) -> None:
+    """Weakly positive AI/semis breadth is not enough to override bearish calls."""
+    for ticker, prior, latest in [
+        ("AMD", 100.0, 100.1),
+        ("AVGO", 100.0, 100.2),
+        ("MU", 100.0, 100.3),
+        ("NVDA", 100.0, 100.4),
+        ("SMCI", 100.0, 99.0),
+    ]:
+        mem_db.execute(
+            "INSERT INTO prices (ticker, ts, o, h, l, c, v)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (ticker, "2026-05-18", prior, prior, prior, prior, 1000000),
+        )
+        mem_db.execute(
+            "INSERT INTO prices (ticker, ts, o, h, l, c, v)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (ticker, "2026-05-19", latest, latest, latest, latest, 1000000),
+        )
+    mem_db.commit()
+    output = PredictionOutput(
+        direction="down",
+        prob_up=0.46,
+        expected_return_bps=-40,
+        confidence=0.7,
+        rationale="Failed candle despite an AI infrastructure narrative.",
+        key_factors=["AI infrastructure", "failed candle"],
+    )
+    features = [{
+        "catalyst_type": "analyst",
+        "sentiment": "neutral",
+        "ts": "2026-05-19T12:00:00+00:00",
+    }]
+    prices = [
+        {"ts": "2026-05-18", "c": 100.0},
+        {"ts": "2026-05-19", "c": 99.0},
+    ]
+
+    adjusted = apply_probability_guardrails(
+        "COHR",
+        output,
+        features,
+        prices,
+        as_of=datetime(2026, 5, 19, 14, 0, tzinfo=timezone.utc),
+        conn=mem_db,
+    )
+
+    assert adjusted.prob_up == pytest.approx(0.46)
+    assert "Probability floored" not in adjusted.rationale
+
+
 def test_probability_guardrails_preserve_fresh_negative_hard_catalyst(
     mem_db: sqlite3.Connection,
 ) -> None:

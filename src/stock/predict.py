@@ -30,14 +30,15 @@ DEFAULT_HORIZON_MINUTES: int = 390
 PRICE_LOOKBACK: int = 10
 AI_INFRA_BREADTH_MIN_OBSERVATIONS: int = 5
 AI_INFRA_BREADTH_THRESHOLD: float = 0.65
+AI_INFRA_MEDIAN_RETURN_THRESHOLD: float = 0.015
 AI_INFRA_BEARISH_BREADTH_FLOOR: float = 0.49
 CALIBRATION_NEUTRAL_PROB: float = 0.50
 AI_INFRA_TICKERS: set[str] = {
-    "AMAT", "AMD", "ASML", "AVGO", "COHR", "CRDO", "DELL", "ETN", "KLAC",
-    "LITE", "LRCX", "MRVL", "MTSI", "MU", "MXL", "NVDA", "SMCI", "SMTC",
-    "TSM", "VRT", "VST",
+    "AAOI", "ACMR", "AMAT", "AMD", "AOSL", "ASML", "AVGO", "CAMT", "COHR",
+    "CRDO", "DELL", "ETN", "KLAC", "LITE", "LRCX", "MRVL", "MTSI", "MU",
+    "MXL", "NVDA", "SMCI", "SMTC", "TSM", "VRT", "VST",
 }
-AI_INFRA_SECTOR_LEADERS: set[str] = {"AMD", "AVGO", "MU", "NVDA", "SMCI"}
+AI_INFRA_SECTOR_LEADERS: set[str] = {"AMD", "AVGO", "MRVL", "MU", "NVDA", "SMCI"}
 AI_INFRA_KEYWORDS: tuple[str, ...] = (
     "ai demand", "ai infrastructure", "ai hardware", "semiconductor",
     "semis", "wafer", "hbm", "memory", "gpu", "optics", "optical",
@@ -314,10 +315,22 @@ def _ai_infra_breadth_positive(conn: sqlite3.Connection) -> bool:
         return False
 
     positive_share = sum(1 for ret in returns.values() if ret > 0) / len(returns)
+    sorted_returns = sorted(returns.values())
+    midpoint = len(sorted_returns) // 2
+    if len(sorted_returns) % 2:
+        median_return = sorted_returns[midpoint]
+    else:
+        median_return = (
+            sorted_returns[midpoint - 1] + sorted_returns[midpoint]
+        ) / 2
     leader_positive = any(
-        returns.get(leader, 0.0) > 0 for leader in AI_INFRA_SECTOR_LEADERS
+        returns.get(leader, -1.0) >= 0 for leader in AI_INFRA_SECTOR_LEADERS
     )
-    return positive_share >= AI_INFRA_BREADTH_THRESHOLD and leader_positive
+    return (
+        positive_share >= AI_INFRA_BREADTH_THRESHOLD
+        and median_return > AI_INFRA_MEDIAN_RETURN_THRESHOLD
+        and leader_positive
+    )
 
 
 def _text_mentions_ai_infra(output: PredictionOutput) -> bool:
