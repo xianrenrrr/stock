@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sqlite3
 from datetime import datetime, timedelta, timezone
 
@@ -151,12 +152,23 @@ def _alert_note_items(conn: sqlite3.Connection, *, days: int) -> list[WarningIte
         items.append(WarningItem(
             severity=severity,
             category="alert",
+            ticker=_leading_ticker(title),
             title=title,
             detail=str(body or "").strip().replace("\n", " ")[:240],
             created_at=str(created_at),
             source="research_reports.alert",
         ))
     return items
+
+
+_TICKER_RE = re.compile(r"\b([A-Z]{1,5}|[0-9]{4,6}\.[A-Z]{2})\b")
+
+
+def _leading_ticker(title: str) -> str | None:
+    """Pull the ticker an alert is about (alert topics lead with the symbol,
+    e.g. 'GOOGL sell-trigger: ...', 'ACMR intraday SPIKE: ...')."""
+    m = _TICKER_RE.search(title or "")
+    return m.group(1) if m else None
 
 
 def _anomaly_items(conn: sqlite3.Connection, *, days: int) -> list[WarningItem]:
@@ -335,7 +347,25 @@ def build_warning_dashboard(
         + _ai_breadth_crash_items(conn)
     )
     items.sort(key=lambda i: (_severity_rank(i.severity), -_created_rank(i.created_at)))
-    return WarningDashboard(generated_at=generated_at, items=items[:limit])
+
+    # Collapse to ONE warning per ticker: after the sort the most severe / newest
+    # item for each ticker is first, so keep that and fold the rest into a
+    # "+N more signals" note. Market-wide (ticker-less) warnings are all kept.
+    extra: dict[str, int] = {}
+    deduped: list[WarningItem] = []
+    seen: set[str] = set()
+    for it in items:
+        if it.ticker:
+            if it.ticker in seen:
+                extra[it.ticker] = extra.get(it.ticker, 0) + 1
+                continue
+            seen.add(it.ticker)
+        deduped.append(it)
+    for it in deduped:
+        if it.ticker and extra.get(it.ticker):
+            it.detail = f"{it.detail} (+{extra[it.ticker]} more signals on {it.ticker})"
+
+    return WarningDashboard(generated_at=generated_at, items=deduped[:limit])
 
 
 def format_warning_dashboard(dashboard: WarningDashboard) -> str:

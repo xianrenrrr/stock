@@ -86,6 +86,26 @@ def test_publish_warning_dashboard_dedupes_unchanged_content(
     assert rows[0] == 1
 
 
+def test_build_warning_dashboard_dedupes_per_ticker(
+    mem_db: sqlite3.Connection,
+) -> None:
+    """Multiple warnings for the same ticker collapse to one (+N more signals)."""
+    now = datetime.now(timezone.utc).isoformat()
+    for topic in ("GOOGL sell-trigger: fraud_legal", "GOOGL sell-trigger: macro_negative",
+                  "GOOGL 异常期权"):
+        mem_db.execute(
+            "INSERT INTO research_reports (kind, topic, body, cost_usd, created_at)"
+            " VALUES ('alert', ?, 'news flag', 0, ?)",
+            (topic, now),
+        )
+    mem_db.commit()
+
+    dash = build_warning_dashboard(mem_db)
+    googl = [i for i in dash.items if i.ticker == "GOOGL"]
+    assert len(googl) == 1  # collapsed to one
+    assert "more signals" in googl[0].detail  # the rest are folded into a note
+
+
 def test_publish_warning_dashboard_updates_in_place_on_change(
     mem_db: sqlite3.Connection,
 ) -> None:
