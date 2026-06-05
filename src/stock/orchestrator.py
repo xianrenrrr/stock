@@ -378,6 +378,31 @@ def _job_scan_intraday_holding_moves() -> None:
         conn.close()
 
 
+AUTO_TRACK_MAX_TICKERS: int = 3
+
+
+def _auto_track_boss_tickers(conn: sqlite3.Connection, text: str) -> list[str]:
+    """Add tickers the boss mentions to the watchlist (idempotent, capped) so a
+    suggestion enters the predict -> score -> learn loop. Returns tickers added."""
+    from stock.research import _detect_tickers_in_text, _known_reply_tickers
+    tickers = _detect_tickers_in_text(
+        text, known_tickers=_known_reply_tickers(conn),
+    )[:AUTO_TRACK_MAX_TICKERS]
+    if not tickers:
+        return []
+    now = datetime.now(timezone.utc).isoformat()
+    added: list[str] = []
+    for t in tickers:
+        conn.execute(
+            "INSERT INTO watchlist (ticker, added_at, active) VALUES (?, ?, 1)"
+            " ON CONFLICT(ticker) DO UPDATE SET active = 1",
+            (t, now),
+        )
+        added.append(t)
+    conn.commit()
+    return added
+
+
 def _job_learn_from_feedback() -> None:
     """Classify recent inbound replies, queue follow-ups, auto-rewrite the prompt."""
     conn = get_conn()
@@ -413,6 +438,16 @@ def _job_learn_from_feedback() -> None:
                     entry.recipient, DUP_INBOUND_WINDOW_HOURS, (entry.text or "")[:60],
                 )
                 continue
+
+            # P5 boss-suggestion auto-development: any ticker the boss names enters
+            # the predict -> score -> learn loop (idempotent watchlist add), so a
+            # suggestion becomes a tracked, graded prediction over time.
+            try:
+                tracked = _auto_track_boss_tickers(conn, entry.text)
+                if tracked:
+                    logger.info("Auto-tracked boss-mentioned tickers: %s", tracked)
+            except Exception:
+                logger.exception("auto-track boss tickers failed")
 
             try:
                 result = intent.classify(

@@ -468,6 +468,13 @@ _ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("score_risk", "INTEGER"),
         ("score_composite", "REAL"),
     ],
+    # Calibration guard: a fitted model is only APPLIED when it beat raw Brier on
+    # a holdout (helps=1). brier_raw/brier_cal record the validation result.
+    "calibration": [
+        ("helps", "INTEGER DEFAULT 0"),
+        ("brier_raw", "REAL"),
+        ("brier_cal", "REAL"),
+    ],
 }
 
 

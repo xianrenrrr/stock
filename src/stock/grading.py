@@ -282,6 +282,58 @@ def _format_stats_block(stats: GradingStats) -> str:
     return "\n".join(lines)
 
 
+def _format_error_patterns(conn: sqlite3.Connection, *, hours: int) -> str:
+    """Systematic error breakdowns so the grading LLM targets MEASURED weaknesses
+    (worst direction/confidence bucket, calibration verdict, trend) -- not vibes."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+
+    def _rate(extra_sql: str, *params: object) -> tuple[int, float | None]:
+        row = conn.execute(
+            "SELECT COUNT(*), AVG(o.direction_hit) FROM predictions p"
+            " JOIN outcomes o ON p.id = o.prediction_id"
+            f" WHERE o.scored_at >= ? {extra_sql}",
+            (cutoff, *params),
+        ).fetchone()
+        n = int(row[0] or 0)
+        return n, (round(float(row[1]) * 100, 1) if n and row[1] is not None else None)
+
+    lines = ["系统性误差 / Systematic error patterns (base improvement directions on these):"]
+    for d in ("up", "down"):
+        n, h = _rate("AND p.direction = ?", d)
+        if n:
+            lines.append(f"- {d}-calls: n={n} hit={h}%")
+    for label, lo, hi in (("high>=.7", 0.7, 1.01), ("med.55-.7", 0.55, 0.7), ("low<.55", 0.0, 0.55)):
+        n, h = _rate("AND p.confidence >= ? AND p.confidence < ?", lo, hi)
+        if n:
+            lines.append(f"- conf {label}: n={n} hit={h}%")
+
+    cal = conn.execute(
+        "SELECT helps, brier_raw, brier_cal FROM calibration ORDER BY version DESC LIMIT 1"
+    ).fetchone()
+    if cal and cal[1] is not None:
+        verdict = "HELPS" if cal[0] else "DOES NOT help (raw is used)"
+        lines.append(
+            f"- calibration: {verdict} (holdout brier raw={cal[1]:.4f} cal={cal[2]:.4f})"
+        )
+
+    # Trend: most-recent half vs the prior half of the window.
+    mid = (datetime.now(timezone.utc) - timedelta(hours=hours / 2)).isoformat()
+    recent_n, recent_h = _rate("AND o.scored_at >= ?", mid)
+    prior = conn.execute(
+        "SELECT COUNT(*), AVG(o.direction_hit) FROM predictions p"
+        " JOIN outcomes o ON p.id = o.prediction_id"
+        " WHERE o.scored_at >= ? AND o.scored_at < ?",
+        (cutoff, mid),
+    ).fetchone()
+    prior_n = int(prior[0] or 0)
+    if recent_h is not None and prior_n and prior[1] is not None:
+        arrow = "improving" if recent_h > prior[1] * 100 else "declining/flat"
+        lines.append(
+            f"- trend: prior-half hit={round(prior[1]*100,1)}% -> recent-half hit={recent_h}% ({arrow})"
+        )
+    return "\n".join(lines)
+
+
 def _format_refresh_block(refreshed: PriceRefreshResult) -> str:
     """Render the price-refresh result as a one-line summary."""
     if not refreshed.tickers:
@@ -500,7 +552,10 @@ def generate_grading_note(
         now_utc=datetime.now(timezone.utc).isoformat(timespec="minutes"),
         lookback_hours=lookback_hours,
         refresh_block=_format_refresh_block(refreshed),
-        stats_block=_format_stats_block(stats),
+        stats_block=(
+            _format_stats_block(stats)
+            + "\n\n" + _format_error_patterns(conn, hours=lookback_hours)
+        ),
         outcomes_block=_format_outcomes_block(rows),
         thesis_block=thesis_block,
         current_rules=_load_current_rules(),

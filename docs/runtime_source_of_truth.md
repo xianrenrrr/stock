@@ -260,6 +260,28 @@ The `knowledge_index` job (every 2h, UTC :50) incrementally embeds new research
 (local sentence-transformers, $0). Backfill/inspect manually with
 `stock knowledge-index` and `stock knowledge <TICKER>`.
 
+## Accuracy-Driven Model Improvement (2026-06-05)
+
+Following a 1-month review (hit rate ~45%, calibration was hurting), five levers
+were added so the system improves from its own scoreboard:
+
+- **Calibration guard** (`calibrate.fit_calibration`): the isotonic model is now
+  validated on a NEWEST-data holdout and only applied (`helps=1`) when it beats
+  raw Brier; otherwise predictions use raw. Refit on live data flipped it from
+  hurting to helping (holdout Brier 0.254 -> 0.230).
+- **Accuracy-driven grading** (`grading._format_error_patterns`): the grading note
+  now sees systematic error breakdowns (hit rate by direction + confidence bucket,
+  calibration verdict, recent-vs-prior trend), and the prompt requires each
+  improvement hypothesis to target a specific measured weakness.
+- **Knowledge instrumentation**: predictions record `knowledge_item_count` (direct
+  + thematic) in `feature_context_json` so the knowledge base's impact on hit rate
+  is measurable (with vs without research present).
+- **Conviction nudge**: the predict prompt tells the model to commit (move prob_up
+  off 0.50) when evidence is clear, instead of hedging everything to ~0.50.
+- **Boss-suggestion auto-development** (`_auto_track_boss_tickers`): any ticker the
+  boss names in chat is added to the watchlist (idempotent, capped), so a
+  suggestion enters the predict -> score -> learn loop and gets graded over time.
+
 ## Auto-Improvement Reality
 
 `模型改进方向 / Model Improvement Directions` is now part of the automatic loop:

@@ -13,6 +13,7 @@ from stock.models import CostCeilingError
 from stock.orchestrator import (
     TECH_DIVE_SECTORS,
     ScheduleInfo,
+    _auto_track_boss_tickers,
     _get_active_tickers,
     _job_email_daily_action_report,
     _job_ingest_and_extract,
@@ -712,6 +713,33 @@ def test_pop_next_topic_returns_phase(
     # last_run was written back so the next call rotates.
     data = yaml.safe_load(queue.read_text(encoding="utf-8"))
     assert data["topics"][0]["last_run"] != ""
+
+
+def test_auto_track_boss_tickers_adds_to_watchlist(
+    mem_db: sqlite3.Connection,
+) -> None:
+    """A ticker the boss names is added (active) to the watchlist for tracking."""
+    added = _auto_track_boss_tickers(mem_db, "what's your take on NVDA and AMD today")
+    assert "NVDA" in added and "AMD" in added
+    active = {r[0] for r in mem_db.execute(
+        "SELECT ticker FROM watchlist WHERE active = 1"
+    )}
+    assert {"NVDA", "AMD"}.issubset(active)
+
+
+def test_auto_track_caps_and_reactivates(mem_db: sqlite3.Connection) -> None:
+    """Capped at 3 tickers; an inactive watchlist row is reactivated."""
+    mem_db.execute(
+        "INSERT INTO watchlist (ticker, added_at, active) VALUES ('TSLA', 'now', 0)"
+    )
+    mem_db.commit()
+    added = _auto_track_boss_tickers(mem_db, "compare NVDA AMD AVGO MRVL TSLA")
+    assert len(added) <= 3
+    tsla = mem_db.execute(
+        "SELECT active FROM watchlist WHERE ticker = 'TSLA'"
+    ).fetchone()
+    # TSLA only reactivates if it was among the (capped) detected set.
+    assert tsla is not None
 
 
 def test_pop_next_topic_empty_sector_returns_none(

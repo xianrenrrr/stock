@@ -4,7 +4,18 @@ from __future__ import annotations
 import sqlite3
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from stock import alerts
+
+
+@pytest.fixture(autouse=True)
+def _stub_live_quotes(monkeypatch: pytest.MonkeyPatch) -> None:
+    """scan_all_holdings fetches LIVE yfinance quotes for the intraday-move scan,
+    which makes the news-alert tests flaky (they break on days a seeded ticker is
+    actually down). Stub it to None so only the news-driven alerts under test fire.
+    Tests that pass an explicit `provider=` are unaffected."""
+    monkeypatch.setattr("stock.alerts._live_pct_change_yfinance", lambda ticker: None)
 
 
 def _seed_holding(conn: sqlite3.Connection, ticker: str = "SMCI") -> None:

@@ -517,10 +517,11 @@ def predict_ticker(
     # analysis we generated actually informs the quantitative call. Direct ticker
     # matches PLUS semantic (thematic) matches against the current news embedding,
     # so a relevant dive that never named the ticker still surfaces.
-    from stock.knowledge import build_ticker_knowledge_block
-    knowledge_block = build_ticker_knowledge_block(
+    from stock.knowledge import format_knowledge_block, gather_knowledge
+    knowledge_items = gather_knowledge(
         conn, ticker, query_embedding=query_embedding,
     )
+    knowledge_block = format_knowledge_block(knowledge_items)
 
     user_message = user_template.format(
         ticker=ticker,
@@ -587,11 +588,16 @@ def predict_ticker(
     created_at = now.isoformat()
     due_at = compute_due_at(now, DEFAULT_HORIZON_MINUTES)
 
-    # Build context JSON for auditing
+    # Build context JSON for auditing. knowledge_item_count instruments the
+    # knowledge base for A/B: compare hit rate of predictions with vs without
+    # research present (count>0) to measure whether the research is predictive.
     feature_context = json.dumps({
         "features": features,
         "prices": prices,
         "retrieved_case_ids": retrieved_ids,
+        "knowledge_item_count": len(knowledge_items),
+        "knowledge_direct": sum(1 for k in knowledge_items if k.via == "direct"),
+        "knowledge_thematic": sum(1 for k in knowledge_items if k.via == "semantic"),
     })
 
     # Insert prediction row

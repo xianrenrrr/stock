@@ -62,24 +62,41 @@ def test_calibrate_returns_raw_when_no_model(mem_db: sqlite3.Connection) -> None
     assert result == pytest.approx(0.8)
 
 
-def test_calibrate_applies_stored_model(mem_db: sqlite3.Connection) -> None:
-    """Manually stored model is applied by calibrate()."""
-    # Fit a simple model
+def _store_model(mem_db: sqlite3.Connection, helps: int) -> IsotonicRegression:
     model = IsotonicRegression(out_of_bounds="clip", y_min=0.0, y_max=1.0)
     model.fit(np.array([0.1, 0.5, 0.9]), np.array([0.0, 0.5, 1.0]))
-    params_blob = pickle.dumps(model)
-
     mem_db.execute(
-        "INSERT INTO calibration (version, params, trained_on_ids, trained_at)"
-        " VALUES (?, ?, ?, ?)",
-        (1, params_blob, "[]", datetime.now(timezone.utc).isoformat()),
+        "INSERT INTO calibration (version, params, trained_on_ids, trained_at, helps)"
+        " VALUES (?, ?, ?, ?, ?)",
+        (1, pickle.dumps(model), "[]", datetime.now(timezone.utc).isoformat(), helps),
     )
     mem_db.commit()
+    return model
 
-    # Should apply the model, not return raw
+
+def test_calibrate_applies_helping_model(mem_db: sqlite3.Connection) -> None:
+    """A model validated as helping (helps=1) IS applied."""
+    model = _store_model(mem_db, helps=1)
     result = calibrate(0.5, mem_db)
-    expected = float(model.predict(np.array([[0.5]]))[0])
-    assert result == pytest.approx(expected)
+    assert result == pytest.approx(float(model.predict(np.array([[0.5]]))[0]))
+
+
+def test_calibrate_guard_skips_non_helping_model(mem_db: sqlite3.Connection) -> None:
+    """A model that did NOT beat raw (helps=0) is ignored -> returns raw."""
+    _store_model(mem_db, helps=0)
+    # 0.5 -> model would map to 0.5, so use a value the model would change.
+    assert calibrate(0.9, mem_db) == pytest.approx(0.9)  # unchanged = raw
+
+
+def test_fit_calibration_stores_helps_flag(mem_db: sqlite3.Connection) -> None:
+    """fit_calibration records a helps flag + holdout briers."""
+    _seed_calibration_data(mem_db, 60, raw_prob=0.7, true_rate=0.6)
+    fit_calibration(mem_db)
+    row = mem_db.execute(
+        "SELECT helps, brier_raw, brier_cal FROM calibration ORDER BY version DESC LIMIT 1"
+    ).fetchone()
+    assert row[0] in (0, 1)
+    assert row[1] is not None and row[2] is not None  # holdout briers recorded
 
 
 def test_fit_calibration_creates_version(mem_db: sqlite3.Connection) -> None:
