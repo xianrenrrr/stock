@@ -48,6 +48,8 @@ FRESH_HARD_CATALYSTS: set[str] = {
     "earnings", "guidance", "earnings_guidance", "m&a", "merger",
     "acquisition", "fda", "contract",
 }
+POST_CATALYST_EXHAUSTION_RETURN_THRESHOLD: float = 0.08
+POST_CATALYST_EXHAUSTION_CAP: float = 0.51
 
 
 class PredictionOutput(BaseModel):
@@ -257,6 +259,26 @@ def _has_fresh_negative_hard_catalyst(
     return False
 
 
+def _has_aged_positive_hard_catalyst(
+    features: list[dict[str, Any]], as_of: datetime
+) -> bool:
+    """Return true for positive hard catalysts in the day-2/day-3 decay window."""
+    for feat in features:
+        catalyst = str(feat.get("catalyst_type", "")).strip().lower()
+        if catalyst not in FRESH_HARD_CATALYSTS:
+            continue
+        sentiment = str(feat.get("sentiment", "")).strip().lower()
+        if sentiment not in {"bullish", "positive"}:
+            continue
+        ts = _parse_feature_ts(feat.get("ts"))
+        if ts is None:
+            continue
+        age = as_of - ts
+        if timedelta(hours=24) < age <= timedelta(days=3):
+            return True
+    return False
+
+
 def _has_fresh_directional_hard_catalyst(
     output: PredictionOutput, features: list[dict[str, Any]], as_of: datetime
 ) -> bool:
@@ -422,10 +444,19 @@ def apply_probability_guardrails(
     fresh_hard_catalyst = _has_fresh_hard_catalyst(features, now)
     recent_ret = _recent_return(prices, bars=2)
     negative_tape = recent_ret is not None and recent_ret < 0
+    aged_positive_hard_catalyst = _has_aged_positive_hard_catalyst(features, now)
 
     cap: float | None = None
     reason: str | None = None
-    if negative_tape and not fresh_hard_catalyst:
+    if (
+        aged_positive_hard_catalyst
+        and not fresh_hard_catalyst
+        and recent_ret is not None
+        and recent_ret > POST_CATALYST_EXHAUSTION_RETURN_THRESHOLD
+    ):
+        cap = POST_CATALYST_EXHAUSTION_CAP
+        reason = "day-2/day-3 post-catalyst exhaustion after an 8%+ two-day reaction"
+    elif negative_tape and not fresh_hard_catalyst:
         cap = 0.52
         reason = "AI/semis narrative with negative recent tape and no fresh hard catalyst"
     elif not fresh_hard_catalyst:
@@ -482,6 +513,12 @@ def predict_ticker(
     retrieved_text = format_retrieved_cases(retrieved)
     retrieved_ids = [c.prediction_id for c in retrieved]
 
+    # Knowledge base: feed our own prior deep research on this ticker (deep_dives,
+    # tech_dives, QA dives, replies, DD/health/earnings) into the prediction so the
+    # analysis we generated actually informs the quantitative call.
+    from stock.knowledge import build_ticker_knowledge_block
+    knowledge_block = build_ticker_knowledge_block(conn, ticker)
+
     user_message = user_template.format(
         ticker=ticker,
         horizon="1 trading day",
@@ -489,6 +526,7 @@ def predict_ticker(
         price_count=len(prices),
         price_history=price_history,
         retrieved_cases=retrieved_text,
+        knowledge_block=knowledge_block,
     )
 
     # Select strategy arm via Thompson sampling bandit. The arm's `name` is

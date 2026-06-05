@@ -104,6 +104,41 @@ def test_probability_guardrails_preserve_fresh_hard_catalyst() -> None:
     assert adjusted.prob_up == pytest.approx(0.64)
 
 
+def test_probability_guardrails_cap_post_catalyst_exhaustion() -> None:
+    """Day-2/day-3 hard-catalyst continuations are capped after an 8%+ rally."""
+    output = PredictionOutput(
+        direction="up",
+        prob_up=0.56,
+        expected_return_bps=70,
+        confidence=0.62,
+        rationale="Earnings beat, confirming volume, and AI infrastructure breadth.",
+        key_factors=["earnings beat", "confirming volume", "AI infrastructure"],
+    )
+    features = [{
+        "catalyst_type": "earnings",
+        "sentiment": "bullish",
+        "ts": "2026-05-17T12:00:00+00:00",
+    }]
+    prices = [
+        {"ts": "2026-05-15", "c": 100.0},
+        {"ts": "2026-05-18", "c": 106.0},
+        {"ts": "2026-05-19", "c": 109.0},
+    ]
+
+    adjusted = apply_probability_guardrails(
+        "DELL",
+        output,
+        features,
+        prices,
+        as_of=datetime(2026, 5, 19, 14, 0, tzinfo=timezone.utc),
+    )
+
+    assert adjusted.prob_up == pytest.approx(0.51)
+    assert adjusted.confidence <= 0.51
+    assert adjusted.expected_return_bps == 10
+    assert "post-catalyst exhaustion" in adjusted.rationale
+
+
 def _seed_ai_infra_peer_breadth(conn: sqlite3.Connection) -> None:
     for ticker, prior, latest in [
         ("AMD", 100.0, 108.0),
