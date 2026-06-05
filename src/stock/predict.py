@@ -513,11 +513,14 @@ def predict_ticker(
     retrieved_text = format_retrieved_cases(retrieved)
     retrieved_ids = [c.prediction_id for c in retrieved]
 
-    # Knowledge base: feed our own prior deep research on this ticker (deep_dives,
-    # tech_dives, QA dives, replies, DD/health/earnings) into the prediction so the
-    # analysis we generated actually informs the quantitative call.
+    # Knowledge base: feed our own prior deep research into the prediction so the
+    # analysis we generated actually informs the quantitative call. Direct ticker
+    # matches PLUS semantic (thematic) matches against the current news embedding,
+    # so a relevant dive that never named the ticker still surfaces.
     from stock.knowledge import build_ticker_knowledge_block
-    knowledge_block = build_ticker_knowledge_block(conn, ticker)
+    knowledge_block = build_ticker_knowledge_block(
+        conn, ticker, query_embedding=query_embedding,
+    )
 
     user_message = user_template.format(
         ticker=ticker,

@@ -74,3 +74,64 @@ def test_format_block_tags_each_item(conn: sqlite3.Connection) -> None:
 
 def test_format_block_empty() -> None:
     assert format_knowledge_block([]).startswith("(no prior deep research")
+
+
+# --- semantic retrieval (embeddings) ---------------------------------------
+
+def _fake_embed(text: str) -> list[float]:
+    """Deterministic 384-dim one-hot embedding keyed on a theme word in the text."""
+    v = [0.0] * 384
+    lower = text.lower()
+    if "powertheme" in lower:
+        v[0] = 1.0
+    elif "biotheme" in lower:
+        v[1] = 1.0
+    else:
+        v[2] = 1.0
+    return v
+
+
+def test_backfill_indexes_and_is_incremental(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from stock import knowledge
+    monkeypatch.setattr("stock.knowledge.embed", _fake_embed)
+    _add(conn, "deep_dive", "A", "powertheme content")
+    assert knowledge.backfill_knowledge(conn) == 1
+    # Second run finds nothing new to index.
+    assert knowledge.backfill_knowledge(conn) == 0
+
+
+def test_retrieve_semantic_finds_thematic_match(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from stock import knowledge
+    monkeypatch.setattr("stock.knowledge.embed", _fake_embed)
+    _add(conn, "tech_dive", "Power grid dive", "powertheme AI-DC nuclear grid")
+    _add(conn, "deep_dive", "Bio dive", "biotheme drug discovery")
+    knowledge.backfill_knowledge(conn)
+
+    power_query = [0.0] * 384
+    power_query[0] = 1.0
+    items = knowledge.retrieve_semantic(conn, power_query, k=2)
+    assert items[0].topic == "Power grid dive"
+    assert items[0].via == "semantic"
+
+
+def test_gather_combines_direct_and_thematic(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from stock import knowledge
+    monkeypatch.setattr("stock.knowledge.embed", _fake_embed)
+    # Names NVDA (direct) AND is power-themed.
+    _add(conn, "deep_dive", "NVDA direct", "NVDA powertheme rack power")
+    # Power-themed but never names NVDA (thematic only).
+    _add(conn, "tech_dive", "Power grid", "powertheme grid nuclear")
+    knowledge.backfill_knowledge(conn)
+
+    power_query = [0.0] * 384
+    power_query[0] = 1.0
+    items = knowledge.gather_knowledge(conn, "NVDA", query_embedding=power_query)
+    by_topic = {i.topic: i.via for i in items}
+    assert by_topic.get("NVDA direct") == "direct"
+    assert by_topic.get("Power grid") == "semantic"

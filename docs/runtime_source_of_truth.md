@@ -43,7 +43,7 @@ Runtime LLM calls are Codex-first:
 
 ## Active Scheduled Jobs
 
-There are 35 active APScheduler jobs in local mode.
+There are 36 active APScheduler jobs in local mode.
 
 | Job id | Cadence UTC | What it actually does | Main output |
 |---|---:|---|---|
@@ -241,14 +241,24 @@ promoted into `data/tech_trends.yaml`, `data/smallcap_universe.yaml`, and
 
 ## Knowledge Base In Predictions
 
-`predict_ticker` now injects a per-ticker KNOWLEDGE BASE into the prediction
-prompt: `stock.knowledge.build_ticker_knowledge_block` pulls our own prior deep
-research that mentions the ticker (`research_reports` of kind deep_dive / tech_dive
-/ deep_qa / reply / health_check / discovery_thesis / earnings_review /
-dd_checklist), tagged by kind and recency. This closes the loop so the analysis we
-generate actually informs the quantitative call instead of only the boss-facing
-notes. Inspect with `stock knowledge <TICKER>`. Word-boundary ticker matching
-avoids false positives (e.g. 'ON' vs 'iON').
+`predict_ticker` injects a per-ticker KNOWLEDGE BASE into the prediction prompt so
+the deep research we generate informs the quantitative call (not just the
+boss-facing notes). Two retrieval modes, combined in
+`stock.knowledge.gather_knowledge`:
+
+- **Direct**: research that names the ticker (`research_reports` of kind deep_dive
+  / tech_dive / deep_qa / reply / health_check / discovery_thesis / earnings_review
+  / dd_checklist), word-boundary matched (so 'ON' != 'iON'), tagged by kind + date.
+- **Semantic (thematic)**: research bodies are embedded into the `knowledge_embeddings`
+  vec0 table; at predict time we pull the nearest neighbours of the ticker's current
+  news embedding, so a relevant dive that never named the ticker still surfaces
+  (e.g. an AI-DC power dive informing a CEG prediction). A cosine-similarity floor
+  (`MIN_SEMANTIC_SIMILARITY=0.30`) drops weak matches so unrelated research is not
+  injected. Tagged "(thematic)" in the prompt.
+
+The `knowledge_index` job (every 2h, UTC :50) incrementally embeds new research
+(local sentence-transformers, $0). Backfill/inspect manually with
+`stock knowledge-index` and `stock knowledge <TICKER>`.
 
 ## Auto-Improvement Reality
 

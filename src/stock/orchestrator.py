@@ -556,6 +556,21 @@ def _job_expedite_user_action_queue() -> None:
         conn.close()
 
 
+def _job_index_knowledge() -> None:
+    """Embed newly-generated research into the knowledge index so predictions can
+    semantically retrieve it. Incremental + local (sentence-transformers, $0)."""
+    from stock import knowledge
+    conn = get_conn()
+    try:
+        n = knowledge.backfill_knowledge(conn)
+        if n:
+            logger.info("Knowledge index: embedded %d new research reports", n)
+    except Exception:
+        logger.exception("Knowledge index job failed")
+    finally:
+        conn.close()
+
+
 def _job_pull_feedback() -> None:
     """Snapshot each recipient's WeChat chat so the operator can record their replies."""
     try:
@@ -1520,6 +1535,17 @@ def create_scheduler() -> BlockingScheduler:
         CronTrigger(minute="*/5", timezone="UTC"),
         id="action_queue_expedite",
         name="Expedite dashboard-requested deep dives",
+        max_instances=1,
+        coalesce=True,
+    )
+
+    # Embed new research into the knowledge index every 2h so predictions can
+    # semantically retrieve recently-generated deep dives. Local + incremental.
+    scheduler.add_job(
+        _job_index_knowledge,
+        CronTrigger(minute=50, hour="*/2", timezone="UTC"),
+        id="knowledge_index",
+        name="Embed new research into the prediction knowledge base",
         max_instances=1,
         coalesce=True,
     )

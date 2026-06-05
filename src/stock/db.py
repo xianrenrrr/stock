@@ -347,6 +347,11 @@ CREATE VIRTUAL TABLE IF NOT EXISTS conversation_embeddings USING vec0(
     embedding float[384] distance_metric=cosine
 );
 
+CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_embeddings USING vec0(
+    research_id INTEGER PRIMARY KEY,
+    embedding float[384] distance_metric=cosine
+);
+
 CREATE TABLE IF NOT EXISTS recipient_tokens (
     token TEXT PRIMARY KEY,
     recipient TEXT NOT NULL,

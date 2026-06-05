@@ -2289,6 +2289,19 @@ def knowledge_cmd(
         raise typer.Exit(code=1)
 
 
+@app.command("knowledge-index")
+def knowledge_index_cmd() -> None:
+    """Embed any not-yet-indexed research into the prediction knowledge base."""
+    from stock import knowledge
+    try:
+        conn = get_conn()
+        n = knowledge.backfill_knowledge(conn)
+        typer.echo(f"Indexed {n} new research report(s) into the knowledge base.")
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
 @app.command("tech-dive")
 def tech_dive_cmd(
     topic: str = typer.Argument(..., help="What to mine, e.g. 'OCS optical circuit switch vs CPO'"),
