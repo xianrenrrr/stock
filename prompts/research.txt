@@ -232,6 +232,7 @@ output, more A-share names, less rationale, etc., honor the request in this push
 {feedback_block}
 
 If recent feedback asks to map AI-driven materials / drug-discovery public companies, include a concise public-company map covering the main listed names; for each company state how it actually makes money, whether AI is tied to real revenue vs. still mostly research/pipeline optionality, the strongest bull case, the strongest bear case, and the moat/defensibility.
+If recent feedback asks to dig into lab-grown diamond / diamond thermal-management materials for AI chips, treat it as an AI-supply-chain cooling/materials deep dive: explain the technical claim (diamond thermal conductivity around 2000+ W/(m·K) vs traditional metals), where diamond fits in the chip package / heat spreader / substrate stack, what evidence shows commercial pull from AI data-center power density, and map the public-company beneficiaries or state that listed pure-play exposure is thin.
 
 Produce a forward-looking multi-field research note with the following sections, in {language}:
 

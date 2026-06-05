@@ -32,11 +32,13 @@
 3. If that catalyst is company-specific and measurable, allow `0.56-0.61` when price action, volume, or sector also confirms.
 4. If the stock already traded after the catalyst and then closed in the bottom 25% of its range or below the open, classify as `post-catalyst fade`; cap `prob_up` at `0.50`.
 5. Fresh earnings/guidance beats worked when not yet faded or when price confirmed, such as SMTC and MRVL. Failed post-catalyst reactions worked better as fades, such as SMTC after its gap-up reversal.
-6. For post-earnings day-2 setups, model continuation separately from exhaustion using first-day reaction size, gap magnitude, close location, next-day premarket action, peer breadth, and volume; if the first-day earnings reaction was already above 8%-10% and there is no new information on day 2, cap `prob_up` at `0.52` unless same-group leader direction and volume continue to confirm.
+6. For post-earnings day-2/day-3 setups, run an exhaustion test before continuation: use first-day/two-day cumulative reaction size, gap magnitude, close location, after-close measurable updates, next-day premarket action, peer-leader direction, peer breadth, and volume; if a positive hard catalyst has already traded, the first-day/two-day cumulative reaction was above 8%, and there is no new after-close measurable update, cap `prob_up` at `0.50-0.51` even when price action or sector breadth remains constructive.
 
 ## Sector Breadth Override
 1. For semiconductors, memory/storage, AI servers, AI infrastructure, optical networking, and data-center power names, calculate same-group breadth from the prior session.
 2. If at least 65% of same-group peers closed up and at least one sector leader or direct peer closed non-negative, do not assign `prob_up < 0.50` to AI-infrastructure, optics, or semiconductor names unless there is a fresh company-specific negative hard catalyst.
+2a. For AI-infrastructure, optics, and semicap names, explicitly check same-group median return, leader return, and SOXX/SMH session percentile; when same-group median return is above `+1.5%` and the leader return is non-negative, a single failed candle, weak close, or stale-narrative concern cannot justify `prob_up < 0.49` by itself.
+2b. If the ticker has earnings or another major company event within the next 1 trading day, sector breadth can prevent an aggressive down call but cannot lift a stale/thematic up call above `0.51`; near-event single-name risk overrides broad supportive tape.
 3. When a DELL, SMCI, NVDA, MRVL, CRDO, or COHR-level hard catalyst is confirmed and same-group AI-infrastructure or optics breadth is supportive, do not assign `prob_up < 0.50` to AAOI, CRWV, LITE, COHR, CIEN, CAMT, ACMR, AOSL, CORZ, or NBIS unless there is a fresh company-specific negative hard catalyst.
 3. A failed gap-up, bottom-quartile close, or reversal-down tag does not defeat this override by itself.
 4. To make a down call below `0.49` in a supportive-breadth tape, require at least two of:
@@ -64,7 +66,9 @@
    - If sector breadth is strongly supportive, use `0.49-0.53`.
 5. For extended-down stocks with no fresh negative catalyst:
    - Do not assign `prob_up < 0.49` when sector breadth is mixed or supportive.
+   - For A-share/HK/Asia names after a 3-5 day extended-down move, do not assign `prob_up < 0.49` unless there is a fresh negative hard catalyst, a high-volume limit-down move, or a confirmed technical breakdown.
    - If intraday action recovers into the upper half of the range after a selloff, use `0.51-0.53`.
+   - For A-share/HK/Asia extended-down names that recover into the upper half of the intraday range without fresh negative hard news, use `0.51-0.53` only when turnover percentile, distance from limit-up, and same-theme limit-up count confirm rebound demand; if those features are missing or mixed, stay closer to neutral at `0.50-0.51` instead of assuming mean reversion.
    - If close is top-quartile after a selloff, use `0.51-0.54`.
 6. Extreme extension in A-share/HK names is more fade-prone. If a stock is up more than 12% over 2-5 sessions with no same-day hard catalyst, cap any up call at `0.51`; if it also fails intraday or volume fades, prefer down `0.45-0.49`.
 

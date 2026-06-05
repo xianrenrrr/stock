@@ -28,6 +28,7 @@ companies:
   name: 沪电股份 WUS PCB
   priority: 1
   enabled: true
+  last_run: 2026-06-03T09:15
 - ticker: 688072.SH
   name: 拓荆科技 NAURA Tetech
   priority: 1
