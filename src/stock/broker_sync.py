@@ -54,9 +54,25 @@ def _to_float(value: object) -> float:
 
 
 def _positions_from_snapshot(raw: dict[str, Any]) -> list[dict[str, Any]]:
-    """Accept both direct snapshots and MCP tool response payloads."""
+    """Accept flat snapshots, MCP tool payloads, and the multi-account format.
+
+    The multi-account shape is `{"accounts": [{"account_number", "positions": [...]}]}`;
+    we flatten it and tag each position with its own account_number so per-account
+    bookkeeping survives the merge.
+    """
     if isinstance(raw.get("positions"), list):
         return raw["positions"]
+    accounts = raw.get("accounts")
+    if isinstance(accounts, list):
+        flat: list[dict[str, Any]] = []
+        for acct in accounts:
+            if not isinstance(acct, dict):
+                continue
+            acct_no = acct.get("account_number")
+            for pos in acct.get("positions") or []:
+                if isinstance(pos, dict):
+                    flat.append({**pos, "account_number": pos.get("account_number") or acct_no})
+        return flat
     data = raw.get("data")
     if isinstance(data, dict) and isinstance(data.get("positions"), list):
         return data["positions"]
@@ -91,12 +107,22 @@ def import_snapshot(
     snapshot: dict[str, Any],
     *,
     path: str = "",
+    deactivate_missing: bool = True,
 ) -> BrokerSyncResult:
-    """Sync non-zero filled positions from a Robinhood snapshot into holdings."""
-    account = _account_number(snapshot)
+    """Sync non-zero filled positions from a Robinhood snapshot into holdings.
+
+    deactivate_missing controls whether holdings absent from the snapshot are
+    marked inactive (i.e. treated as sold). The AUTOMATED pull passes False
+    because the Robinhood MCP is unreliable in headless sessions -- an empty or
+    partial snapshot must NEVER wipe real holdings. Even when True, deactivation
+    only happens within accounts that actually returned at least one position
+    (an account with zero returned positions is treated as "could not read",
+    not "sold everything").
+    """
+    default_account = _account_number(snapshot)
     as_of = str(snapshot.get("as_of") or datetime.now(timezone.utc).isoformat())
-    result = BrokerSyncResult(path=path, account_number=account, as_of=as_of)
-    seen: set[str] = set()
+    result = BrokerSyncResult(path=path, account_number=default_account, as_of=as_of)
+    seen_by_account: dict[str, set[str]] = {}
 
     for pos in _positions_from_snapshot(snapshot):
         if not isinstance(pos, dict):
@@ -108,6 +134,7 @@ def import_snapshot(
             result.skipped_empty += 1
             continue
 
+        acct = str(pos.get("account_number") or default_account or "").strip() or None
         cost_basis = _to_float(
             pos.get("average_buy_price")
             or pos.get("average_cost")
@@ -118,23 +145,24 @@ def import_snapshot(
             ticker=ticker,
             qty=qty,
             cost_basis=cost_basis,
-            notes=_broker_note(account, as_of, ptype),
+            notes=_broker_note(acct, as_of, ptype),
         )
-        seen.add(ticker)
+        if acct:
+            seen_by_account.setdefault(acct, set()).add(ticker)
         result.upserted += 1
 
-    # Only deactivate rows previously created from this same broker account.
-    # Manual holdings and YAML-managed holdings are intentionally untouched.
-    if account:
-        like = f"{BROKER_TAG}%account={account}%"
-        rows = conn.execute(
-            "SELECT ticker FROM holdings WHERE active = 1 AND notes LIKE ?",
-            (like,),
-        ).fetchall()
-        for row in rows:
-            ticker = str(row[0]).upper()
-            if ticker not in seen:
-                if holdings.remove_holding(conn, ticker):
+    # Deactivate sold positions ONLY within accounts that returned at least one
+    # position, and only when explicitly requested. Never wipe on an empty pull.
+    if deactivate_missing:
+        for acct, seen in seen_by_account.items():
+            like = f"{BROKER_TAG}%account={acct}%"
+            rows = conn.execute(
+                "SELECT ticker FROM holdings WHERE active = 1 AND notes LIKE ?",
+                (like,),
+            ).fetchall()
+            for row in rows:
+                ticker = str(row[0]).upper()
+                if ticker not in seen and holdings.remove_holding(conn, ticker):
                     result.deactivated += 1
 
     return result
@@ -143,6 +171,8 @@ def import_snapshot(
 def import_snapshot_file(
     conn: sqlite3.Connection,
     path: str | Path = DEFAULT_SNAPSHOT_PATH,
+    *,
+    deactivate_missing: bool = True,
 ) -> BrokerSyncResult:
     """Import a snapshot file if present; missing files are a quiet no-op."""
     snapshot_path = Path(path)
@@ -151,7 +181,9 @@ def import_snapshot_file(
     raw = json.loads(snapshot_path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
         raise ValueError(f"broker snapshot must be a JSON object: {snapshot_path}")
-    return import_snapshot(conn, raw, path=str(snapshot_path))
+    return import_snapshot(
+        conn, raw, path=str(snapshot_path), deactivate_missing=deactivate_missing,
+    )
 
 
 # --- Robinhood positions PULL bridge (read-only) ---------------------------
@@ -166,19 +198,21 @@ class BrokerPullError(RuntimeError):
 
 
 def build_positions_pull_instruction() -> str:
-    """Read-only codex/RH-MCP instruction: fetch current positions as a snapshot."""
+    """Read-only codex/RH-MCP instruction: fetch positions for EVERY account."""
     return (
-        "Using the robinhood-trading MCP, fetch the operator's CURRENT open "
-        "equity positions. Call `get_accounts` to get the account_number if "
-        "needed, then `get_equity_positions`. Output ONLY a JSON object in "
-        "EXACTLY this shape (numbers as numbers, not strings):\n"
-        '{"account_number": "<acct>", "as_of": "<iso8601 utc>", '
-        '"positions": [ {"symbol": "AAPL", "quantity": 10, '
-        '"average_buy_price": 150.0, "type": "long"} ... ]}\n\n'
+        "You MUST actually invoke the robinhood-trading MCP tools (do NOT return "
+        "an empty result without calling them). Steps: (1) call `get_accounts` "
+        "and capture EVERY account_number. (2) For EACH account_number, call "
+        "`get_equity_positions` with that account_number. (3) If any tool errors "
+        "or the MCP is unavailable, report it in `errors`.\n"
+        "Output ONLY a JSON object in EXACTLY this shape (numbers as numbers):\n"
+        '{"as_of": "<iso8601 utc>", "accounts": [ {"account_number": "<acct>", '
+        '"type": "<margin|cash>", "positions": [ {"symbol": "AAPL", '
+        '"quantity": 10, "average_buy_price": 150.0} ... ]} ], "errors": []}\n'
+        "Include every open position with a non-zero quantity.\n\n"
         "ABSOLUTE SAFETY RULES: this is READ-ONLY. Do NOT call "
         "place_equity_order or cancel_equity_order. Do NOT place, modify, or "
-        "cancel any order. Only read positions. Include every open position with "
-        "a non-zero quantity."
+        "cancel any order. Only read positions."
     )
 
 
@@ -236,15 +270,26 @@ def pull_positions_via_codex(
             payload = json.loads(raw_text) if raw_text else None
         except json.JSONDecodeError as exc:
             raise BrokerPullError(f"codex returned non-JSON positions: {exc}") from exc
-        if not isinstance(payload, dict) or "positions" not in payload:
-            raise BrokerPullError("codex output missing a 'positions' list")
+        if not isinstance(payload, dict):
+            raise BrokerPullError("codex output is not a JSON object")
+
+        # Flatten across formats (flat positions OR multi-account) to count.
+        positions = _positions_from_snapshot(payload)
+        errors = payload.get("errors") or []
+        # CRITICAL: if the MCP returned nothing usable, SKIP -- never write an
+        # empty snapshot (a flaky/unauthenticated RH MCP returning 0 positions
+        # must not be mistaken for "sold everything" and wipe real holdings).
+        if not positions:
+            detail = "; ".join(str(e) for e in errors) or "no positions returned"
+            raise BrokerPullError(f"RH MCP returned no positions ({detail})")
 
         sp = Path(snapshot_path)
         sp.parent.mkdir(parents=True, exist_ok=True)
         sp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        accounts = payload.get("accounts")
         return {
-            "count": len(payload.get("positions") or []),
-            "account_number": payload.get("account_number"),
+            "count": len(positions),
+            "accounts": len(accounts) if isinstance(accounts, list) else 1,
             "written_to": str(sp),
             "raw": payload,
         }

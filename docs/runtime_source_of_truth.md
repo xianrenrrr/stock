@@ -188,6 +188,24 @@ tools, so the runtime bridge is file based:
 Queued/pending buy orders are not counted as holdings until Robinhood reports a
 filled non-zero position.
 
+**Pull reliability (2026-06-04):** the robinhood-trading MCP is interactively
+authenticated and is often UNAVAILABLE in headless `codex exec`, so the auto-pull
+returns empty/partial unpredictably. Two safeguards: (1) `pull_positions_via_codex`
+raises `BrokerPullError` (skips, writes no snapshot) when it gets zero positions or
+an MCP-unavailable error; (2) all AUTOMATED imports are UPSERT-ONLY
+(`deactivate_missing=False`) -- they never deactivate holdings, because a flaky
+empty/partial pull must not be mistaken for "sold everything" and wipe real
+positions. Sold positions are removed manually (`stock holding remove <TICKER>`)
+or via an explicit `stock broker import-snapshot` of a trusted full snapshot
+(which keeps `deactivate_missing=True`). The pull also now reads ALL accounts
+(`{"accounts":[...]}` multi-account format).
+
+**Warning dashboard de-noise (2026-06-04):** warnings render only in the top
+warning panel. `publish_warning_dashboard` updates a SINGLE
+`research_reports(kind='warning_dashboard')` row in place (was inserting a new row
+every 15 min), and `/channel/api/notes` excludes `kind='warning_dashboard'` from
+the feed, so the boss app no longer shows a wall of duplicate warning notes.
+
 ### Holdings source of truth (2026-06-02)
 
 Live Robinhood is now the SOLE source of truth for holdings. `data/holdings.yaml`

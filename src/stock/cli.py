@@ -1061,7 +1061,9 @@ def broker_pull_cmd() -> None:
     try:
         conn = get_conn()
         pull = broker_sync.pull_positions_via_codex()
-        result = broker_sync.import_snapshot_file(conn)
+        # Upsert-only: the RH MCP is unreliable in headless mode, so a pull never
+        # deactivates holdings (use `stock holding remove` for sold positions).
+        result = broker_sync.import_snapshot_file(conn, deactivate_missing=False)
         refreshed = 0
         for h in holdings.list_holdings(conn, active_only=True):
             try:

@@ -255,13 +255,18 @@ def get_notes(
     limit: int = Query(default=DEFAULT_NOTES_LIMIT, ge=1, le=200),
     auth: tuple[str, str | None, sqlite3.Connection] = Depends(_require_recipient),
 ) -> NotesListResponse:
-    """Return recent research notes (daily + deep-dive) sorted newest first."""
+    """Return recent research notes (daily + deep-dive) sorted newest first.
+
+    Excludes kind='warning_dashboard': those warnings already render in the
+    dedicated top warning panel (/channel/api/warnings), so including them in the
+    feed produced a wall of near-duplicate notes every 15 minutes.
+    """
     _recipient, _last_seen, conn = auth
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     rows = conn.execute(
         "SELECT id, kind, topic, layer_focus, body, created_at"
         " FROM research_reports"
-        " WHERE created_at >= ?"
+        " WHERE created_at >= ? AND kind != 'warning_dashboard'"
         " ORDER BY created_at DESC, id DESC LIMIT ?",
         (cutoff, limit),
     ).fetchall()

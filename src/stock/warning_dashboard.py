@@ -403,12 +403,27 @@ def publish_warning_dashboard(
         )
 
     now = datetime.now(timezone.utc).isoformat()
-    cursor = conn.execute(
-        "INSERT INTO research_reports"
-        " (kind, topic, layer_focus, body, cost_usd, created_at)"
-        " VALUES ('warning_dashboard', 'Warning dashboard', 'risk', ?, 0, ?)",
-        (body, now),
-    )
+    # Update the single existing warning_dashboard row in place instead of
+    # inserting a new one every time the warning set changes -- otherwise the
+    # table (and the synced feed) accumulates dozens of near-duplicate rows.
+    existing = conn.execute(
+        "SELECT id FROM research_reports WHERE kind = 'warning_dashboard'"
+        " ORDER BY id DESC LIMIT 1",
+    ).fetchone()
+    if existing:
+        research_id = int(existing[0])
+        conn.execute(
+            "UPDATE research_reports SET body = ?, created_at = ? WHERE id = ?",
+            (body, now, research_id),
+        )
+    else:
+        cursor = conn.execute(
+            "INSERT INTO research_reports"
+            " (kind, topic, layer_focus, body, cost_usd, created_at)"
+            " VALUES ('warning_dashboard', 'Warning dashboard', 'risk', ?, 0, ?)",
+            (body, now),
+        )
+        research_id = int(cursor.lastrowid or 0)
     conn.execute(
         "INSERT INTO cloud_sync_state (key, value, updated_at)"
         " VALUES (?, ?, ?)"
@@ -418,7 +433,7 @@ def publish_warning_dashboard(
     )
     conn.commit()
     return WarningPublishResult(
-        research_id=int(cursor.lastrowid or 0),
+        research_id=research_id,
         high_count=high_count,
         medium_count=medium_count,
         changed=True,

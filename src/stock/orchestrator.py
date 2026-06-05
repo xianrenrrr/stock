@@ -1296,7 +1296,11 @@ def _job_import_broker_snapshot() -> None:
     """Import filled broker positions from the local Robinhood snapshot bridge."""
     conn = get_conn()
     try:
-        result = broker_sync.import_snapshot_file(conn)
+        # Upsert-only: never let an automated import deactivate holdings. The
+        # snapshot may be partial/stale; wiping real positions is unacceptable.
+        # Sold positions are removed manually (`stock holding remove`) or via the
+        # explicit `stock broker import-snapshot` of a trusted full snapshot.
+        result = broker_sync.import_snapshot_file(conn, deactivate_missing=False)
         if result.missing:
             return
         if result.upserted or result.deactivated:
@@ -1330,7 +1334,7 @@ def _job_pull_broker_positions() -> None:
         except broker_sync.BrokerPullError as exc:
             logger.warning("Broker positions pull skipped: %s", exc)
             return
-        imp = broker_sync.import_snapshot_file(conn)
+        imp = broker_sync.import_snapshot_file(conn, deactivate_missing=False)
         # Refresh latest daily bars for held tickers so the warning is current.
         refreshed = 0
         for h in holdings.list_holdings(conn, active_only=True):

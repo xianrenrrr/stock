@@ -84,3 +84,34 @@ def test_publish_warning_dashboard_dedupes_unchanged_content(
         "SELECT COUNT(*) FROM research_reports WHERE kind = 'warning_dashboard'"
     ).fetchone()
     assert rows[0] == 1
+
+
+def test_publish_warning_dashboard_updates_in_place_on_change(
+    mem_db: sqlite3.Connection,
+) -> None:
+    """Changed warning content updates the SAME row -- never accumulates dupes."""
+    now = datetime.now(timezone.utc).isoformat()
+    mem_db.execute(
+        "INSERT INTO research_reports (kind, topic, body, cost_usd, created_at)"
+        " VALUES ('alert', 'AMBA drop -20%', 'moved', 0, ?)",
+        (now,),
+    )
+    mem_db.commit()
+    first = publish_warning_dashboard(mem_db)
+
+    # New warning content arrives -> digest changes -> publish again.
+    mem_db.execute(
+        "INSERT INTO research_reports (kind, topic, body, cost_usd, created_at)"
+        " VALUES ('alert', 'SMCI sell-trigger: fraud_legal', 'flag', 0, ?)",
+        (datetime.now(timezone.utc).isoformat(),),
+    )
+    mem_db.commit()
+    second = publish_warning_dashboard(mem_db)
+
+    assert second.changed is True
+    # Same row reused, not a second warning_dashboard row.
+    assert second.research_id == first.research_id
+    count = mem_db.execute(
+        "SELECT COUNT(*) FROM research_reports WHERE kind = 'warning_dashboard'"
+    ).fetchone()[0]
+    assert count == 1
