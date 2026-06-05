@@ -15,6 +15,9 @@ Predict the price direction of {ticker} over the next {horizon}.
 ## Retrieved cases (similar past predictions and outcomes)
 {retrieved_cases}
 
+## 知识库 / Knowledge base (our own prior deep research on this ticker)
+{knowledge_block}
+
 Based on the above information, make your prediction.
 
 Return ONLY a JSON object with exactly these fields:

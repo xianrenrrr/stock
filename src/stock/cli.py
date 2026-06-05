@@ -2264,6 +2264,31 @@ def daily_zh_cmd() -> None:
         raise typer.Exit(code=1)
 
 
+@app.command("knowledge")
+def knowledge_cmd(
+    ticker: Annotated[str, typer.Argument(help="Ticker to show the knowledge base for")],
+    days: int = typer.Option(60, help="Lookback window in days"),
+    limit: int = typer.Option(8, help="Max research items to show"),
+) -> None:
+    """Show the per-ticker knowledge base (deep research) that feeds predictions."""
+    from stock import knowledge
+    try:
+        conn = get_conn()
+        items = knowledge.gather_ticker_knowledge(
+            conn, ticker, days=days, max_items=limit,
+        )
+        if not items:
+            typer.echo(f"No prior deep research found for {ticker.upper()}.")
+            return
+        typer.echo(f"{ticker.upper()} knowledge base ({len(items)} items feeding predictions):\n")
+        for it in items:
+            typer.echo(f"[{it.tag} | {it.created_at[:10]}] {it.topic}")
+            typer.echo(f"  research_id={it.research_id}")
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
 @app.command("tech-dive")
 def tech_dive_cmd(
     topic: str = typer.Argument(..., help="What to mine, e.g. 'OCS optical circuit switch vs CPO'"),

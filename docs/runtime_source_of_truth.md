@@ -239,6 +239,17 @@ promoted into `data/tech_trends.yaml`, `data/smallcap_universe.yaml`, and
 | DD checklist | Manual plus weekly company queue | `python -m stock.cli dd-checklist <TICKER>` | One company is scheduled weekly through `company_dd_dive`. |
 | WeChat GUI inbox pull | Manual only | `python -m stock.cli pull-feedback` | Scheduled GUI control was removed to avoid laptop takeover behavior. |
 
+## Knowledge Base In Predictions
+
+`predict_ticker` now injects a per-ticker KNOWLEDGE BASE into the prediction
+prompt: `stock.knowledge.build_ticker_knowledge_block` pulls our own prior deep
+research that mentions the ticker (`research_reports` of kind deep_dive / tech_dive
+/ deep_qa / reply / health_check / discovery_thesis / earnings_review /
+dd_checklist), tagged by kind and recency. This closes the loop so the analysis we
+generate actually informs the quantitative call instead of only the boss-facing
+notes. Inspect with `stock knowledge <TICKER>`. Word-boundary ticker matching
+avoids false positives (e.g. 'ON' vs 'iON').
+
 ## Auto-Improvement Reality
 
 `模型改进方向 / Model Improvement Directions` is now part of the automatic loop:
