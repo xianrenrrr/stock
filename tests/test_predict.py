@@ -104,6 +104,42 @@ def test_probability_guardrails_preserve_fresh_hard_catalyst() -> None:
     assert adjusted.prob_up == pytest.approx(0.64)
 
 
+def test_probability_guardrails_cap_stale_thematic_upcall_without_confirmation() -> None:
+    """Stale/thematic up-calls without fresh catalysts are capped at neutral."""
+    output = PredictionOutput(
+        direction="up",
+        prob_up=0.54,
+        expected_return_bps=40,
+        confidence=0.58,
+        rationale="Short-term price action is confirming up on a repeated theme.",
+        key_factors=["confirming up", "stale narrative"],
+    )
+    features = [{
+        "catalyst_type": "theme",
+        "novelty": "repeated",
+        "summary": "Repeated sector narrative without new company-specific news.",
+        "ts": "2026-05-19T12:00:00+00:00",
+    }]
+    prices = [
+        {"ts": "2026-05-15", "c": 100.0, "v": 1000},
+        {"ts": "2026-05-18", "c": 101.0, "v": 1000},
+        {"ts": "2026-05-19", "c": 102.0, "v": 1050},
+    ]
+
+    adjusted = apply_probability_guardrails(
+        "AAPL",
+        output,
+        features,
+        prices,
+        as_of=datetime(2026, 5, 19, 14, 0, tzinfo=timezone.utc),
+    )
+
+    assert adjusted.prob_up == pytest.approx(0.50)
+    assert adjusted.confidence <= 0.50
+    assert adjusted.expected_return_bps == 0
+    assert "stale/thematic" in adjusted.rationale
+
+
 def test_probability_guardrails_cap_post_catalyst_exhaustion() -> None:
     """Day-2/day-3 hard-catalyst continuations are capped after an 8%+ rally."""
     output = PredictionOutput(
@@ -250,6 +286,45 @@ def test_probability_guardrails_require_strong_ai_group_median(
 
     assert adjusted.prob_up == pytest.approx(0.46)
     assert "Probability floored" not in adjusted.rationale
+
+
+def test_probability_guardrails_allow_stale_ai_upcall_with_breadth_and_volume(
+    mem_db: sqlite3.Connection,
+) -> None:
+    """Supportive AI breadth plus confirming volume exempts stale up-calls."""
+    _seed_ai_infra_peer_breadth(mem_db)
+    output = PredictionOutput(
+        direction="up",
+        prob_up=0.54,
+        expected_return_bps=40,
+        confidence=0.58,
+        rationale="AI infrastructure tape is confirming up despite stale news.",
+        key_factors=["AI infrastructure", "confirming volume"],
+    )
+    features = [{
+        "catalyst_type": "theme",
+        "novelty": "stale",
+        "summary": "Repeated AI infrastructure sector narrative.",
+        "ts": "2026-05-19T12:00:00+00:00",
+    }]
+    prices = [
+        {"ts": "2026-05-14", "c": 99.0, "v": 1000},
+        {"ts": "2026-05-15", "c": 100.0, "v": 1000},
+        {"ts": "2026-05-18", "c": 101.0, "v": 1000},
+        {"ts": "2026-05-19", "c": 102.0, "v": 1600},
+    ]
+
+    adjusted = apply_probability_guardrails(
+        "MU",
+        output,
+        features,
+        prices,
+        as_of=datetime(2026, 5, 19, 14, 0, tzinfo=timezone.utc),
+        conn=mem_db,
+    )
+
+    assert adjusted.prob_up == pytest.approx(0.54)
+    assert "stale/thematic" not in adjusted.rationale
 
 
 def test_probability_guardrails_preserve_fresh_negative_hard_catalyst(

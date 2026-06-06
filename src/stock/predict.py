@@ -50,6 +50,8 @@ FRESH_HARD_CATALYSTS: set[str] = {
 }
 POST_CATALYST_EXHAUSTION_RETURN_THRESHOLD: float = 0.08
 POST_CATALYST_EXHAUSTION_CAP: float = 0.51
+STALE_UPCALL_CAP: float = 0.50
+CONFIRMING_VOLUME_MULTIPLE: float = 1.2
 
 
 class PredictionOutput(BaseModel):
@@ -362,6 +364,38 @@ def _text_mentions_ai_infra(output: PredictionOutput) -> bool:
     return any(keyword in text for keyword in AI_INFRA_KEYWORDS)
 
 
+def _has_stale_or_thematic_news(features: list[dict[str, Any]]) -> bool:
+    for feat in features:
+        novelty = str(feat.get("novelty", "")).strip().lower()
+        catalyst = str(feat.get("catalyst_type", "")).strip().lower()
+        summary = str(feat.get("summary", "")).strip().lower()
+        if novelty in {"low", "stale", "repeated", "thematic"}:
+            return True
+        if catalyst in {"theme", "thematic", "analyst", "sector"} and any(
+            word in summary for word in ("repeat", "theme", "sector", "narrative")
+        ):
+            return True
+    return False
+
+
+def _has_confirming_volume(prices: list[dict[str, Any]]) -> bool:
+    if len(prices) < 3:
+        return False
+    latest = prices[-1]
+    prior = prices[-2]
+    try:
+        latest_volume = float(latest["v"])
+        prior_volumes = [float(bar["v"]) for bar in prices[-6:-1]]
+        latest_close = float(latest["c"])
+        prior_close = float(prior["c"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    if not prior_volumes or latest_close <= prior_close:
+        return False
+    avg_prior_volume = sum(prior_volumes) / len(prior_volumes)
+    return avg_prior_volume > 0 and latest_volume >= avg_prior_volume * CONFIRMING_VOLUME_MULTIPLE
+
+
 def _preserve_supported_calibration_direction(
     ticker: str,
     output: PredictionOutput,
@@ -413,10 +447,41 @@ def apply_probability_guardrails(
     calls into the 0.55-0.64 range when tape is already rolling over.
     """
     ticker_upper = ticker.upper()
-    if ticker_upper not in AI_INFRA_TICKERS and not _text_mentions_ai_infra(output):
+    now = as_of or datetime.now(timezone.utc)
+    ai_infra_context = ticker_upper in AI_INFRA_TICKERS or _text_mentions_ai_infra(output)
+    fresh_hard_catalyst = _has_fresh_hard_catalyst(features, now)
+
+    if (
+        output.direction == "up"
+        and output.prob_up > STALE_UPCALL_CAP
+        and not fresh_hard_catalyst
+        and _has_stale_or_thematic_news(features)
+    ):
+        supported_exception = (
+            ai_infra_context
+            and conn is not None
+            and _ai_infra_breadth_positive(conn)
+            and _has_confirming_volume(prices)
+        )
+        if not supported_exception:
+            logger.info(
+                "stale up-call cap for %s: %.2f -> %.2f",
+                ticker_upper, output.prob_up, STALE_UPCALL_CAP,
+            )
+            output.prob_up = STALE_UPCALL_CAP
+            output.confidence = min(output.confidence, STALE_UPCALL_CAP)
+            output.expected_return_bps = min(output.expected_return_bps, 0)
+            output.rationale = (
+                output.rationale.rstrip()
+                + " Probability capped because the bullish setup is stale/thematic "
+                "with no fresh hard catalyst and lacks both supportive breadth and "
+                "confirming volume."
+            )
+            return output
+
+    if not ai_infra_context:
         return output
 
-    now = as_of or datetime.now(timezone.utc)
     if (
         output.direction == "down"
         and output.prob_up < AI_INFRA_BEARISH_BREADTH_FLOOR
@@ -441,7 +506,6 @@ def apply_probability_guardrails(
     if output.direction != "up":
         return output
 
-    fresh_hard_catalyst = _has_fresh_hard_catalyst(features, now)
     recent_ret = _recent_return(prices, bars=2)
     negative_tape = recent_ret is not None and recent_ret < 0
     aged_positive_hard_catalyst = _has_aged_positive_hard_catalyst(features, now)
