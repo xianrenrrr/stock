@@ -42,6 +42,8 @@ KNOWLEDGE_KINDS: dict[str, str] = {
     "discovery_thesis": "Discovery thesis",
     "earnings_review": "Earnings review",
     "dd_checklist": "DD checklist",
+    "macro": "US macro",
+    "daily": "Daily note",
 }
 
 DEFAULT_DAYS: int = 60

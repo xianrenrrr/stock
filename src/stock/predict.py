@@ -587,6 +587,10 @@ def predict_ticker(
     )
     knowledge_block = format_knowledge_block(knowledge_items)
 
+    # Shared macro regime (Fed path, jobs, liquidity) -- the tide moving all names.
+    from stock.macro import format_macro_block
+    macro_block = format_macro_block(conn)
+
     user_message = user_template.format(
         ticker=ticker,
         horizon="1 trading day",
@@ -595,6 +599,7 @@ def predict_ticker(
         price_history=price_history,
         retrieved_cases=retrieved_text,
         knowledge_block=knowledge_block,
+        macro_block=macro_block,
     )
 
     # Select strategy arm via Thompson sampling bandit. The arm's `name` is

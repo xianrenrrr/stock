@@ -239,6 +239,23 @@ promoted into `data/tech_trends.yaml`, `data/smallcap_universe.yaml`, and
 | DD checklist | Manual plus weekly company queue | `python -m stock.cli dd-checklist <TICKER>` | One company is scheduled weekly through `company_dd_dive`. |
 | WeChat GUI inbox pull | Manual only | `python -m stock.cli pull-feedback` | Scheduled GUI control was removed to avoid laptop takeover behavior. |
 
+## Daily US Macro Regime (2026-06-06)
+
+`stock.macro.generate_macro_digest` produces a daily US macro snapshot (labor,
+Fed rate path + cut/hike odds, inflation, rates/liquidity, big-cap cashflow,
+market regime, with a "NET REGIME + equity implication" line) via the
+web-search-capable core LLM. The `macro_digest` job runs Mon-Fri 01:55 + 13:55
+UTC (just before the prediction batches). `macro.format_macro_block` injects the
+latest snapshot as SHARED context into EVERY prediction (`{macro_block}` in
+prompts/predict.txt) so a single-name read can be overridden by the macro tide
+(rate path, liquidity). Persisted as `research_reports(kind='macro')`, synced to
+the dashboard feed, and indexed into the knowledge base. Inspect/generate with
+`stock macro` / `stock macro --show`.
+
+The knowledge base is now UNIFIED: `KNOWLEDGE_KINDS` includes `macro` and `daily`
+notes in addition to the deep-research kinds, so predictions retrieve from one
+store covering macro + daily notes + all deep research.
+
 ## Knowledge Base In Predictions
 
 `predict_ticker` injects a per-ticker KNOWLEDGE BASE into the prediction prompt so

@@ -2289,6 +2289,30 @@ def knowledge_cmd(
         raise typer.Exit(code=1)
 
 
+@app.command("macro")
+def macro_cmd(
+    show: bool = typer.Option(False, "--show", help="Show the latest snapshot instead of generating a new one."),
+) -> None:
+    """Generate (or --show) today's US macro regime digest fed into predictions."""
+    from stock import macro
+    try:
+        conn = get_conn()
+        if show:
+            typer.echo(macro.format_macro_block(conn))
+            return
+        rid = macro.generate_macro_digest(conn)
+        if not rid:
+            typer.echo("Macro digest produced no output.", err=True)
+            raise typer.Exit(code=1)
+        typer.echo(f"Macro digest research_id={rid}\n---")
+        typer.echo(macro.format_macro_block(conn))
+    except typer.Exit:
+        raise
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
 @app.command("knowledge-index")
 def knowledge_index_cmd() -> None:
     """Embed any not-yet-indexed research into the prediction knowledge base."""

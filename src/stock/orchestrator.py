@@ -606,6 +606,24 @@ def _job_index_knowledge() -> None:
         conn.close()
 
 
+def _job_macro_digest() -> None:
+    """Generate today's US macro regime snapshot (jobs, Fed path, rates, big-cap
+    cashflow) so every prediction + the daily note see the macro tide, not just
+    single-name signals. Runs before the prediction batches."""
+    from stock import macro
+    conn = get_conn()
+    try:
+        rid = macro.generate_macro_digest(conn)
+        if rid:
+            logger.info("Macro digest done: research_id=%s", rid)
+    except CostCeilingError:
+        logger.warning("Cost ceiling reached during macro digest, skipping")
+    except Exception:
+        logger.exception("Macro digest job failed")
+    finally:
+        conn.close()
+
+
 def _job_pull_feedback() -> None:
     """Snapshot each recipient's WeChat chat so the operator can record their replies."""
     try:
@@ -1581,6 +1599,17 @@ def create_scheduler() -> BlockingScheduler:
         CronTrigger(minute=50, hour="*/2", timezone="UTC"),
         id="knowledge_index",
         name="Embed new research into the prediction knowledge base",
+        max_instances=1,
+        coalesce=True,
+    )
+
+    # Daily US macro regime digest, twice on weekdays just before each prediction
+    # batch (02:15 / 14:15 UTC) so predictions see the latest macro tide.
+    scheduler.add_job(
+        _job_macro_digest,
+        CronTrigger(hour="1,13", minute=55, day_of_week="mon-fri", timezone="UTC"),
+        id="macro_digest",
+        name="Daily US macro regime digest (jobs, Fed path, rates, big-cap cashflow)",
         max_instances=1,
         coalesce=True,
     )

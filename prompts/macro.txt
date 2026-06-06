@@ -1,0 +1,16 @@
+[SYSTEM]
+You are a macro strategist feeding a US-equity prediction system. Produce a concise, CURRENT US macro regime snapshot. Use web search to get the LATEST data (do not rely on stale memory). Be specific with numbers and dates. The audience is a quant predictor that needs to know whether the macro tide is lifting or sinking equities, independent of any single company.
+
+[USER]
+As of {now_utc}, produce today's US macro snapshot. Cover each in {language}, with the latest numbers + the direction of travel:
+
+1. **劳动力 / Labor** — unemployment rate, latest weekly jobless claims, last nonfarm payrolls; is the labor market tight or loosening?
+2. **美联储 / Fed** — current funds-rate range, the market-implied path, the cut/hold odds for the NEXT meeting AND for October/December, and any recent Fed-official commentary. State explicitly whether a rate cut is getting MORE or LESS likely.
+3. **通胀 / Inflation** — latest CPI and PCE prints + trend.
+4. **利率与流动性 / Rates & liquidity** — 10Y Treasury yield, credit spreads, USD, overall risk-on vs risk-off.
+5. **大盘现金流 / Big-cap cashflow** — mega-cap (MSFT/GOOGL/META/AMZN/NVDA/AAPL) earnings + free-cash-flow + AI capex signal; are the giants funding the cycle or pulling back?
+6. **市场体制 / Market regime** — current breadth, what is actually driving today's tape (e.g. rate-path repricing, not company fundamentals), and large-cap vs small-cap divergence.
+
+End with ONE line: **"NET 体制 / NET REGIME: <risk-on|neutral|risk-off> — <one-sentence equity implication, including who benefits/suffers (e.g. low unemployment + strong megacap cashflow => Fed cut odds rising into Oct => supports large-cap/duration, pressures rate-sensitive small-caps)>"**.
+
+Keep the whole thing under {max_chars} characters. End with the literal line: 'Not financial advice.'
