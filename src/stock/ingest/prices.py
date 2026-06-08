@@ -8,6 +8,11 @@ import yfinance
 from stock.ingest import PriceBar
 
 
+def canonical_yfinance_ticker(ticker: str) -> str:
+    """Normalize symbols before yfinance lookup and local price storage."""
+    return ticker.strip().upper()
+
+
 def fetch_daily_prices(ticker: str, days: int = 30) -> list[PriceBar]:
     """Download daily OHLCV bars for a ticker via yfinance.
 
@@ -16,6 +21,7 @@ def fetch_daily_prices(ticker: str, days: int = 30) -> list[PriceBar]:
     close once it's settled (US session ends 20:00 UTC; data settles in
     yfinance shortly after), so set end to tomorrow.
     """
+    ticker = canonical_yfinance_ticker(ticker)
     today = datetime.now(timezone.utc)
     end_date = (today + timedelta(days=1)).strftime("%Y-%m-%d")
     start_date = (today - timedelta(days=days)).strftime("%Y-%m-%d")

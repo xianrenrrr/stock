@@ -125,8 +125,9 @@ def fetch_prices(
     dry_run: bool = False,
 ) -> IngestResult:
     """Fetch daily OHLCV bars from yfinance, insert into DB."""
-    from stock.ingest.prices import fetch_daily_prices
+    from stock.ingest.prices import canonical_yfinance_ticker, fetch_daily_prices
 
+    ticker = canonical_yfinance_ticker(ticker)
     bars = fetch_daily_prices(ticker, days)
     fetched = len(bars)
 

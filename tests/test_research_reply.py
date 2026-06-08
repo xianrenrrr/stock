@@ -29,6 +29,15 @@ def test_detect_tickers_does_not_promote_lowercase_words() -> None:
     assert found == []
 
 
+def test_detect_tickers_accepts_lowercase_known_korean_suffix() -> None:
+    """Known suffixed symbols can be matched case-insensitively."""
+    found = _detect_tickers_in_text(
+        "check 000660.ks not bare KS",
+        known_tickers={"000660.KS"},
+    )
+    assert found == ["000660.KS"]
+
+
 def test_live_quote_block_uses_known_lowercase_ticker() -> None:
     """Reply context includes quote-style data for lowercase known tickers."""
     conn: sqlite3.Connection = db.get_conn(":memory:")

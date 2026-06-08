@@ -385,9 +385,9 @@ def test_detect_tickers_filters_stopwords() -> None:
 
     text = "what's the AI play on NVDA right now? also AMD vs MU?"
     out = _detect_tickers_in_text(text)
-    # 'AI' filtered; first two real tickers retained, capped at 2
+    # 'AI' filtered; real tickers retained in order.
     assert "AI" not in out
-    assert out == ["NVDA", "AMD"]
+    assert out == ["NVDA", "AMD", "MU"]
 
 
 def test_detect_tickers_handles_a_share_suffix() -> None:
@@ -397,3 +397,11 @@ def test_detect_tickers_handles_a_share_suffix() -> None:
     out = _detect_tickers_in_text("看一下 600584.SS 和 0700.HK")
     assert "600584.SS" in out
     assert "0700.HK" in out
+
+
+def test_detect_tickers_does_not_truncate_korean_suffix() -> None:
+    """Regression: 000660.KS must not be emitted as bare KS."""
+    from stock.research import _detect_tickers_in_text
+
+    out = _detect_tickers_in_text("fix 000660.KS, MU, 2330.TW, 600584.SS")
+    assert out == ["000660.KS", "MU", "2330.TW", "600584.SS"]

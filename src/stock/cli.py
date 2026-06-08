@@ -296,14 +296,16 @@ def channel_token_revoke_cmd(
         typer.echo(traceback.format_exc(), err=True)
         raise typer.Exit(code=1)
 
-_TICKER_RE = re.compile(r"^[A-Z]{1,5}$")
+_TICKER_RE = re.compile(r"^(?:[A-Z]{1,5}|[0-9]{4,6}\.(?:SS|SZ|HK|TW|KS|KQ))$")
 
 
 def _validate_ticker(ticker: str) -> str:
     """Normalize and validate a ticker symbol."""
     ticker = ticker.upper()
     if not _TICKER_RE.match(ticker):
-        raise typer.BadParameter(f"Invalid ticker '{ticker}': must be 1-5 uppercase letters.")
+        raise typer.BadParameter(
+            f"Invalid ticker '{ticker}': must be 1-5 letters or a supported market suffix."
+        )
     return ticker
 
 

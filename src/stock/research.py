@@ -948,14 +948,15 @@ def generate_discovery_thesis(
 import re as _re_thesis  # alias to avoid shadowing module-level imports above
 
 _REPLY_TICKER_RE = _re_thesis.compile(
-    r"(?<![A-Za-z0-9])([A-Z]{2,5}|[0-9]{4,6}\.(?:SS|SZ|HK|TW))(?![A-Za-z0-9])"
+    r"(?<![A-Za-z0-9.])([0-9]{4,6}\.(?:SS|SZ|HK|TW|KS|KQ)|[A-Z]{1,5})(?![A-Za-z0-9.])"
 )
 _REPLY_TICKER_STOPWORDS: frozenset[str] = frozenset({
     "AI", "API", "AM", "PM", "USD", "CNY", "EPS", "GDP", "CEO", "CFO",
     "AND", "FOR", "THE", "PER", "ETC", "OK", "FYI", "TBD", "USA", "EU",
     "NDA", "IPO", "ETF", "OEM", "BOM", "ASP", "QOQ", "YOY",
+    "SS", "SZ", "HK", "TW", "KS", "KQ",
 })
-_REPLY_TICKER_MAX: int = 2  # cap how many fresh predictions we generate per reply
+_REPLY_TICKER_MAX: int = 4  # cap fresh predictions while covering multi-ticker fixes
 
 
 def _detect_tickers_in_text(
@@ -986,7 +987,7 @@ def _detect_tickers_in_text(
     known = {t.upper() for t in (known_tickers or set()) if t}
     if known and len(seen) < _REPLY_TICKER_MAX:
         for match in _re_thesis.finditer(
-            r"(?<![A-Za-z0-9])([A-Za-z]{2,5}|[0-9]{4,6}\.(?:ss|sz|hk|tw))(?![A-Za-z0-9])",
+            r"(?<![A-Za-z0-9.])([0-9]{4,6}\.(?:ss|sz|hk|tw|ks|kq)|[A-Za-z]{1,5})(?![A-Za-z0-9.])",
             text,
         ):
             tok = match.group(1).upper()

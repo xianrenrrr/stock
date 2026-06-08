@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 
 from stock.ingest import PriceBar, fetch_prices
-from stock.ingest.prices import fetch_daily_prices
+from stock.ingest.prices import canonical_yfinance_ticker, fetch_daily_prices
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -52,6 +52,10 @@ def test_fetch_daily_prices_returns_bars(
     assert bars[0].ticker == "AAPL"
     assert bars[0].o == 150.0
     assert bars[0].c == 154.0
+
+
+def test_canonical_yfinance_ticker_preserves_market_suffix() -> None:
+    assert canonical_yfinance_ticker(" 000660.ks ") == "000660.KS"
 
 
 @patch("stock.ingest.prices.yfinance.download")
@@ -102,6 +106,24 @@ def test_prices_written_to_db(
     result = fetch_prices("AAPL", mem_db, days=30)
     assert result.inserted == 5
     rows = mem_db.execute("SELECT COUNT(*) FROM prices WHERE ticker = 'AAPL'").fetchone()
+    assert rows[0] == 5
+
+
+@patch("stock.ingest.prices.yfinance.download")
+def test_prices_written_with_canonical_suffixed_ticker(
+    mock_download: object,
+    mem_db: sqlite3.Connection,
+    prices_dataframe_fixture: pd.DataFrame,
+) -> None:
+    """Regression: 000660.KS must be fetched/stored whole, not as KS."""
+    mock_download.return_value = prices_dataframe_fixture  # type: ignore[union-attr]
+    result = fetch_prices("000660.ks", mem_db, days=30)
+
+    assert result.ticker == "000660.KS"
+    assert mock_download.call_args.args[0] == "000660.KS"
+    rows = mem_db.execute(
+        "SELECT COUNT(*) FROM prices WHERE ticker = '000660.KS'"
+    ).fetchone()
     assert rows[0] == 5
 
 
