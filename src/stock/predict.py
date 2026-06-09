@@ -33,16 +33,23 @@ AI_INFRA_BREADTH_THRESHOLD: float = 0.65
 AI_INFRA_MEDIAN_RETURN_THRESHOLD: float = 0.015
 AI_INFRA_BEARISH_BREADTH_FLOOR: float = 0.49
 CALIBRATION_NEUTRAL_PROB: float = 0.50
+PEER_READTHROUGH_DOWNCALL_MIN: float = 0.47
+PEER_READTHROUGH_DOWNCALL_FLOOR: float = 0.50
 AI_INFRA_TICKERS: set[str] = {
     "AAOI", "ACMR", "AMAT", "AMD", "AOSL", "ASML", "AVGO", "CAMT", "COHR",
     "CRDO", "DELL", "ETN", "KLAC", "LITE", "LRCX", "MRVL", "MTSI", "MU",
     "MXL", "NVDA", "SMCI", "SMTC", "TSM", "VRT", "VST",
 }
+SEMI_MEMORY_TICKERS: set[str] = AI_INFRA_TICKERS | {"INTC", "SNDK", "WDC"}
 AI_INFRA_SECTOR_LEADERS: set[str] = {"AMD", "AVGO", "MRVL", "MU", "NVDA", "SMCI"}
 AI_INFRA_KEYWORDS: tuple[str, ...] = (
     "ai demand", "ai infrastructure", "ai hardware", "semiconductor",
     "semis", "wafer", "hbm", "memory", "gpu", "optics", "optical",
     "power", "cooling", "data center", "datacenter", "nvidia",
+)
+PEER_READTHROUGH_KEYWORDS: tuple[str, ...] = (
+    "peer read-through", "peer/sector", "read-through", "broadcom", "avgo",
+    "single peer", "sector earnings read",
 )
 FRESH_HARD_CATALYSTS: set[str] = {
     "earnings", "guidance", "earnings_guidance", "m&a", "merger",
@@ -364,6 +371,13 @@ def _text_mentions_ai_infra(output: PredictionOutput) -> bool:
     return any(keyword in text for keyword in AI_INFRA_KEYWORDS)
 
 
+def _text_mentions_peer_readthrough(output: PredictionOutput) -> bool:
+    text = " ".join(
+        [output.rationale, *[str(f) for f in output.key_factors]]
+    ).lower()
+    return any(keyword in text for keyword in PEER_READTHROUGH_KEYWORDS)
+
+
 def _has_stale_or_thematic_news(features: list[dict[str, Any]]) -> bool:
     for feat in features:
         novelty = str(feat.get("novelty", "")).strip().lower()
@@ -394,6 +408,37 @@ def _has_confirming_volume(prices: list[dict[str, Any]]) -> bool:
         return False
     avg_prior_volume = sum(prior_volumes) / len(prior_volumes)
     return avg_prior_volume > 0 and latest_volume >= avg_prior_volume * CONFIRMING_VOLUME_MULTIPLE
+
+
+def _has_confirming_down_volume(prices: list[dict[str, Any]]) -> bool:
+    if len(prices) < 3:
+        return False
+    latest = prices[-1]
+    prior = prices[-2]
+    try:
+        latest_volume = float(latest["v"])
+        prior_volumes = [float(bar["v"]) for bar in prices[-6:-1]]
+        latest_close = float(latest["c"])
+        prior_close = float(prior["c"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    if not prior_volumes or latest_close >= prior_close:
+        return False
+    avg_prior_volume = sum(prior_volumes) / len(prior_volumes)
+    return avg_prior_volume > 0 and latest_volume >= avg_prior_volume * CONFIRMING_VOLUME_MULTIPLE
+
+
+def _ai_infra_leaders_negative(conn: sqlite3.Connection) -> bool:
+    negative = 0
+    observed = 0
+    for leader in AI_INFRA_SECTOR_LEADERS:
+        ret = _latest_return_for_ticker(leader, conn)
+        if ret is None:
+            continue
+        observed += 1
+        if ret < 0:
+            negative += 1
+    return observed >= 2 and negative >= 2
 
 
 def _preserve_supported_calibration_direction(
@@ -449,6 +494,11 @@ def apply_probability_guardrails(
     ticker_upper = ticker.upper()
     now = as_of or datetime.now(timezone.utc)
     ai_infra_context = ticker_upper in AI_INFRA_TICKERS or _text_mentions_ai_infra(output)
+    semi_peer_context = (
+        ticker_upper in SEMI_MEMORY_TICKERS
+        or ai_infra_context
+        or _text_mentions_peer_readthrough(output)
+    )
     fresh_hard_catalyst = _has_fresh_hard_catalyst(features, now)
 
     if (
@@ -478,6 +528,30 @@ def apply_probability_guardrails(
                 "confirming volume."
             )
             return output
+
+    if (
+        output.direction == "down"
+        and PEER_READTHROUGH_DOWNCALL_MIN <= output.prob_up < CALIBRATION_NEUTRAL_PROB
+        and semi_peer_context
+        and _text_mentions_peer_readthrough(output)
+        and not _has_fresh_negative_hard_catalyst(features, now)
+        and not _has_confirming_down_volume(prices)
+        and not (conn is not None and _ai_infra_leaders_negative(conn))
+    ):
+        logger.info(
+            "peer read-through down-call floor for %s: %.2f -> %.2f",
+            ticker_upper, output.prob_up, PEER_READTHROUGH_DOWNCALL_FLOOR,
+        )
+        output.prob_up = PEER_READTHROUGH_DOWNCALL_FLOOR
+        output.confidence = min(output.confidence, PEER_READTHROUGH_DOWNCALL_FLOOR)
+        output.expected_return_bps = max(output.expected_return_bps, 0)
+        output.rationale = (
+            output.rationale.rstrip()
+            + " Probability floored to neutral because the down-call relies on "
+            "single-peer read-through without a fresh negative hard catalyst, "
+            "confirming downside volume, or multiple sector leaders moving down."
+        )
+        return output
 
     if not ai_infra_context:
         return output

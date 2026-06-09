@@ -235,6 +235,79 @@ def test_probability_guardrails_floor_ai_bearish_positive_breadth(
     assert "Probability floored" in adjusted.rationale
 
 
+def test_probability_guardrails_floor_peer_readthrough_downcall_without_confirmation() -> None:
+    """Low-confidence single-peer read-through down-calls are neutralized."""
+    output = PredictionOutput(
+        direction="down",
+        prob_up=0.47,
+        expected_return_bps=-30,
+        confidence=0.56,
+        rationale=(
+            "Negative peer/sector earnings read-through from Broadcom's soft "
+            "AI guidance pressures semiconductors."
+        ),
+        key_factors=["peer read-through", "Broadcom soft AI guidance"],
+    )
+    features = [{
+        "catalyst_type": "sector",
+        "sentiment": "neutral",
+        "ts": "2026-06-08T12:00:00+00:00",
+    }]
+    prices = [
+        {"ts": "2026-06-04", "c": 100.0, "v": 1000},
+        {"ts": "2026-06-05", "c": 100.5, "v": 1000},
+        {"ts": "2026-06-08", "c": 100.0, "v": 1050},
+    ]
+
+    adjusted = apply_probability_guardrails(
+        "INTC",
+        output,
+        features,
+        prices,
+        as_of=datetime(2026, 6, 8, 14, 0, tzinfo=timezone.utc),
+    )
+
+    assert adjusted.prob_up == pytest.approx(0.50)
+    assert adjusted.confidence <= 0.50
+    assert adjusted.expected_return_bps == 0
+    assert "single-peer read-through" in adjusted.rationale
+
+
+def test_probability_guardrails_preserve_peer_readthrough_with_down_volume() -> None:
+    """Confirming downside volume allows low-confidence peer-read-through down-calls."""
+    output = PredictionOutput(
+        direction="down",
+        prob_up=0.47,
+        expected_return_bps=-30,
+        confidence=0.56,
+        rationale="Negative peer read-through from Broadcom weighs on memory.",
+        key_factors=["peer read-through", "confirming volume"],
+    )
+    features = [{
+        "catalyst_type": "sector",
+        "sentiment": "neutral",
+        "ts": "2026-06-08T12:00:00+00:00",
+    }]
+    prices = [
+        {"ts": "2026-06-02", "c": 102.0, "v": 1000},
+        {"ts": "2026-06-03", "c": 101.0, "v": 1000},
+        {"ts": "2026-06-04", "c": 100.5, "v": 1000},
+        {"ts": "2026-06-05", "c": 100.0, "v": 1000},
+        {"ts": "2026-06-08", "c": 99.0, "v": 1600},
+    ]
+
+    adjusted = apply_probability_guardrails(
+        "MU",
+        output,
+        features,
+        prices,
+        as_of=datetime(2026, 6, 8, 14, 0, tzinfo=timezone.utc),
+    )
+
+    assert adjusted.prob_up == pytest.approx(0.47)
+    assert "single-peer read-through" not in adjusted.rationale
+
+
 def test_probability_guardrails_require_strong_ai_group_median(
     mem_db: sqlite3.Connection,
 ) -> None:
