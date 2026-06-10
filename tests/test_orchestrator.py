@@ -17,6 +17,7 @@ from stock.orchestrator import (
     _get_active_tickers,
     _job_email_daily_action_report,
     _job_ingest_and_extract,
+    _job_pull_broker_positions,
     _job_reflect_weekly,
     _job_run_predictions,
     _job_score_daily,
@@ -333,6 +334,31 @@ def test_job_score_daily_error_logged(
 
     # Should not raise
     _job_score_daily()
+
+
+def test_job_pull_broker_positions_deactivates_missing_on_success(
+    mock_conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A successful live broker pull is authoritative enough to clear sold holdings."""
+    import stock.orchestrator as orch
+
+    monkeypatch.setattr(
+        orch.broker_sync,
+        "pull_positions_via_codex",
+        lambda: {"count": 1, "accounts": 1},
+    )
+    import_mock = MagicMock()
+    import_mock.upserted = 1
+    import_mock.deactivated = 2
+    import_snapshot_file = MagicMock(return_value=import_mock)
+    monkeypatch.setattr(orch.broker_sync, "import_snapshot_file", import_snapshot_file)
+    monkeypatch.setattr(orch.holdings, "list_holdings", lambda c, active_only=True: [])
+    monkeypatch.setattr("stock.ingest.fetch_prices", MagicMock())
+
+    _job_pull_broker_positions()
+
+    import_snapshot_file.assert_called_once()
+    assert import_snapshot_file.call_args.kwargs == {"deactivate_missing": True}
 
 
 # -- _job_reflect_weekly tests -----------------------------------------------

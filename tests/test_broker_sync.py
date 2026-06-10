@@ -85,7 +85,7 @@ def test_import_snapshot_empty_never_deactivates(mem_db: sqlite3.Connection) -> 
 
 
 def test_import_snapshot_upsert_only_never_deactivates(mem_db: sqlite3.Connection) -> None:
-    """deactivate_missing=False (the auto-pull path) never deactivates, even with positions."""
+    """deactivate_missing=False never deactivates, even with positions."""
     add_holding(
         mem_db, ticker="SMCI", qty=10, cost_basis=46,
         notes="[broker:robinhood account=643103732] synced",
