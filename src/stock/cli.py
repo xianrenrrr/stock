@@ -407,6 +407,112 @@ def report_cmd(
         raise typer.Exit(code=1)
 
 
+@app.command("usage")
+def usage_cmd(
+    days: Annotated[int, typer.Option("--days", help="Number of days to include")] = 7,
+) -> None:
+    """LLM usage report (claude/codex calls, tokens, fallback share, top callers)."""
+    from stock.usage import format_usage_report
+
+    try:
+        conn = get_conn()
+        try:
+            typer.echo(_console_safe(format_usage_report(conn, days=days)))
+        finally:
+            conn.close()
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
+@app.command("jobs")
+def jobs_cmd(
+    days: Annotated[
+        int, typer.Option("--days", help="Failure-count window in days")
+    ] = 7,
+) -> None:
+    """Show every scheduled job: next fire, last ok run, last error."""
+    from datetime import datetime, timezone
+
+    from stock import job_runs
+    from stock.orchestrator import create_scheduler
+
+    try:
+        scheduler = create_scheduler()
+        jobs = scheduler.get_jobs()
+        if not jobs:
+            typer.echo("Scheduler has no jobs (cloud_proxy mode?).")
+            return
+        conn = get_conn()
+        try:
+            summary = job_runs.summarize(conn, days=days)
+        finally:
+            conn.close()
+        now = datetime.now(timezone.utc)
+        typer.echo(f"{len(jobs)} scheduled jobs (failure window: {days}d):\n")
+        for job in sorted(jobs, key=lambda j: j.id):
+            info = summary.get(job.id, {})
+            next_fire = job.trigger.get_next_fire_time(None, now)
+            next_s = next_fire.strftime("%a %m-%d %H:%M") if next_fire else "n/a"
+            last_ok = str(info.get("last_ok") or "never")[:16]
+            failures = int(info.get("failures_in_window") or 0)
+            flag = " !!" if failures else ""
+            line = f"  {job.id:<32} next {next_s:<15} last-ok {last_ok:<16}{flag}"
+            if failures:
+                line += f" failures={failures}"
+                last_err = str(info.get("last_error") or "")[:80]
+                if last_err:
+                    line += f" last-error: {last_err}"
+            typer.echo(_console_safe(line))
+        typer.echo(
+            "\n(`last-ok never` is expected until the orchestrator restarts with"
+            " the job_runs ledger. Run any job now with `stock trigger <job_id>`.)"
+        )
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
+@app.command("trigger")
+def trigger_cmd(
+    job_id: Annotated[str, typer.Argument(help="Scheduler job id, e.g. broker_positions_pull")],
+) -> None:
+    """Run one scheduled job RIGHT NOW (same function the scheduler calls)."""
+    import time as time_mod
+
+    from stock import job_runs
+    from stock.orchestrator import create_scheduler
+
+    try:
+        scheduler = create_scheduler()
+        job = next((j for j in scheduler.get_jobs() if j.id == job_id), None)
+        if job is None:
+            known = ", ".join(sorted(j.id for j in scheduler.get_jobs()))
+            typer.echo(f"Unknown job id '{job_id}'. Known jobs: {known}", err=True)
+            raise typer.Exit(code=1)
+        typer.echo(f"Running {job_id} ...")
+        started = time_mod.monotonic()
+        try:
+            job.func()
+            duration_ms = int((time_mod.monotonic() - started) * 1000)
+            job_runs.record_run_safe(
+                job_id, job_runs.OK, trigger="manual", duration_ms=duration_ms,
+            )
+            typer.echo(f"{job_id} finished ok in {duration_ms / 1000:.1f}s")
+        except Exception as exc:
+            duration_ms = int((time_mod.monotonic() - started) * 1000)
+            job_runs.record_run_safe(
+                job_id, job_runs.ERROR, trigger="manual",
+                duration_ms=duration_ms, error=repr(exc),
+            )
+            raise
+    except typer.Exit:
+        raise
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
 @app.command("reflect")
 def reflect_cmd(
     dry_run: Annotated[

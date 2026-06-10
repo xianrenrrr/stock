@@ -293,6 +293,62 @@ def _put_uoa_items(conn: sqlite3.Connection, *, days: int) -> list[WarningItem]:
     return items
 
 
+# Broker-sync staleness: the auto-pull skips (writes nothing) when the RH MCP
+# is unavailable in headless codex, so holdings can silently freeze. Weekday
+# threshold is ~1.5 trading days; Monday allows for the weekend pause.
+BROKER_STALE_HOURS_WEEKDAY: float = 36.0
+BROKER_STALE_HOURS_MONDAY: float = 84.0
+
+
+def _broker_sync_staleness_items(
+    conn: sqlite3.Connection, *, now: datetime | None = None
+) -> list[WarningItem]:
+    now = now or datetime.now(timezone.utc)
+    if now.weekday() >= 5:  # pull job is Mon-Fri; weekend staleness is expected
+        return []
+    row = conn.execute(
+        "SELECT MAX(updated_at) FROM holdings"
+        " WHERE active = 1 AND notes LIKE '[broker:robinhood%'",
+    ).fetchone()
+    if not row or not row[0]:
+        return []
+    try:
+        last_sync = datetime.fromisoformat(str(row[0]).replace("Z", "+00:00"))
+    except ValueError:
+        return []
+    if last_sync.tzinfo is None:
+        last_sync = last_sync.replace(tzinfo=timezone.utc)
+    age_hours = (now - last_sync).total_seconds() / 3600
+    threshold = (
+        BROKER_STALE_HOURS_MONDAY if now.weekday() == 0 else BROKER_STALE_HOURS_WEEKDAY
+    )
+    if age_hours <= threshold:
+        return []
+
+    from stock import job_runs
+
+    detail = (
+        f"Active holdings were last synced from Robinhood {age_hours:.0f}h ago"
+        f" ({str(row[0])[:16]}). P&L, stops, and alerts run on stale positions."
+    )
+    err = job_runs.last_error(conn, "broker_positions_pull")
+    if err:
+        detail += f" Last pull error ({err[1][:16]}): {err[0][:200]}"
+    else:
+        detail += (
+            " No recorded pull errors -- check the orchestrator is running and"
+            " `codex` can reach the robinhood-trading MCP, or run `stock broker pull`."
+        )
+    return [WarningItem(
+        severity="high",
+        category="data",
+        title="Robinhood holdings sync is stale",
+        detail=detail,
+        created_at=now.isoformat(),
+        source="broker_sync",
+    )]
+
+
 def _ai_breadth_crash_items(conn: sqlite3.Connection) -> list[WarningItem]:
     drops: list[tuple[str, float, str]] = []
     seen = 0
@@ -339,6 +395,7 @@ def build_warning_dashboard(
     generated_at = datetime.now(timezone.utc).isoformat()
     items = (
         _holding_risk_items(conn)
+        + _broker_sync_staleness_items(conn)
         + _alert_note_items(conn, days=days)
         + _anomaly_items(conn, days=days)
         + _ai_loop_crash_items(conn, days=days)

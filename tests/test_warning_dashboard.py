@@ -2,9 +2,78 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from stock.warning_dashboard import build_warning_dashboard, publish_warning_dashboard
+from stock import job_runs
+from stock.warning_dashboard import (
+    _broker_sync_staleness_items,
+    build_warning_dashboard,
+    publish_warning_dashboard,
+)
+
+
+def _add_broker_holding(
+    conn: sqlite3.Connection, ticker: str, updated_at: str
+) -> None:
+    conn.execute(
+        "INSERT INTO holdings"
+        " (ticker, qty, cost_basis, opened_at, notes, active, updated_at)"
+        " VALUES (?, 10, 100.0, '2026-06-01', ?, 1, ?)",
+        (ticker, "[broker:robinhood account=1] synced from Robinhood MCP"
+         " filled position snapshot", updated_at),
+    )
+    conn.commit()
+
+
+# 2026-06-09 is a Tuesday; 2026-06-08 Monday; 2026-06-06/07 the weekend.
+_TUESDAY = datetime(2026, 6, 9, 15, 0, tzinfo=timezone.utc)
+_MONDAY = datetime(2026, 6, 8, 15, 0, tzinfo=timezone.utc)
+_SATURDAY = datetime(2026, 6, 6, 15, 0, tzinfo=timezone.utc)
+
+
+def test_broker_staleness_warns_on_old_weekday_sync(
+    mem_db: sqlite3.Connection,
+) -> None:
+    _add_broker_holding(mem_db, "SMCI", (_TUESDAY - timedelta(hours=120)).isoformat())
+    job_runs.record_run(
+        mem_db, "broker_positions_pull", job_runs.ERROR,
+        error="pull skipped: RH MCP returned no positions",
+    )
+
+    items = _broker_sync_staleness_items(mem_db, now=_TUESDAY)
+
+    assert len(items) == 1
+    assert items[0].severity == "high"
+    assert "stale" in items[0].title
+    assert "RH MCP returned no positions" in items[0].detail
+
+
+def test_broker_staleness_quiet_when_fresh(mem_db: sqlite3.Connection) -> None:
+    _add_broker_holding(mem_db, "SMCI", (_TUESDAY - timedelta(hours=2)).isoformat())
+    assert _broker_sync_staleness_items(mem_db, now=_TUESDAY) == []
+
+
+def test_broker_staleness_monday_allows_weekend_gap(
+    mem_db: sqlite3.Connection,
+) -> None:
+    # Friday-evening sync is ~66h old on Monday afternoon: still fine.
+    _add_broker_holding(mem_db, "SMCI", (_MONDAY - timedelta(hours=66)).isoformat())
+    assert _broker_sync_staleness_items(mem_db, now=_MONDAY) == []
+    # But a week-old sync on Monday is not.
+    mem_db.execute("DELETE FROM holdings")
+    _add_broker_holding(mem_db, "SMCI", (_MONDAY - timedelta(hours=168)).isoformat())
+    assert len(_broker_sync_staleness_items(mem_db, now=_MONDAY)) == 1
+
+
+def test_broker_staleness_quiet_on_weekend_and_without_broker_holdings(
+    mem_db: sqlite3.Connection,
+) -> None:
+    _add_broker_holding(mem_db, "SMCI", (_SATURDAY - timedelta(hours=120)).isoformat())
+    assert _broker_sync_staleness_items(mem_db, now=_SATURDAY) == []
+
+    mem_db.execute("DELETE FROM holdings")
+    mem_db.commit()
+    assert _broker_sync_staleness_items(mem_db, now=_TUESDAY) == []
 
 
 def test_warning_dashboard_surfaces_recent_alerts(mem_db: sqlite3.Connection) -> None:

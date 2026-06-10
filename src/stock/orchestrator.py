@@ -10,6 +10,12 @@ from pathlib import Path
 import httpx
 import openai
 import yaml
+from apscheduler.events import (
+    EVENT_JOB_ERROR,
+    EVENT_JOB_EXECUTED,
+    EVENT_JOB_MISSED,
+    EVENT_JOB_SUBMITTED,
+)
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
@@ -30,6 +36,7 @@ from stock import (
     grading,
     holdings,
     intent,
+    job_runs,
     prompt_rewriter,
     self_review,
     smallcap_scanner,
@@ -801,6 +808,16 @@ def _job_backup_db() -> None:
         logger.warning("DB backup skipped: %s", exc)
     except Exception:
         logger.exception("DB backup job failed")
+    try:
+        conn = get_conn()
+        try:
+            removed = job_runs.prune(conn)
+            if removed:
+                logger.info("job_runs prune removed %d old rows", removed)
+        finally:
+            conn.close()
+    except Exception:
+        logger.exception("job_runs prune failed")
 
 
 TOPIC_QUEUE_PATH: str = "data/topic_queue.yaml"
@@ -1400,9 +1417,17 @@ def _job_pull_broker_positions() -> None:
         try:
             pull = broker_sync.pull_positions_via_codex()
         except broker_sync.BrokerPullError as exc:
+            # The skip is deliberate (a flaky pull must not wipe holdings), but
+            # it must be VISIBLE: the listener sees this job exit cleanly, so
+            # record the failure ourselves for `stock jobs` + the staleness
+            # warning. Holdings went 5 days stale unnoticed before this.
             logger.warning("Broker positions pull skipped: %s", exc)
+            job_runs.record_run(
+                conn, "broker_positions_pull", job_runs.ERROR,
+                error=f"pull skipped: {exc}",
+            )
             return
-        imp = broker_sync.import_snapshot_file(conn, deactivate_missing=False)
+        imp = broker_sync.import_snapshot_file(conn, deactivate_missing=True)
         # Refresh latest daily bars for held tickers so the warning is current.
         refreshed = 0
         for h in holdings.list_holdings(conn, active_only=True):
@@ -1870,7 +1895,48 @@ def create_scheduler() -> BlockingScheduler:
         name="Daily self-review packet + optional Codex proposals",
     )
 
+    _install_job_run_listener(scheduler)
     return scheduler
+
+
+def _install_job_run_listener(scheduler: BlockingScheduler) -> None:
+    """Record every job execution into the job_runs ledger.
+
+    APScheduler dispatches these events from worker threads, so each handler
+    opens its own short-lived connection (via record_run_safe) and must never
+    raise -- a broken ledger write must not take down the scheduler.
+    """
+    starts: dict[tuple[str, str], float] = {}
+
+    def _on_submitted(event) -> None:  # noqa: ANN001 -- apscheduler event type
+        try:
+            run_times = getattr(event, "scheduled_run_times", None) or []
+            key = (event.job_id, str(run_times[0]) if run_times else "")
+            starts[key] = time.monotonic()
+        except Exception:  # noqa: BLE001
+            logger.exception("job_runs listener: submitted handler failed")
+
+    def _on_finished(event) -> None:  # noqa: ANN001 -- apscheduler event type
+        try:
+            key = (event.job_id, str(getattr(event, "scheduled_run_time", "") or ""))
+            started = starts.pop(key, None)
+            duration_ms = (
+                int((time.monotonic() - started) * 1000) if started is not None else None
+            )
+            if event.code == EVENT_JOB_MISSED:
+                status, error = job_runs.MISSED, None
+            elif getattr(event, "exception", None) is not None:
+                status, error = job_runs.ERROR, repr(event.exception)
+            else:
+                status, error = job_runs.OK, None
+            job_runs.record_run_safe(
+                event.job_id, status, error=error, duration_ms=duration_ms,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("job_runs listener: finished handler failed")
+
+    scheduler.add_listener(_on_submitted, EVENT_JOB_SUBMITTED)
+    scheduler.add_listener(_on_finished, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR | EVENT_JOB_MISSED)
 
 
 def get_schedule_info(scheduler: BlockingScheduler) -> ScheduleInfo:

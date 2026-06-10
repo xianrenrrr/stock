@@ -1,6 +1,7 @@
 # STOCK Runtime Source Of Truth
 
-Last verified: 2026-05-31 from `src/stock/orchestrator.py:create_scheduler()`.
+Last verified: 2026-06-09 from `src/stock/orchestrator.py:create_scheduler()`
+(37 active jobs in local mode).
 
 This file is the source of truth for what runs automatically. Older roadmap
 files describe design history and may be stale.
@@ -41,9 +42,37 @@ Runtime LLM calls are Codex-first:
   Anthropic vision only as an optional fallback when `ANTHROPIC_API_KEY` is
   configured. They never call MiniMax.
 
+## Job Observability (2026-06-09)
+
+Every scheduled job execution is recorded in the `job_runs` table by an
+APScheduler listener installed in `create_scheduler()`:
+
+- `ok` rows are kept ONE per job (replaced on each success) so the 5-second
+  `sync_to_render` job cannot bloat the table; `error`/`missed` rows are
+  append-only history, pruned after 14 days by the nightly `backup_db` job.
+- `_job_pull_broker_positions` records its deliberate `BrokerPullError` skips
+  as error rows too (the exception is swallowed, so the listener alone would
+  log them as ok). Holdings previously went 5 days stale with zero trace.
+- The warning dashboard raises a HIGH "Robinhood holdings sync is stale"
+  warning when broker-synced holdings have not updated for >36h on a weekday
+  (>84h on Monday to allow the weekend pause).
+
+Operator commands:
+
+```powershell
+python -m stock.cli jobs               # every job: next fire, last ok, last error
+python -m stock.cli trigger <job_id>   # run any scheduled job right now
+python -m stock.cli usage --days 7     # LLM usage: codex/claude calls, tokens,
+                                       # fallback share, top callers by tokens
+```
+
+`stock usage` reads the `llm_calls` ledger. Codex/Claude CLI backends are
+subscription (cost_usd=0), so TOKENS are the quota signal; a rising claude_cli
+share means the codex credit/usage circuit breaker (F17c) is tripping.
+
 ## Active Scheduled Jobs
 
-There are 36 active APScheduler jobs in local mode.
+There are 37 active APScheduler jobs in local mode.
 
 | Job id | Cadence UTC | What it actually does | Main output |
 |---|---:|---|---|

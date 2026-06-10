@@ -452,6 +452,21 @@ CREATE INDEX IF NOT EXISTS idx_self_review_date
     ON self_review_proposals (review_date DESC);
 CREATE INDEX IF NOT EXISTS idx_self_review_applied
     ON self_review_proposals (applied, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS job_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id TEXT NOT NULL,
+    status TEXT NOT NULL,
+    trigger TEXT NOT NULL DEFAULT 'scheduled',
+    started_at TEXT,
+    finished_at TEXT NOT NULL,
+    duration_ms INTEGER,
+    error TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_job_runs_job
+    ON job_runs (job_id, finished_at DESC);
+CREATE INDEX IF NOT EXISTS idx_job_runs_status
+    ON job_runs (status, finished_at DESC);
 """
 
 
