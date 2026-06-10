@@ -61,7 +61,7 @@ def fit_calibration(conn: sqlite3.Connection) -> int | None:
         "SELECT p.id, p.prob_up, o.direction_hit"
         " FROM predictions p"
         " JOIN outcomes o ON p.id = o.prediction_id"
-        " ORDER BY o.scored_at DESC LIMIT ?",
+        " ORDER BY o.scored_at DESC, p.id DESC LIMIT ?",
         (CALIBRATION_WINDOW,),
     ).fetchall()
     if len(rows) < MIN_CALIBRATION_SAMPLES:
