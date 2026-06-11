@@ -433,6 +433,24 @@ def usage_cmd(
         raise typer.Exit(code=1)
 
 
+@app.command("ablation")
+def ablation_cmd(
+    days: Annotated[int, typer.Option("--days", help="Scored-prediction window")] = 45,
+) -> None:
+    """Do the context signals help? Hit rate/Brier WITH vs WITHOUT each block."""
+    from stock.ablation import compute_ablation, format_ablation
+
+    try:
+        conn = get_conn()
+        try:
+            typer.echo(_console_safe(format_ablation(compute_ablation(conn, days=days))))
+        finally:
+            conn.close()
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
 @app.command("jobs")
 def jobs_cmd(
     days: Annotated[
