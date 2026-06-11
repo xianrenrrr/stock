@@ -57,7 +57,10 @@ PRICING: dict[str, dict[str, float]] = {
 # WebSearch so the prompt can ground itself; our existing Tavily/Serper layer
 # stays available for autonomous discovery.
 CLAUDE_CLI_CORE_BIN: str = "claude"
-CLAUDE_CLI_CORE_DEFAULT_MODEL: str = "claude-opus-4-7"
+# Boss directive 2026-06-11: Claude (Fable 5) over codex everywhere. This is
+# the fallback when CORE_CLAUDE_MODEL is unset and the model used by the
+# codex->claude fallback paths. Operator override lives in .env.
+CLAUDE_CLI_CORE_DEFAULT_MODEL: str = "claude-fable-5"
 CLAUDE_CLI_CORE_TIMEOUT_SECS: int = 600
 CLAUDE_CLI_CORE_MODEL_NAME: str = "claude-code-session"  # the key in PRICING
 

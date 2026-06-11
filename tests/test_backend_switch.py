@@ -85,12 +85,26 @@ def _seed_settings(monkeypatch: pytest.MonkeyPatch, **kw: str) -> None:
     get_settings.cache_clear()
 
 
-def test_get_core_client_defaults_to_codex_cli(
+def test_get_core_client_defaults_to_claude_cli(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """No env override -> get_core_client returns CodexWithClaudeFallback (new default)."""
+    """No env override -> claude_cli + Fable 5 (boss directive 2026-06-11)."""
     monkeypatch.delenv("CORE_LLM_BACKEND", raising=False)
     _seed_settings(monkeypatch)
+    try:
+        client = get_core_client()
+        assert isinstance(client, ClaudeCliClient)
+        assert client.provider == "claude_cli"
+        assert get_core_model() == "claude-fable-5"
+    finally:
+        get_settings.cache_clear()
+
+
+def test_get_core_client_switches_to_codex_cli(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CORE_LLM_BACKEND=codex_cli -> codex with claude fallback (previous default)."""
+    _seed_settings(monkeypatch, CORE_LLM_BACKEND="codex_cli")
     try:
         client = get_core_client()
         assert isinstance(client, CodexWithClaudeFallback)
@@ -110,7 +124,7 @@ def test_get_core_client_switches_to_claude_cli(
         client = get_core_client()
         assert isinstance(client, ClaudeCliClient)
         assert client.provider == "claude_cli"
-        assert get_core_model() == "claude-opus-4-7"
+        assert get_core_model() == "claude-fable-5"
     finally:
         get_settings.cache_clear()
 
@@ -194,7 +208,7 @@ def test_get_utility_client_blank_falls_back_to_core(
         client = get_utility_client()
         # Falls back to core, which is claude_cli here -> a pure ClaudeCliClient.
         assert isinstance(client, ClaudeCliClient)
-        assert get_utility_model() == "claude-opus-4-7"  # core model, not haiku
+        assert get_utility_model() == "claude-fable-5"  # core model, not haiku
     finally:
         get_settings.cache_clear()
 

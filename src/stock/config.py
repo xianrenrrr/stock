@@ -90,13 +90,14 @@ class Settings(BaseSettings):
     # grading, deep-dive, health-check). Utility classifiers (intent,
     # prompt_rewriter, thesis, discover, features) also route through this
     # helper so small utility calls do not silently use a different provider.
-    #   "codex_cli" (default): every core call spawns `codex exec` locally,
-    #                          with claude_cli as automatic fallback on
-    #                          timeout / missing binary. $0 metered.
-    #   "claude_cli"         : every core call spawns `claude -p` locally only.
+    #   "claude_cli" (active since 2026-06-11, boss directive): every core call
+    #                          spawns `claude -p --model $CORE_CLAUDE_MODEL`.
+    #   "codex_cli"          : previous default; codex exec with claude_cli
+    #                          fallback on timeout / missing binary.
     #   "minimax"            : legacy value; ignored and routed to codex_cli.
-    core_llm_backend: str = "codex_cli"
-    core_claude_model: str = "claude-opus-4-7"
+    # The operator switch lives in .env -- these are only fallback defaults.
+    core_llm_backend: str = "claude_cli"
+    core_claude_model: str = "claude-fable-5"
     # Blank lets codex pick its own configured default (currently gpt-5.5).
     # Override in .env if you want to pin a specific codex-supported model.
     core_codex_model: str = ""
