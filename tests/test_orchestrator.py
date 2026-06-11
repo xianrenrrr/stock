@@ -143,7 +143,10 @@ def test_job_ingest_and_extract_processes_all(
     _job_ingest_and_extract()
 
     assert news_calls == ["AAPL", "NVDA"]
-    assert prices_calls == ["AAPL", "NVDA"]
+    # H0: index/sector-ETF/VIX/rates bars are pulled first (prices only).
+    from stock.market_context import INDEX_TICKERS
+
+    assert prices_calls == list(INDEX_TICKERS) + ["AAPL", "NVDA"]
     assert features_calls == ["AAPL", "NVDA"]
 
 

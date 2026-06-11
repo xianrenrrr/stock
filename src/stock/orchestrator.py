@@ -174,6 +174,15 @@ def _job_ingest_and_extract() -> None:
             return
         watchlist_set = set(_get_active_tickers(conn))
 
+        # H0 market internals: keep index/sector-ETF/VIX/10Y bars fresh so the
+        # predict prompt's market-tape block has data. Prices only, no news/LLM.
+        from stock.market_context import INDEX_TICKERS
+        for index_ticker in INDEX_TICKERS:
+            try:
+                fetch_prices(index_ticker, conn)
+            except Exception:
+                logger.exception("Index price ingest failed for %s", index_ticker)
+
         for ticker in tickers:
             try:
                 # Pull fresh news from Yahoo + RSS feeds

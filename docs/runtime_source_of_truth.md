@@ -305,6 +305,23 @@ The knowledge base is now UNIFIED: `KNOWLEDGE_KINDS` includes `macro` and `daily
 notes in addition to the deep-research kinds, so predictions retrieve from one
 store covering macro + daily notes + all deep research.
 
+## Market Tape In Predictions (Plan H phase H0, 2026-06-10)
+
+Every prediction prompt now ends with a `市场盘面 / Market tape` block built by
+`stock.market_context.build_market_context`:
+
+- **Market internals**: SPY/QQQ/SMH/SOXX/XLK/^VIX/^TNX last close + 1d/5d moves
+  from the local prices table. The `ingest_and_extract` job pulls these index
+  bars (prices only, no news/LLM) before the watchlist loop.
+- **Live quote**: yfinance fast_info at predict time with the gap vs the last
+  daily close -- the 14:15 UTC batch runs after the US open but daily bars are
+  yesterday's, so the overnight gap was previously invisible.
+- **Next earnings date**: yfinance calendar, flagged loudly when it falls
+  inside the 1-day prediction horizon.
+
+Live quote + earnings are best-effort: network failures degrade to
+"unavailable" lines and never block the prediction.
+
 ## Knowledge Base In Predictions
 
 `predict_ticker` injects a per-ticker KNOWLEDGE BASE into the prediction prompt so

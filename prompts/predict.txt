@@ -22,6 +22,9 @@ Predict the price direction of {ticker} over the next {horizon}.
 The macro regime (Fed rate path, jobs, liquidity, big-cap cashflow) can override a single-name read: in a risk-off / rising-rate tape even good news underperforms, and vice-versa. Weigh this against the ticker-specific signals above.
 {macro_block}
 
+## 盘面 / Market tape (indices, sector ETFs, VIX, rates + live quote + next earnings)
+{market_context}
+
 **Conviction:** when the news + knowledge base + cases give a clear directional read, COMMIT -- move prob_up meaningfully away from 0.50 (e.g. >=0.60 for up, <=0.40 for down). Reserve prob_up near 0.50 for genuinely ambiguous setups. Hedging every call to ~0.50 is not calibration, it is abstaining, and it carries no information.
 
 Based on the above information, make your prediction.

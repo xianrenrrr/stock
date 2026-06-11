@@ -18,6 +18,17 @@ def mem_db() -> Generator[sqlite3.Connection, None, None]:
     conn.close()
 
 
+@pytest.fixture(autouse=True)
+def _no_network_market_context(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep tests hermetic: H0 market-context live lookups never hit yfinance."""
+    monkeypatch.setattr(
+        "stock.market_context.fetch_live_quote", lambda _t: None, raising=True,
+    )
+    monkeypatch.setattr(
+        "stock.market_context.fetch_next_earnings_date", lambda _t: None, raising=True,
+    )
+
+
 @pytest.fixture()
 def env_settings(monkeypatch: pytest.MonkeyPatch) -> Generator[Settings, None, None]:
     """Return a Settings instance with test env vars, clearing lru_cache."""

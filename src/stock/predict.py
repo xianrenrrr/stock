@@ -665,6 +665,12 @@ def predict_ticker(
     from stock.macro import format_macro_block
     macro_block = format_macro_block(conn)
 
+    # H0 market tape: index/VIX/rates internals + live quote (overnight gap)
+    # + next earnings date. Live parts are best-effort and degrade to
+    # "unavailable" lines rather than failing the prediction.
+    from stock.market_context import build_market_context
+    market_context = build_market_context(ticker, conn)
+
     user_message = user_template.format(
         ticker=ticker,
         horizon="1 trading day",
@@ -674,6 +680,7 @@ def predict_ticker(
         retrieved_cases=retrieved_text,
         knowledge_block=knowledge_block,
         macro_block=macro_block,
+        market_context=market_context,
     )
 
     # Select strategy arm via Thompson sampling bandit. The arm's `name` is
