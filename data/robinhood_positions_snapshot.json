@@ -1,5 +1,93 @@
 {
-  "account_number": "",
-  "as_of": "2026-06-04T00:00:00Z",
-  "positions": []
+  "as_of": "2026-06-10T21:30:34.8332979Z",
+  "accounts": [
+    {
+      "account_number": "641749338",
+      "type": "margin",
+      "positions": [
+        {
+          "symbol": "GOOGL",
+          "quantity": 40,
+          "average_buy_price": 400.9
+        },
+        {
+          "symbol": "RXRX",
+          "quantity": 100,
+          "average_buy_price": 3
+        },
+        {
+          "symbol": "VEEV",
+          "quantity": 2,
+          "average_buy_price": 161
+        },
+        {
+          "symbol": "SDGR",
+          "quantity": 10,
+          "average_buy_price": 13.4
+        },
+        {
+          "symbol": "ACMR",
+          "quantity": 5,
+          "average_buy_price": 82.9
+        },
+        {
+          "symbol": "CRDO",
+          "quantity": 20,
+          "average_buy_price": 210
+        }
+      ]
+    },
+    {
+      "account_number": "643103732",
+      "type": "cash",
+      "positions": [
+        {
+          "symbol": "NVT",
+          "quantity": 22,
+          "average_buy_price": 160
+        },
+        {
+          "symbol": "JBL",
+          "quantity": 9,
+          "average_buy_price": 345
+        },
+        {
+          "symbol": "CAMT",
+          "quantity": 23,
+          "average_buy_price": 162
+        },
+        {
+          "symbol": "TEM",
+          "quantity": 70,
+          "average_buy_price": 48
+        },
+        {
+          "symbol": "RKLB",
+          "quantity": 20,
+          "average_buy_price": 135
+        },
+        {
+          "symbol": "VEEV",
+          "quantity": 9,
+          "average_buy_price": 168
+        },
+        {
+          "symbol": "ASTS",
+          "quantity": 12,
+          "average_buy_price": 100
+        },
+        {
+          "symbol": "AMKR",
+          "quantity": 24,
+          "average_buy_price": 66
+        },
+        {
+          "symbol": "ASX",
+          "quantity": 42,
+          "average_buy_price": 36
+        }
+      ]
+    }
+  ],
+  "errors": []
 }
