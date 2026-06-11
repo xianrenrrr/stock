@@ -186,28 +186,47 @@ def test_extract_features_stops_on_cost_ceiling(
     env_settings: Settings,
     mem_db: sqlite3.Connection,
 ) -> None:
-    """Cost ceiling stops extraction mid-batch and returns partial results."""
+    """Cost ceiling stops extraction mid-run and returns partial results.
+
+    Batched semantics: a full batch succeeds, then the ceiling hits on the
+    next chunk's single-article call -> we keep the batch's results.
+    """
+    from stock.features import BATCH_SIZE
+
     now = datetime.now(timezone.utc).isoformat()
-    for idx in range(3):
-        mem_db.execute(
+    ids: list[int] = []
+    for idx in range(BATCH_SIZE + 1):
+        cursor = mem_db.execute(
             "INSERT INTO news (ticker, source, url, title, body, ts, ingested_at)"
             " VALUES (?, ?, ?, ?, ?, ?, ?)",
             ("AAPL", "test", f"https://example.com/ceil-{idx}", f"News {idx}",
              "body", now, now),
         )
+        ids.append(int(cursor.lastrowid or 0))
     mem_db.commit()
 
-    with patch("stock.features.get_utility_client") as mock_get:
+    batch_content = json.dumps({
+        "items": [
+            {"id": i, "sentiment": "neutral", "novelty": "low",
+             "catalyst_type": "other", "time_sensitivity": "days",
+             "summary": "x"}
+            for i in ids
+        ]
+    })
+    with (
+        patch("stock.features.get_utility_client") as mock_get,
+        patch("stock.features.load_feature_batch_prompt", return_value="{articles}"),
+    ):
         mock_client = MagicMock()
         mock_get.return_value = mock_client
         mock_client.chat.side_effect = [
-            _mock_chat_response(),
+            _mock_chat_response(batch_content),
             CostCeilingError("ceiling"),
         ]
 
         results = extract_features("AAPL", mem_db)
 
-    assert len(results) == 1
+    assert len(results) == BATCH_SIZE
 
 
 def test_get_unfeatured_news_returns_correct_rows(
@@ -247,3 +266,150 @@ def test_news_features_model_validates() -> None:
     )
     assert feat.sentiment == "bullish"
     assert feat.catalyst_type == "earnings"
+
+
+# --- batched extraction (quota lever, 2026-06-10) ---------------------------
+
+
+def _insert_many_news(conn: sqlite3.Connection, count: int) -> list[int]:
+    return [_insert_news(conn, url_suffix=f"batch{i}") for i in range(count)]
+
+
+def _batch_response(ids: list[int]) -> str:
+    return json.dumps({
+        "items": [
+            {
+                "id": i,
+                "sentiment": "bullish",
+                "novelty": "low",
+                "catalyst_type": "other",
+                "time_sensitivity": "days",
+                "summary": f"item {i}",
+            }
+            for i in ids
+        ]
+    })
+
+
+@patch("stock.features.load_feature_batch_prompt", return_value="{articles}")
+def test_extract_features_batches_in_one_call(
+    _mock_prompt: MagicMock,
+    env_settings: Settings,
+    mem_db: sqlite3.Connection,
+) -> None:
+    """Five articles -> ONE chat call, all five stored."""
+    ids = _insert_many_news(mem_db, 5)
+
+    with patch("stock.features.get_utility_client") as mock_get:
+        mock_client = MagicMock()
+        mock_get.return_value = mock_client
+        mock_client.chat.return_value = _mock_chat_response(_batch_response(ids))
+
+        results = extract_features("AAPL", mem_db)
+
+    assert mock_client.chat.call_count == 1
+    assert sorted(r.news_id for r in results) == sorted(ids)
+    (count,) = mem_db.execute("SELECT COUNT(*) FROM features").fetchone()
+    assert count == 5
+
+
+@patch("stock.features.load_feature_batch_prompt", return_value="{articles}")
+def test_extract_features_chunks_by_batch_size(
+    _mock_prompt: MagicMock,
+    env_settings: Settings,
+    mem_db: sqlite3.Connection,
+) -> None:
+    """BATCH_SIZE+1 articles -> one batch call + one single call."""
+    from stock.features import BATCH_SIZE
+
+    ids = _insert_many_news(mem_db, BATCH_SIZE + 1)
+
+    with (
+        patch("stock.features.get_utility_client") as mock_get,
+        patch("stock.features.load_feature_prompt", return_value="{ticker} {title} {body}"),
+    ):
+        mock_client = MagicMock()
+        mock_get.return_value = mock_client
+        # First call: batch response for the first BATCH_SIZE ids (newest-first
+        # ordering makes the exact membership unimportant -- answer everything).
+        mock_client.chat.side_effect = [
+            _mock_chat_response(_batch_response(ids)),
+            _mock_chat_response(),
+        ]
+
+        results = extract_features("AAPL", mem_db)
+
+    assert mock_client.chat.call_count == 2
+    assert len(results) == BATCH_SIZE + 1
+
+
+@patch("stock.features.load_feature_batch_prompt", return_value="{articles}")
+def test_extract_features_falls_back_to_singles_on_bad_batch(
+    _mock_prompt: MagicMock,
+    env_settings: Settings,
+    mem_db: sqlite3.Connection,
+) -> None:
+    """Unparseable batch response degrades to per-article calls."""
+    _insert_many_news(mem_db, 3)
+
+    with (
+        patch("stock.features.get_utility_client") as mock_get,
+        patch("stock.features.load_feature_prompt", return_value="{ticker} {title} {body}"),
+    ):
+        mock_client = MagicMock()
+        mock_get.return_value = mock_client
+        mock_client.chat.side_effect = [
+            _mock_chat_response("sorry, no JSON for you"),
+            _mock_chat_response(),
+            _mock_chat_response(),
+            _mock_chat_response(),
+        ]
+
+        results = extract_features("AAPL", mem_db)
+
+    assert mock_client.chat.call_count == 4  # 1 failed batch + 3 singles
+    assert len(results) == 3
+
+
+@patch("stock.features.load_feature_batch_prompt", return_value="{articles}")
+def test_extract_batch_ignores_invented_and_missing_ids(
+    _mock_prompt: MagicMock,
+    env_settings: Settings,
+    mem_db: sqlite3.Connection,
+) -> None:
+    """Model answers one real id, one invented id, skips one -> only the real id stored."""
+    from stock.features import extract_batch
+
+    ids = _insert_many_news(mem_db, 2)
+    answered = [ids[0], 999999]
+
+    with patch("stock.features.get_utility_client") as mock_get:
+        mock_client = MagicMock()
+        mock_get.return_value = mock_client
+        mock_client.chat.return_value = _mock_chat_response(_batch_response(answered))
+
+        items = get_unfeatured_news("AAPL", mem_db)
+        results = extract_batch(items, mem_db)
+
+    assert [r.news_id for r in results] == [ids[0]]
+    # The skipped article is still unfeatured for the next cycle.
+    assert len(get_unfeatured_news("AAPL", mem_db)) == 1
+
+
+@patch("stock.features.load_feature_batch_prompt", return_value="{articles}")
+def test_extract_features_stops_on_cost_ceiling_in_batch(
+    _mock_prompt: MagicMock,
+    env_settings: Settings,
+    mem_db: sqlite3.Connection,
+) -> None:
+    _insert_many_news(mem_db, 3)
+
+    with patch("stock.features.get_utility_client") as mock_get:
+        mock_client = MagicMock()
+        mock_get.return_value = mock_client
+        mock_client.chat.side_effect = CostCeilingError("ceiling")
+
+        results = extract_features("AAPL", mem_db)
+
+    assert results == []
+    assert mock_client.chat.call_count == 1

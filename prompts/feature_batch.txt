@@ -1,0 +1,13 @@
+You are a financial news analyst. Extract structured features for EACH of the following news articles.
+
+{articles}
+
+Return ONLY a JSON object of the form {{"items": [...]}} with EXACTLY one entry per article above. Each entry must have:
+- "id": the article id shown above (integer, copy it exactly)
+- "sentiment": one of "bullish", "bearish", "neutral"
+- "novelty": one of "high", "medium", "low" — how unexpected is this news relative to consensus?
+- "catalyst_type": one of "earnings", "macro", "product", "regulatory", "personnel", "legal", "other"
+- "time_sensitivity": one of "hours", "days", "weeks" — how quickly will this impact the stock price?
+- "summary": one sentence summarizing the key market-relevant takeaway
+
+Do not include any text outside the JSON object. Do not wrap in markdown code fences.
