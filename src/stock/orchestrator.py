@@ -1447,6 +1447,49 @@ def _job_pull_broker_positions() -> None:
         conn.close()
 
 
+# Plan I: job-id -> zero-arg job function, populated by create_scheduler so the
+# quota-leftover retry job (and `stock trigger`) can re-run any job by id.
+JOB_REGISTRY: dict[str, object] = {}
+
+
+def _job_retry_quota_leftovers() -> None:
+    """Plan I: re-run jobs whose work was killed by a CLI usage limit, once the
+    ~5h subscription window has refreshed. Capped/deduped in quota.leftover_jobs_due."""
+    from stock import quota
+    from stock.models import _is_codex_circuit_open
+
+    if _is_codex_circuit_open():
+        logger.info("quota retry skipped: codex circuit still open")
+        return
+    conn = get_conn()
+    try:
+        due = quota.leftover_jobs_due(conn)
+        if not due:
+            return
+        logger.info("quota retry: re-running %s", ", ".join(due))
+        for job_id in due:
+            func = JOB_REGISTRY.get(job_id)
+            if not callable(func):
+                logger.warning("quota retry: no registered function for %s", job_id)
+                continue
+            started = time.monotonic()
+            try:
+                func()
+                status, error = job_runs.OK, None
+            except Exception as exc:  # noqa: BLE001 -- isolate per-job retries
+                logger.exception("quota retry failed for %s", job_id)
+                status, error = job_runs.ERROR, repr(exc)
+            job_runs.record_run(
+                conn, job_id, status, trigger="quota_retry",
+                duration_ms=int((time.monotonic() - started) * 1000), error=error,
+            )
+            quota.mark_job_events_retried(conn, job_id)
+    except Exception:
+        logger.exception("quota leftover retry job failed")
+    finally:
+        conn.close()
+
+
 def create_scheduler() -> BlockingScheduler:
     """Create and configure the APScheduler instance with all pipeline jobs.
 
@@ -1895,6 +1938,16 @@ def create_scheduler() -> BlockingScheduler:
         name="Daily self-review packet + optional Codex proposals",
     )
 
+    # Plan I: re-run quota-killed jobs after the ~5h CLI session window refreshes.
+    scheduler.add_job(
+        _job_retry_quota_leftovers,
+        IntervalTrigger(minutes=30),
+        id="retry_quota_leftovers",
+        name="Retry jobs killed by CLI usage limits (post quota refresh)",
+    )
+
+    JOB_REGISTRY.clear()
+    JOB_REGISTRY.update({job.id: job.func for job in scheduler.get_jobs()})
     _install_job_run_listener(scheduler)
     return scheduler
 

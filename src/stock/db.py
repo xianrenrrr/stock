@@ -467,6 +467,17 @@ CREATE INDEX IF NOT EXISTS idx_job_runs_job
     ON job_runs (job_id, finished_at DESC);
 CREATE INDEX IF NOT EXISTS idx_job_runs_status
     ON job_runs (status, finished_at DESC);
+
+CREATE TABLE IF NOT EXISTS usage_limit_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    provider TEXT NOT NULL,
+    caller TEXT NOT NULL,
+    detail TEXT,
+    detected_at TEXT NOT NULL,
+    retried_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_usage_limit_events_time
+    ON usage_limit_events (detected_at DESC);
 """
 
 

@@ -489,10 +489,10 @@ def test_create_scheduler_has_expected_jobs() -> None:
     + intraday holding move alerts + warning_dashboard_publish
     + broker_snapshot_import + stop_order_propose
     + broker_positions_pull + action_queue_expedite
-    + knowledge_index + macro_digest = 37.
+    + knowledge_index + macro_digest + retry_quota_leftovers = 38.
     """
     scheduler = create_scheduler()
-    assert len(scheduler.get_jobs()) == 37
+    assert len(scheduler.get_jobs()) == 38
 
 
 def test_create_scheduler_job_ids() -> None:
@@ -538,8 +538,18 @@ def test_create_scheduler_job_ids() -> None:
         "action_queue_expedite",
         "knowledge_index",
         "macro_digest",
+        "retry_quota_leftovers",
     }
     assert job_ids == expected
+
+
+def test_create_scheduler_populates_job_registry() -> None:
+    """Plan I retry + `stock trigger` resolve job funcs from JOB_REGISTRY."""
+    from stock.orchestrator import JOB_REGISTRY
+
+    scheduler = create_scheduler()
+    assert set(JOB_REGISTRY) == {job.id for job in scheduler.get_jobs()}
+    assert all(callable(fn) for fn in JOB_REGISTRY.values())
 
 
 def test_create_scheduler_cloud_proxy_mode_is_empty(
@@ -567,7 +577,7 @@ def test_get_schedule_info_format() -> None:
     info = get_schedule_info(scheduler)
 
     assert isinstance(info, ScheduleInfo)
-    assert len(info.jobs) == 37
+    assert len(info.jobs) == 38
 
     # Each entry has name and next_run keys
     for entry in info.jobs:

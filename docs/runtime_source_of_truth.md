@@ -1,7 +1,7 @@
 # STOCK Runtime Source Of Truth
 
-Last verified: 2026-06-09 from `src/stock/orchestrator.py:create_scheduler()`
-(37 active jobs in local mode).
+Last verified: 2026-06-10 from `src/stock/orchestrator.py:create_scheduler()`
+(38 active jobs in local mode).
 
 This file is the source of truth for what runs automatically. Older roadmap
 files describe design history and may be stale.
@@ -70,9 +70,29 @@ python -m stock.cli usage --days 7     # LLM usage: codex/claude calls, tokens,
 subscription (cost_usd=0), so TOKENS are the quota signal; a rising claude_cli
 share means the codex credit/usage circuit breaker (F17c) is tripping.
 
+## Quota-Aware Leftover Retry (Plan I, 2026-06-10)
+
+Codex/Claude CLI subscription quotas refresh on a ~5-hour session window. The
+broker positions pull was dead June 4-10 purely from codex usage-limit
+exhaustion. Now:
+
+- When F17c detects a codex credit/usage-limit hit, the event is persisted to
+  `usage_limit_events` (provider, caller, detected_at) in addition to opening
+  the in-memory circuit breaker.
+- `retry_quota_leftovers` (every 30 min) maps open events -- and job_runs
+  errors whose text looks credit-shaped -- back to scheduler job ids via the
+  caller prefix map in `src/stock/quota.py`, and re-runs each job once
+  `detected_at + 5h` has passed (quota refreshed). Allowlisted jobs only
+  (research/dives/predictions/scoring/broker pull etc.; 5-min plumbing jobs
+  excluded), max 2 retries per job per 24h, and a job that already succeeded
+  on its next scheduled fire is marked recovered instead of re-run.
+- Retries are recorded in `job_runs` with `trigger='quota_retry'`.
+- `stock usage --windows` shows per-provider consumption bucketed into fixed
+  5h UTC windows plus the latest limit event and its expected refresh time.
+
 ## Active Scheduled Jobs
 
-There are 37 active APScheduler jobs in local mode.
+There are 38 active APScheduler jobs in local mode.
 
 | Job id | Cadence UTC | What it actually does | Main output |
 |---|---:|---|---|

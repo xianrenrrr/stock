@@ -410,14 +410,22 @@ def report_cmd(
 @app.command("usage")
 def usage_cmd(
     days: Annotated[int, typer.Option("--days", help="Number of days to include")] = 7,
+    windows: Annotated[
+        bool,
+        typer.Option("--windows", help="Bucket usage into 5h CLI-session quota windows"),
+    ] = False,
 ) -> None:
     """LLM usage report (claude/codex calls, tokens, fallback share, top callers)."""
+    from stock.quota import format_windows_report
     from stock.usage import format_usage_report
 
     try:
         conn = get_conn()
         try:
-            typer.echo(_console_safe(format_usage_report(conn, days=days)))
+            if windows:
+                typer.echo(_console_safe(format_windows_report(conn, days=max(days, 1))))
+            else:
+                typer.echo(_console_safe(format_usage_report(conn, days=days)))
         finally:
             conn.close()
     except Exception:

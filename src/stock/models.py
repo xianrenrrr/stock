@@ -676,6 +676,18 @@ class CodexCliClient:
             # backend across a 26-ticker fan-out.
             if _looks_like_codex_credit_limit(proc.stderr or "", content):
                 _record_codex_credit_hit()
+                # Plan I: persist the exhaustion so the orchestrator's
+                # retry_quota_leftovers job can re-run the killed work after
+                # the ~5h subscription window refreshes.
+                try:
+                    from stock.quota import record_usage_limit_event
+
+                    record_usage_limit_event(
+                        conn, "codex_cli", caller,
+                        detail=((proc.stderr or "") or content)[:300].strip(),
+                    )
+                except Exception:
+                    logger.exception("usage-limit event persist failed (non-fatal)")
                 raise CodexCliUnavailable(
                     f"codex hit credit/usage limit for caller={caller}: "
                     f"{((proc.stderr or '') or content)[:300].strip()}"
