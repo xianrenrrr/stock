@@ -478,6 +478,17 @@ CREATE TABLE IF NOT EXISTS usage_limit_events (
 );
 CREATE INDEX IF NOT EXISTS idx_usage_limit_events_time
     ON usage_limit_events (detected_at DESC);
+
+CREATE TABLE IF NOT EXISTS context_nodes (
+    node TEXT NOT NULL,
+    scope TEXT NOT NULL,
+    content TEXT NOT NULL,
+    content_hash TEXT NOT NULL,
+    input_fingerprint TEXT NOT NULL,
+    token_estimate INTEGER,
+    computed_at TEXT NOT NULL,
+    PRIMARY KEY (node, scope)
+);
 """
 
 

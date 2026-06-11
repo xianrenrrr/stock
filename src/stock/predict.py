@@ -661,15 +661,29 @@ def predict_ticker(
     )
     knowledge_block = format_knowledge_block(knowledge_items)
 
-    # Shared macro regime (Fed path, jobs, liquidity) -- the tide moving all names.
-    from stock.macro import format_macro_block
-    macro_block = format_macro_block(conn)
+    # H1 context DAG: shared blocks (macro regime, market internals, AI-infra
+    # breadth) resolve through memoized nodes -- rendered once per batch, not
+    # once per ticker -- and their content hashes go into the manifest below so
+    # grading can attribute outcomes to specific context versions.
+    from stock.context_graph import get_block
+    macro_block, macro_hash = get_block(conn, "macro")
+    internals_block, internals_hash = get_block(conn, "market_internals")
+    breadth_block, breadth_hash = get_block(conn, "sector_breadth")
 
-    # H0 market tape: index/VIX/rates internals + live quote (overnight gap)
-    # + next earnings date. Live parts are best-effort and degrade to
-    # "unavailable" lines rather than failing the prediction.
-    from stock.market_context import build_market_context
-    market_context = build_market_context(ticker, conn)
+    # Per-ticker live parts (overnight gap, next earnings) stay uncached;
+    # they are best-effort and degrade to "unavailable" lines.
+    from stock.market_context import format_earnings_line, format_live_quote_line
+    market_context = "\n".join([
+        internals_block,
+        breadth_block,
+        format_live_quote_line(ticker, conn),
+        format_earnings_line(ticker),
+    ])
+    context_manifest = {
+        "macro": macro_hash,
+        "market_internals": internals_hash,
+        "sector_breadth": breadth_hash,
+    }
 
     user_message = user_template.format(
         ticker=ticker,
@@ -748,6 +762,7 @@ def predict_ticker(
         "knowledge_item_count": len(knowledge_items),
         "knowledge_direct": sum(1 for k in knowledge_items if k.via == "direct"),
         "knowledge_thematic": sum(1 for k in knowledge_items if k.via == "semantic"),
+        "context_manifest": context_manifest,
     })
 
     # Insert prediction row
