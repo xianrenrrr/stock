@@ -1424,7 +1424,7 @@ def _job_pull_broker_positions() -> None:
     conn = get_conn()
     try:
         try:
-            pull = broker_sync.pull_positions_via_codex()
+            pull = broker_sync.pull_positions()
         except broker_sync.BrokerPullError as exc:
             # The skip is deliberate (a flaky pull must not wipe holdings), but
             # it must be VISIBLE: the listener sees this job exit cleanly, so

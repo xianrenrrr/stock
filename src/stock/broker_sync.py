@@ -194,7 +194,42 @@ def import_snapshot_file(
 # never places or cancels an order.
 
 class BrokerPullError(RuntimeError):
-    """Raised when the codex / RH-MCP positions-pull subprocess fails."""
+    """Raised when an RH-MCP positions-pull subprocess fails."""
+
+
+CLAUDE_BIN: str = "claude"
+
+
+def _finalize_pull_payload(
+    payload: object, snapshot_path: str | Path, *, source: str
+) -> dict:
+    """Validate a positions payload and write the snapshot file.
+
+    Shared tail of the codex and claude pull paths. Raises BrokerPullError on
+    anything unusable -- CRITICALLY including zero positions, because a flaky
+    or unauthenticated MCP returning nothing must never be mistaken for
+    "sold everything" and wipe real holdings.
+    """
+    if not isinstance(payload, dict):
+        raise BrokerPullError(f"{source} output is not a JSON object")
+
+    positions = _positions_from_snapshot(payload)
+    errors = payload.get("errors") or []
+    if not positions:
+        detail = "; ".join(str(e) for e in errors) or "no positions returned"
+        raise BrokerPullError(f"RH MCP returned no positions via {source} ({detail})")
+
+    sp = Path(snapshot_path)
+    sp.parent.mkdir(parents=True, exist_ok=True)
+    sp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    accounts = payload.get("accounts")
+    return {
+        "count": len(positions),
+        "accounts": len(accounts) if isinstance(accounts, list) else 1,
+        "written_to": str(sp),
+        "source": source,
+        "raw": payload,
+    }
 
 
 def build_positions_pull_instruction() -> str:
@@ -270,31 +305,77 @@ def pull_positions_via_codex(
             payload = json.loads(raw_text) if raw_text else None
         except json.JSONDecodeError as exc:
             raise BrokerPullError(f"codex returned non-JSON positions: {exc}") from exc
-        if not isinstance(payload, dict):
-            raise BrokerPullError("codex output is not a JSON object")
-
-        # Flatten across formats (flat positions OR multi-account) to count.
-        positions = _positions_from_snapshot(payload)
-        errors = payload.get("errors") or []
-        # CRITICAL: if the MCP returned nothing usable, SKIP -- never write an
-        # empty snapshot (a flaky/unauthenticated RH MCP returning 0 positions
-        # must not be mistaken for "sold everything" and wipe real holdings).
-        if not positions:
-            detail = "; ".join(str(e) for e in errors) or "no positions returned"
-            raise BrokerPullError(f"RH MCP returned no positions ({detail})")
-
-        sp = Path(snapshot_path)
-        sp.parent.mkdir(parents=True, exist_ok=True)
-        sp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-        accounts = payload.get("accounts")
-        return {
-            "count": len(positions),
-            "accounts": len(accounts) if isinstance(accounts, list) else 1,
-            "written_to": str(sp),
-            "raw": payload,
-        }
+        return _finalize_pull_payload(payload, snapshot_path, source="codex")
     finally:
         try:
             Path(out_file).unlink()
         except OSError:
             pass
+
+
+def pull_positions_via_claude(
+    *,
+    snapshot_path: str | Path = DEFAULT_SNAPSHOT_PATH,
+    claude_bin: str = CLAUDE_BIN,
+    timeout_secs: int = CODEX_PULL_TIMEOUT_SECS,
+) -> dict:
+    """Spawn a `claude -p` / RH-MCP session to read live positions (read-only).
+
+    Mirror of pull_positions_via_codex on the Claude CLI: the robinhood-trading
+    MCP is registered at user scope (`claude mcp add --transport http ...`) and
+    must be OAuth-authenticated once via `/mcp` in an interactive session.
+    Raises BrokerPullError on missing binary / timeout / non-zero exit /
+    unparseable output / zero positions.
+    """
+    instruction = build_positions_pull_instruction()
+    resolved = shutil.which(claude_bin) or claude_bin
+    argv = [
+        resolved, "-p",
+        "--output-format", "text",
+        "--dangerously-skip-permissions",
+    ]
+    creation_flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+    try:
+        proc = subprocess.run(
+            argv, input=instruction, capture_output=True, text=True,
+            encoding="utf-8", timeout=timeout_secs, creationflags=creation_flags,
+        )
+    except FileNotFoundError as exc:
+        raise BrokerPullError(
+            f"`{resolved}` not on PATH; install Claude Code + `claude login`"
+        ) from exc
+    except subprocess.TimeoutExpired as exc:
+        raise BrokerPullError(
+            f"claude positions pull timed out after {timeout_secs}s"
+        ) from exc
+
+    if proc.returncode != 0:
+        raise BrokerPullError(
+            f"claude exit={proc.returncode}: {(proc.stderr or '').strip()[:400]}"
+        )
+
+    raw_text = (proc.stdout or "").strip()
+    try:
+        from stock.models import parse_llm_json
+
+        payload = parse_llm_json(raw_text) if raw_text else None
+    except Exception as exc:  # noqa: BLE001 -- any parse failure is a pull failure
+        raise BrokerPullError(f"claude returned non-JSON positions: {exc}") from exc
+    return _finalize_pull_payload(payload, snapshot_path, source="claude")
+
+
+def pull_positions(
+    *, snapshot_path: str | Path = DEFAULT_SNAPSHOT_PATH
+) -> dict:
+    """Pull live positions via Claude first, falling back to codex.
+
+    Boss directive 2026-06-11: Claude is the primary CLI (codex was flaky on
+    the RH MCP); keeping both doubles the chance a pull lands. Until the
+    Claude-side MCP OAuth is completed once, the claude attempt fails fast and
+    codex carries the job exactly as before.
+    """
+    try:
+        return pull_positions_via_claude(snapshot_path=snapshot_path)
+    except BrokerPullError as exc:
+        logger.warning("claude positions pull failed (%s); trying codex", exc)
+    return pull_positions_via_codex(snapshot_path=snapshot_path)

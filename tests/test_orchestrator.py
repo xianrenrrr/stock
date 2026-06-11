@@ -347,8 +347,8 @@ def test_job_pull_broker_positions_deactivates_missing_on_success(
 
     monkeypatch.setattr(
         orch.broker_sync,
-        "pull_positions_via_codex",
-        lambda: {"count": 1, "accounts": 1},
+        "pull_positions",
+        lambda **kw: {"count": 1, "accounts": 1, "source": "claude"},
     )
     import_mock = MagicMock()
     import_mock.upserted = 1

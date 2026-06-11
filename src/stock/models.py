@@ -497,12 +497,33 @@ class ClaudeCliClient:
 
         duration_ms = int((time.perf_counter() - start) * 1000)
 
+        # Plan I, claude-first: detect subscription usage-limit exhaustion the
+        # same way F17c does for codex. Claude Code prints a short apology
+        # ("You've reached your usage limit ...") either on stderr with a
+        # non-zero exit OR as a short stdout body with exit 0. Persist the
+        # event so retry_quota_leftovers re-runs the killed job after the ~5h
+        # window refreshes. Long stdout is real model output and is never
+        # scanned -- a research note may legitimately contain "rate limit".
+        stdout_text = (proc.stdout or "").strip()
+        short_stdout = stdout_text if len(stdout_text) < 500 else ""
+        if _looks_like_codex_credit_limit(proc.stderr or "", short_stdout):
+            detail = ((proc.stderr or "").strip() or stdout_text)[:300]
+            try:
+                from stock.quota import record_usage_limit_event
+
+                record_usage_limit_event(conn, "claude_cli", caller, detail=detail)
+            except Exception:
+                logger.exception("usage-limit event persist failed (non-fatal)")
+            raise ClaudeCliUnavailable(
+                f"claude hit usage limit for caller={caller}: {detail}"
+            )
+
         if proc.returncode != 0:
             raise ClaudeCliUnavailable(
                 f"`claude -p` exit={proc.returncode}: {(proc.stderr or '').strip()[:500]}"
             )
 
-        content = (proc.stdout or "").strip()
+        content = stdout_text
         # Defensive: hybrid-thinking models can still emit <think> blocks
         if "<think>" in content:
             content = strip_thinking(content)

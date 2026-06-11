@@ -159,3 +159,66 @@ def test_format_windows_report_shows_refresh_eta(
     assert "5h UTC window" in report
     assert "window refresh ~" in report
     assert "codex_cli" in report
+
+
+def test_claude_cli_limit_detection_persists_event(
+    mem_db, monkeypatch,
+) -> None:
+    """A claude -p usage-limit apology raises AND records a usage_limit_event."""
+    from unittest.mock import MagicMock, patch
+
+    import pytest as pytest_mod
+
+    from stock.config import Settings, get_settings
+    from stock.models import ClaudeCliClient, ClaudeCliUnavailable
+
+    monkeypatch.setattr(
+        "stock.models.get_settings", lambda: Settings(_env_file=None),
+    )
+    get_settings.cache_clear()
+
+    proc = MagicMock(
+        returncode=1, stdout="",
+        stderr="You've reached your usage limit. Your limit will reset at 3am.",
+    )
+    with patch("subprocess.run", return_value=proc):
+        client = ClaudeCliClient()
+        with pytest_mod.raises(ClaudeCliUnavailable, match="usage limit"):
+            client.chat(
+                messages=[{"role": "user", "content": "hi"}],
+                model="claude-fable-5", max_tokens=10,
+                conn=mem_db, caller="research.generate_daily",
+            )
+
+    rows = mem_db.execute(
+        "SELECT provider, caller FROM usage_limit_events",
+    ).fetchall()
+    assert rows == [("claude_cli", "research.generate_daily")]
+    get_settings.cache_clear()
+
+
+def test_claude_cli_long_output_not_flagged_as_limit(mem_db, monkeypatch) -> None:
+    """A long research note containing 'rate limit' is NOT a usage-limit event."""
+    from unittest.mock import MagicMock, patch
+
+    from stock.config import Settings, get_settings
+    from stock.models import ClaudeCliClient
+
+    monkeypatch.setattr(
+        "stock.models.get_settings", lambda: Settings(_env_file=None),
+    )
+    get_settings.cache_clear()
+
+    body = ("Fed policy and the rate limit debate... " * 40).strip()  # >500 chars
+    proc = MagicMock(returncode=0, stdout=body, stderr="")
+    with patch("subprocess.run", return_value=proc):
+        client = ClaudeCliClient()
+        resp = client.chat(
+            messages=[{"role": "user", "content": "hi"}],
+            model="claude-fable-5", max_tokens=10,
+            conn=mem_db, caller="research.generate_daily",
+        )
+
+    assert resp.content == body
+    assert mem_db.execute("SELECT COUNT(*) FROM usage_limit_events").fetchone() == (0,)
+    get_settings.cache_clear()

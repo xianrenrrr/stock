@@ -270,6 +270,16 @@ tools, so the runtime bridge is file based:
 Queued/pending buy orders are not counted as holdings until Robinhood reports a
 filled non-zero position.
 
+**Dual-path pull (2026-06-11):** `broker_sync.pull_positions()` tries a
+`claude -p` session FIRST (the robinhood-trading MCP is registered with the
+Claude CLI at user scope: `https://agent.robinhood.com/mcp/trading`), then
+falls back to `codex exec`. The Claude path requires a ONE-TIME interactive
+OAuth: run `claude` interactively, `/mcp`, authenticate robinhood-trading in
+the browser. Until then the claude attempt fails fast and codex carries the
+job as before. Claude usage-limit exhaustion is now also detected in
+`ClaudeCliClient` and persisted to `usage_limit_events`, so the plan-I
+`retry_quota_leftovers` job covers Claude the same as codex.
+
 **Pull reliability (2026-06-04):** the robinhood-trading MCP is interactively
 authenticated and is often UNAVAILABLE in headless `codex exec`, so the auto-pull
 returns empty/partial unpredictably. Two safeguards: (1) `pull_positions_via_codex`

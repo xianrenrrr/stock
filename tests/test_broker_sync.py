@@ -184,3 +184,84 @@ def test_pull_positions_via_codex_raises_on_nonzero_exit(tmp_path) -> None:
     with patch("subprocess.run", side_effect=fake_run):
         with pytest.raises(broker_sync.BrokerPullError):
             broker_sync.pull_positions_via_codex(snapshot_path=str(tmp_path / "s.json"))
+
+
+# --- dual-path pull: claude first, codex fallback (2026-06-11) ---------------
+
+
+def test_pull_positions_uses_claude_first(tmp_path, monkeypatch):
+    from stock import broker_sync
+
+    snapshot = tmp_path / "snap.json"
+    claude_result = {"count": 2, "source": "claude", "written_to": str(snapshot)}
+    monkeypatch.setattr(
+        broker_sync, "pull_positions_via_claude", lambda **kw: claude_result,
+    )
+
+    def _codex_should_not_run(**kw):
+        raise AssertionError("codex path must not run when claude succeeds")
+
+    monkeypatch.setattr(broker_sync, "pull_positions_via_codex", _codex_should_not_run)
+
+    assert broker_sync.pull_positions(snapshot_path=snapshot) == claude_result
+
+
+def test_pull_positions_falls_back_to_codex(tmp_path, monkeypatch):
+    from stock import broker_sync
+
+    snapshot = tmp_path / "snap.json"
+
+    def _claude_fails(**kw):
+        raise broker_sync.BrokerPullError("MCP needs authentication")
+
+    codex_result = {"count": 3, "source": "codex", "written_to": str(snapshot)}
+    monkeypatch.setattr(broker_sync, "pull_positions_via_claude", _claude_fails)
+    monkeypatch.setattr(
+        broker_sync, "pull_positions_via_codex", lambda **kw: codex_result,
+    )
+
+    assert broker_sync.pull_positions(snapshot_path=snapshot) == codex_result
+
+
+def test_pull_positions_via_claude_parses_and_writes(tmp_path, monkeypatch):
+    import json as json_mod
+    from unittest.mock import MagicMock, patch
+
+    from stock import broker_sync
+
+    snapshot = tmp_path / "snap.json"
+    payload = {
+        "as_of": "2026-06-11T00:00:00Z",
+        "accounts": [{
+            "account_number": "641749338",
+            "positions": [{"symbol": "SMCI", "quantity": 158, "average_buy_price": 46.0}],
+        }],
+        "errors": [],
+    }
+    proc = MagicMock(returncode=0, stdout=json_mod.dumps(payload), stderr="")
+    with patch("stock.broker_sync.subprocess.run", return_value=proc):
+        result = broker_sync.pull_positions_via_claude(snapshot_path=snapshot)
+
+    assert result["count"] == 1 and result["source"] == "claude"
+    assert json_mod.loads(snapshot.read_text(encoding="utf-8")) == payload
+
+
+def test_pull_positions_via_claude_zero_positions_never_writes(tmp_path):
+    import json as json_mod
+    from unittest.mock import MagicMock, patch
+
+    import pytest as pytest_mod
+
+    from stock import broker_sync
+
+    snapshot = tmp_path / "snap.json"
+    proc = MagicMock(
+        returncode=0,
+        stdout=json_mod.dumps({"accounts": [], "errors": ["MCP needs authentication"]}),
+        stderr="",
+    )
+    with patch("stock.broker_sync.subprocess.run", return_value=proc):
+        with pytest_mod.raises(broker_sync.BrokerPullError, match="no positions"):
+            broker_sync.pull_positions_via_claude(snapshot_path=snapshot)
+
+    assert not snapshot.exists()
