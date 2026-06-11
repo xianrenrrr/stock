@@ -53,6 +53,14 @@ class Settings(BaseSettings):
     openclaw_bin: str = "openclaw"     # binary on PATH; override with full path if needed
     openclaw_agent: str = "main"        # which OpenClaw agent has the delivery skill
 
+    # Congressional/government trades feed (plan H H3). Any JSON URL with a
+    # list of transactions works -- QuiverQuant API URL with key, a community
+    # mirror, or a self-hosted export. Both QuiverQuant and the old
+    # senate/house-stock-watcher field names are parsed. Empty = collector
+    # job logs a skip and does nothing (the free community mirrors died;
+    # source choice is the operator's: paid QuiverQuant vs an eFD scraper).
+    gov_trades_url: str = ""
+
     # SEC EDGAR User-Agent header (required by SEC policy, free, no key).
     # Override at install time so SEC can identify the operator if a request misbehaves.
     edgar_user_agent: str = "stock-research 0.1 ops@example.com"

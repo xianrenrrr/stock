@@ -1,7 +1,7 @@
 # STOCK Runtime Source Of Truth
 
-Last verified: 2026-06-10 from `src/stock/orchestrator.py:create_scheduler()`
-(38 active jobs in local mode).
+Last verified: 2026-06-11 from `src/stock/orchestrator.py:create_scheduler()`
+(39 active jobs in local mode).
 
 This file is the source of truth for what runs automatically. Older roadmap
 files describe design history and may be stale.
@@ -90,9 +90,36 @@ exhaustion. Now:
 - `stock usage --windows` shows per-provider consumption bucketed into fixed
   5h UTC windows plus the latest limit event and its expected refresh time.
 
+## Feature Extraction Is Batched (2026-06-11)
+
+`extract_features` sends 8 articles per LLM call (id-keyed items array) with
+per-article fallback on unparseable batch responses — cutting the biggest CLI
+quota consumer (~430 calls/day) roughly 8×. Caller: `features.extract_batch`.
+
+## Context DAG + Ablation (Plan H phases H1/H4, 2026-06-11)
+
+Shared prediction blocks (macro, market_internals, sector_breadth) resolve
+through memoized `context_nodes` (rendered once per batch; fingerprint-based
+invalidation; failures degrade to direct render). Each prediction records a
+`context_manifest` of node content hashes in `feature_context_json`.
+`stock ablation [--days N]` reports hit rate/Brier WITH vs WITHOUT each
+signal. First live run (45d, n=2064): knowledge-era predictions 62.4% hit
+vs 49.1% without (n=322/1742) — attribution between knowledge/macro is
+still confounded (same era).
+
+## Gov Trades Collector (Plan H phase H3, 2026-06-11)
+
+`gov_trades_pull` (daily 05:30 UTC) reads the JSON feed in `GOV_TRADES_URL`
+into the `gov_trades` table (QuiverQuant + stock-watcher field names parsed;
+dedup on politician/ticker/type/date/amount). **It is a NO-OP until
+`GOV_TRADES_URL` is set** — the free community mirrors are dead (403), so the
+operator must choose: paid QuiverQuant API vs building an eFD scraper.
+When data exists, predictions append a per-ticker gov-trades block (with the
+45-day disclosure-lag caveat) and `stock gov-trades <TICKER>` inspects it.
+
 ## Active Scheduled Jobs
 
-There are 38 active APScheduler jobs in local mode.
+There are 39 active APScheduler jobs in local mode.
 
 | Job id | Cadence UTC | What it actually does | Main output |
 |---|---:|---|---|

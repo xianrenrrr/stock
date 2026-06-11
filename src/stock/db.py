@@ -479,6 +479,23 @@ CREATE TABLE IF NOT EXISTS usage_limit_events (
 CREATE INDEX IF NOT EXISTS idx_usage_limit_events_time
     ON usage_limit_events (detected_at DESC);
 
+CREATE TABLE IF NOT EXISTS gov_trades (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    politician TEXT NOT NULL,
+    chamber TEXT NOT NULL DEFAULT '',
+    ticker TEXT NOT NULL,
+    transaction_type TEXT NOT NULL,
+    amount_range TEXT NOT NULL DEFAULT '',
+    transaction_date TEXT NOT NULL,
+    disclosed_at TEXT NOT NULL DEFAULT '',
+    source TEXT NOT NULL DEFAULT '',
+    ingested_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_gov_trades_dedup
+    ON gov_trades (politician, ticker, transaction_type, transaction_date, amount_range);
+CREATE INDEX IF NOT EXISTS idx_gov_trades_ticker
+    ON gov_trades (ticker, transaction_date DESC);
+
 CREATE TABLE IF NOT EXISTS context_nodes (
     node TEXT NOT NULL,
     scope TEXT NOT NULL,

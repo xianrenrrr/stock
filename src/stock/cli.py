@@ -433,6 +433,41 @@ def usage_cmd(
         raise typer.Exit(code=1)
 
 
+@app.command("gov-trades")
+def gov_trades_cmd(
+    action: Annotated[str, typer.Argument(help="'pull' to fetch the feed, or a ticker to list")],
+) -> None:
+    """Pull or inspect congressional/government trade disclosures (H3)."""
+    from stock.ingest.gov_trades import format_gov_block, pull_gov_trades
+
+    try:
+        conn = get_conn()
+        try:
+            if action.lower() == "pull":
+                result = pull_gov_trades(conn)
+                if result is None:
+                    typer.echo(
+                        "GOV_TRADES_URL is not configured. The free community"
+                        " mirrors are dead; set a QuiverQuant API URL (paid) or"
+                        " another JSON feed in .env."
+                    )
+                    raise typer.Exit(code=1)
+                typer.echo(
+                    f"Gov trades: fetched={result.fetched}"
+                    f" inserted={result.inserted} skipped={result.skipped}"
+                )
+            else:
+                block = format_gov_block(action.upper(), conn)
+                typer.echo(_console_safe(block or f"No gov trades stored for {action.upper()}."))
+        finally:
+            conn.close()
+    except typer.Exit:
+        raise
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
 @app.command("ablation")
 def ablation_cmd(
     days: Annotated[int, typer.Option("--days", help="Scored-prediction window")] = 45,

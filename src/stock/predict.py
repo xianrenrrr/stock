@@ -672,13 +672,18 @@ def predict_ticker(
 
     # Per-ticker live parts (overnight gap, next earnings) stay uncached;
     # they are best-effort and degrade to "unavailable" lines.
+    from stock.ingest.gov_trades import format_gov_block
     from stock.market_context import format_earnings_line, format_live_quote_line
-    market_context = "\n".join([
+    market_parts = [
         internals_block,
         breadth_block,
         format_live_quote_line(ticker, conn),
         format_earnings_line(ticker),
-    ])
+    ]
+    gov_block = format_gov_block(ticker, conn)
+    if gov_block:
+        market_parts.append(gov_block)
+    market_context = "\n".join(market_parts)
     context_manifest = {
         "macro": macro_hash,
         "market_internals": internals_hash,

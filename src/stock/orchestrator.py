@@ -1456,6 +1456,23 @@ def _job_pull_broker_positions() -> None:
         conn.close()
 
 
+def _job_pull_gov_trades() -> None:
+    """H3: daily pull of congressional trade disclosures (skips when unconfigured)."""
+    from stock.ingest.gov_trades import pull_gov_trades
+
+    conn = get_conn()
+    try:
+        result = pull_gov_trades(conn)
+        if result is not None:
+            logger.info(
+                "Gov trades: fetched=%d inserted=%d", result.fetched, result.inserted,
+            )
+    except Exception:
+        logger.exception("Gov trades pull job failed")
+    finally:
+        conn.close()
+
+
 # Plan I: job-id -> zero-arg job function, populated by create_scheduler so the
 # quota-leftover retry job (and `stock trigger`) can re-run any job by id.
 JOB_REGISTRY: dict[str, object] = {}
@@ -1953,6 +1970,15 @@ def create_scheduler() -> BlockingScheduler:
         IntervalTrigger(minutes=30),
         id="retry_quota_leftovers",
         name="Retry jobs killed by CLI usage limits (post quota refresh)",
+    )
+
+    # H3: daily congressional/government trades pull (no-op until
+    # GOV_TRADES_URL is configured -- see config.py).
+    scheduler.add_job(
+        _job_pull_gov_trades,
+        CronTrigger(hour=5, minute=30, timezone="UTC"),
+        id="gov_trades_pull",
+        name="Pull congressional/government trade disclosures",
     )
 
     JOB_REGISTRY.clear()
