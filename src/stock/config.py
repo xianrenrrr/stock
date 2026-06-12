@@ -101,6 +101,12 @@ class Settings(BaseSettings):
     # Blank lets codex pick its own configured default (currently gpt-5.5).
     # Override in .env if you want to pin a specific codex-supported model.
     core_codex_model: str = ""
+    # Reasoning effort split for subprocess backends. General/core research
+    # stays high; prediction calls get the expensive lane because they directly
+    # drive scored portfolio decisions. Valid values match current Claude CLI:
+    # low, medium, high, xhigh, max.
+    core_reasoning_effort: str = "high"
+    prediction_reasoning_effort: str = "max"
     # Fast lane for high-frequency utility classifiers (feature extraction +
     # intent). These are cheap JSON tasks that benefit from low latency far
     # more than frontier reasoning, so they route to a fast Claude haiku model

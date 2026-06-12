@@ -109,6 +109,33 @@ _codex_circuit_lock = threading.Lock()
 _codex_circuit_hits: deque[float] = deque(maxlen=CODEX_CIRCUIT_HITS_THRESHOLD * 4)
 _codex_circuit_open_until: float = 0.0  # epoch seconds when circuit re-arms
 
+_REASONING_EFFORT_VALUES: set[str] = {"low", "medium", "high", "xhigh", "max"}
+
+
+def _clean_reasoning_effort(value: str, *, default: str) -> str:
+    """Normalize CLI effort settings, falling back instead of crashing jobs."""
+    effort = (value or "").strip().lower()
+    if effort in _REASONING_EFFORT_VALUES:
+        return effort
+    fallback = default if default in _REASONING_EFFORT_VALUES else "high"
+    if effort:
+        logger.warning("invalid reasoning effort %r; using %s", value, fallback)
+    return fallback
+
+
+def _reasoning_effort_for_caller(caller: str, settings: Settings) -> str:
+    """Use max/xhigh only for prediction work; keep general calls cheaper."""
+    base = _clean_reasoning_effort(
+        getattr(settings, "core_reasoning_effort", "high"), default="high",
+    )
+    prediction = _clean_reasoning_effort(
+        getattr(settings, "prediction_reasoning_effort", "max"), default="max",
+    )
+    normalized = (caller or "").lower()
+    if normalized.startswith("predict.") or ".predict." in normalized:
+        return prediction
+    return base
+
 
 def _record_codex_credit_hit() -> None:
     """Record a credit-limit hit; open the breaker if threshold reached within window."""
@@ -470,12 +497,14 @@ class ClaudeCliClient:
         creation_flags = 0
         if sys.platform == "win32":
             creation_flags = subprocess.CREATE_NO_WINDOW
+        effort = _reasoning_effort_for_caller(caller, settings)
 
         try:
             proc = subprocess.run(
                 [
                     self._bin, "-p",
                     "--model", model or CLAUDE_CLI_CORE_DEFAULT_MODEL,
+                    "--effort", effort,
                     "--output-format", "text",
                     "--dangerously-skip-permissions",
                 ],
@@ -645,6 +674,11 @@ class CodexCliClient:
             self._bin, "exec",
             "--skip-git-repo-check",
             "--dangerously-bypass-approvals-and-sandbox",
+            "-c",
+            (
+                "model_reasoning_effort="
+                f"\"{_reasoning_effort_for_caller(caller, settings)}\""
+            ),
             "-o", out_path,
         ]
         # Only pass -m if caller specified one; otherwise let codex pick its

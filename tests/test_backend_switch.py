@@ -243,10 +243,36 @@ def test_codex_cli_client_chat_happy_path(
     assert response.content == "PONG"
     assert response.cost_usd == 0.0
     assert response.model == CODEX_CLI_CORE_MODEL_NAME
+    args, _kwargs = mock_run.call_args
+    cmd = args[0]
+    effort_idx = cmd.index("-c") + 1
+    assert cmd[effort_idx] == 'model_reasoning_effort="high"'
     row = mem_db.execute(
         "SELECT provider, cost_usd FROM llm_calls WHERE caller = 'test.codex_cli'"
     ).fetchone()
     assert row == ("codex_cli", 0.0)
+
+
+def test_codex_cli_prediction_uses_prediction_reasoning_effort(
+    mem_db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Prediction callers use the max reasoning lane for Codex."""
+    _seed_settings(monkeypatch)
+    with patch("subprocess.run", side_effect=_fake_codex_subprocess("PONG")) as mock_run:
+        client = CodexCliClient()
+        msgs: list[ChatMessage] = [{"role": "user", "content": "predict"}]
+        client.chat(
+            messages=msgs,
+            model="",
+            max_tokens=128,
+            conn=mem_db,
+            caller="predict.predict_ticker",
+        )
+
+    args, _kwargs = mock_run.call_args
+    cmd = args[0]
+    effort_idx = cmd.index("-c") + 1
+    assert cmd[effort_idx] == 'model_reasoning_effort="max"'
 
 
 def test_codex_cli_client_missing_binary_raises_unavailable(
@@ -418,6 +444,8 @@ def test_claude_cli_client_chat_happy_path(
     # to .CMD); the trailing "-p" is the headless-mode flag.
     assert cmd[0].lower().endswith("claude") or cmd[0].lower().endswith("claude.cmd")
     assert cmd[1] == "-p"
+    effort_idx = cmd.index("--effort") + 1
+    assert cmd[effort_idx] == "high"
     # Prompt now goes via stdin (`input=`), NOT argv -- avoids the 32 KB
     # Windows command-line cap that broke the daily-research push.
     stdin_text = kwargs.get("input", "")
@@ -431,6 +459,29 @@ def test_claude_cli_client_chat_happy_path(
         "SELECT provider, cost_usd FROM llm_calls WHERE caller = 'test.claude_cli'"
     ).fetchone()
     assert row == ("claude_cli", 0.0)
+
+
+def test_claude_cli_prediction_uses_prediction_reasoning_effort(
+    mem_db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Prediction callers use the max reasoning lane for Claude."""
+    _seed_settings(monkeypatch)
+    fake_proc = MagicMock(returncode=0, stdout="OK\n", stderr="")
+    with patch("subprocess.run", return_value=fake_proc) as mock_run:
+        client = ClaudeCliClient()
+        msgs: list[ChatMessage] = [{"role": "user", "content": "predict"}]
+        client.chat(
+            messages=msgs,
+            model="claude-fable-5",
+            max_tokens=128,
+            conn=mem_db,
+            caller="predict.predict_ticker",
+        )
+
+    args, _kwargs = mock_run.call_args
+    cmd = args[0]
+    effort_idx = cmd.index("--effort") + 1
+    assert cmd[effort_idx] == "max"
 
 
 def test_claude_cli_client_missing_binary_raises_unavailable(
