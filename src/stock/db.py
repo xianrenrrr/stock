@@ -529,6 +529,11 @@ _ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("brier_raw", "REAL"),
         ("brier_cal", "REAL"),
     ],
+    # Failed-item retry (2026-06-12): deep dives killed by transient CLI
+    # failures are re-queued at the next drain instead of dying silently.
+    "action_queue": [
+        ("attempts", "INTEGER DEFAULT 0"),
+    ],
 }
 
 

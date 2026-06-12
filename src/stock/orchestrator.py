@@ -573,6 +573,9 @@ def _job_run_action_queue() -> None:
     """Drain the auto-queued action items so the next push can reference them."""
     conn = get_conn()
     try:
+        # Give recently-failed items (transient CLI failures, quota windows)
+        # another shot before draining -- failed follow-ups must not die silently.
+        action_queue.requeue_failed(conn)
         completed = action_queue.run_pending(conn, max_items=4)
         logger.info("action_queue runner drained=%d", len(completed))
     except CostCeilingError:

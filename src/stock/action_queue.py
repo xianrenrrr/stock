@@ -187,10 +187,11 @@ def recent_completed(
 
 
 def _mark_running(conn: sqlite3.Connection, item_id: int) -> None:
-    """Stamp started_at and flip status -> running."""
+    """Stamp started_at, count the attempt, and flip status -> running."""
     now = datetime.now(timezone.utc).isoformat()
     conn.execute(
-        "UPDATE action_queue SET status = 'running', started_at = ?"
+        "UPDATE action_queue SET status = 'running', started_at = ?,"
+        " attempts = COALESCE(attempts, 0) + 1"
         " WHERE id = ?",
         (now, item_id),
     )
@@ -227,6 +228,41 @@ def _mark_pending_again(conn: sqlite3.Connection, item_id: int) -> None:
         (item_id,),
     )
     conn.commit()
+
+
+RETRY_MAX_ATTEMPTS: int = 3
+RETRY_MAX_AGE_HOURS: int = 48
+
+
+def requeue_failed(
+    conn: sqlite3.Connection,
+    *,
+    max_age_hours: int = RETRY_MAX_AGE_HOURS,
+    max_attempts: int = RETRY_MAX_ATTEMPTS,
+) -> int:
+    """Flip recent failed rows back to pending so the next drain retries them.
+
+    A deep dive killed by a transient CLI failure (timeout, 5h usage-window
+    exhaustion, flaky subprocess) must not be lost forever -- this is the
+    queue-item mirror of the plan-I scheduler-job retry. Rows older than
+    max_age_hours or already tried max_attempts times stay failed (legacy
+    rows with NULL attempts count as one attempt).
+    """
+    cutoff = (
+        datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
+    ).isoformat()
+    cursor = conn.execute(
+        "UPDATE action_queue SET status = 'pending', started_at = NULL,"
+        " completed_at = NULL"
+        " WHERE status = 'failed' AND queued_at >= ?"
+        " AND COALESCE(attempts, 1) < ?",
+        (cutoff, max_attempts),
+    )
+    conn.commit()
+    requeued = int(cursor.rowcount or 0)
+    if requeued:
+        logger.info("action_queue: re-queued %d failed item(s) for retry", requeued)
+    return requeued
 
 
 def run_pending(

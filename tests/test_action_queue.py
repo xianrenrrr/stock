@@ -316,3 +316,56 @@ def test_recent_completed_filters_by_window(mem_db: sqlite3.Connection) -> None:
     assert "fresh" in topics
     assert "old" not in topics
 
+
+
+# --- failed-item retry (2026-06-12) ------------------------------------------
+
+
+def _insert_failed(conn, *, topic: str, attempts, hours_ago: float = 1.0) -> int:
+    from datetime import datetime, timedelta, timezone
+
+    queued = (datetime.now(timezone.utc) - timedelta(hours=hours_ago)).isoformat()
+    cur = conn.execute(
+        "INSERT INTO action_queue (raw_text, topic, status, error, queued_at, attempts)"
+        " VALUES (?, ?, 'failed', 'ClaudeCliUnavailable', ?, ?)",
+        (topic, topic, queued, attempts),
+    )
+    conn.commit()
+    return int(cur.lastrowid or 0)
+
+
+def test_requeue_failed_recent_items(mem_db) -> None:
+    from stock import action_queue
+
+    _insert_failed(mem_db, topic="retry me", attempts=1)
+    _insert_failed(mem_db, topic="legacy null attempts", attempts=None)
+
+    assert action_queue.requeue_failed(mem_db) == 2
+    statuses = [r[0] for r in mem_db.execute("SELECT status FROM action_queue")]
+    assert statuses == ["pending", "pending"]
+
+
+def test_requeue_failed_respects_caps(mem_db) -> None:
+    from stock import action_queue
+
+    _insert_failed(mem_db, topic="too many attempts", attempts=3)
+    _insert_failed(mem_db, topic="too old", attempts=1, hours_ago=72)
+
+    assert action_queue.requeue_failed(mem_db) == 0
+    statuses = [r[0] for r in mem_db.execute("SELECT status FROM action_queue")]
+    assert statuses == ["failed", "failed"]
+
+
+def test_mark_running_counts_attempts(mem_db) -> None:
+    from stock import action_queue
+
+    items = action_queue.enqueue_actions(
+        mem_db, source_research_id=None, raw_items=["count my attempts"],
+    )
+    action_queue._mark_running(mem_db, items[0].id)
+    action_queue._mark_running(mem_db, items[0].id)
+
+    (attempts,) = mem_db.execute(
+        "SELECT attempts FROM action_queue WHERE id = ?", (items[0].id,),
+    ).fetchone()
+    assert attempts == 2
