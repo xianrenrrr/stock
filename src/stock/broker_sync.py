@@ -124,12 +124,16 @@ def import_snapshot(
     result = BrokerSyncResult(path=path, account_number=default_account, as_of=as_of)
     seen_by_account: dict[str, set[str]] = {}
 
+    # Aggregate same-ticker positions across accounts BEFORE upserting: VEEV
+    # held in both margin and cash is ONE logical holding, and holdings rows
+    # are keyed by ticker -- without this, the second account's upsert
+    # silently overwrites the first instead of combining quantities.
+    agg: dict[str, dict[str, Any]] = {}
     for pos in _positions_from_snapshot(snapshot):
         if not isinstance(pos, dict):
             continue
         ticker = str(pos.get("symbol") or pos.get("ticker") or "").strip().upper()
         qty = _to_float(pos.get("quantity") or pos.get("qty"))
-        ptype = str(pos.get("type") or "")
         if not ticker or qty <= 0:
             result.skipped_empty += 1
             continue
@@ -140,15 +144,36 @@ def import_snapshot(
             or pos.get("average_cost")
             or pos.get("cost_basis")
         )
+        ptype = str(pos.get("type") or "")
+
+        prev = agg.get(ticker)
+        if prev is None:
+            agg[ticker] = {
+                "qty": qty,
+                "cost_basis": cost_basis,
+                "accounts": [(acct, ptype)],
+            }
+        else:
+            total_qty = prev["qty"] + qty
+            if total_qty > 0:
+                prev["cost_basis"] = (
+                    prev["qty"] * prev["cost_basis"] + qty * cost_basis
+                ) / total_qty
+            prev["qty"] = total_qty
+            prev["accounts"].append((acct, ptype))
+
+    for ticker, info in agg.items():
+        notes = " | ".join(_broker_note(acct, as_of, ptype) for acct, ptype in info["accounts"])
         holdings.add_holding(
             conn,
             ticker=ticker,
-            qty=qty,
-            cost_basis=cost_basis,
-            notes=_broker_note(acct, as_of, ptype),
+            qty=info["qty"],
+            cost_basis=info["cost_basis"],
+            notes=notes,
         )
-        if acct:
-            seen_by_account.setdefault(acct, set()).add(ticker)
+        for acct, _ in info["accounts"]:
+            if acct:
+                seen_by_account.setdefault(acct, set()).add(ticker)
         result.upserted += 1
 
     # Deactivate sold positions ONLY within accounts that returned at least one

@@ -115,6 +115,34 @@ def test_import_snapshot_multi_account_format(mem_db: sqlite3.Connection) -> Non
     assert active == {"GOOGL", "CAMT"}
 
 
+def test_import_snapshot_aggregates_same_ticker_across_accounts(
+    mem_db: sqlite3.Connection,
+) -> None:
+    """VEEV held in margin + cash is ONE logical holding: sum qty,
+    weighted-average cost basis. Boss feedback 2026-06-15: prior behavior
+    let the second account's upsert silently overwrite the first."""
+    result = broker_sync.import_snapshot(mem_db, {
+        "as_of": "2026-06-12T21:30:00Z",
+        "accounts": [
+            {"account_number": "A1", "type": "margin", "positions": [
+                {"symbol": "VEEV", "quantity": 2, "average_buy_price": 161},
+            ]},
+            {"account_number": "A2", "type": "cash", "positions": [
+                {"symbol": "VEEV", "quantity": 9, "average_buy_price": 168},
+            ]},
+        ],
+    })
+    assert result.upserted == 1
+    rows = list_holdings(mem_db)
+    assert [r.ticker for r in rows] == ["VEEV"]
+    assert rows[0].qty == 11
+    expected_cost = (2 * 161 + 9 * 168) / 11
+    assert abs(rows[0].cost_basis - expected_cost) < 1e-6
+    # Both account tags survive so per-account deactivation still matches.
+    assert "account=A1" in rows[0].notes
+    assert "account=A2" in rows[0].notes
+
+
 # --- positions PULL bridge (read-only) -------------------------------------
 
 
