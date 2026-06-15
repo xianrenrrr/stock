@@ -29,21 +29,20 @@ emails.
 
 ## LLM Backend Policy
 
-Runtime LLM calls are **Claude-first on Fable 5** (boss directive 2026-06-11).
-The ONE place to configure backends/models is `.env`:
+Runtime LLM calls are **Claude-first on Opus 4.8** (Claude-first boss directive
+2026-06-11; **Fable 5 is BANNED, operator directive 2026-06-14** — do not set
+`CORE_CLAUDE_MODEL=claude-fable-5`). The ONE place to configure backends/models
+is `.env`:
 
-- `CORE_LLM_BACKEND=claude_cli` + `CORE_CLAUDE_MODEL=claude-fable-5` — every
+- `CORE_LLM_BACKEND=claude_cli` + `CORE_CLAUDE_MODEL=claude-opus-4-8` — every
   core call (research, predictions, grading, dives, macro, replies, thesis,
-  discovery) spawns `claude -p --model claude-fable-5` on the Claude Code
+  discovery) spawns `claude -p --model claude-opus-4-8` on the Claude Code
   subscription.
 - `SELF_REVIEW_BACKEND=claude_cli` — the daily autopilot also runs on Claude.
 - `UTILITY_CLAUDE_MODEL=claude-haiku-4-5-20251001` — the high-frequency cheap
-  JSON lane (feature extraction, intent) stays on haiku; Fable there would
-  burn the 5h session window for no gain.
-- Quota note: Fable's tokenizer runs ~30% more tokens for the same content and
-  thinking is always on. Watch `stock usage --windows`; quota exhaustion is
-  handled by the plan-I `retry_quota_leftovers` system. Fallback model option:
-  `claude-opus-4-8` in `CORE_CLAUDE_MODEL`.
+  JSON lane (feature extraction, intent) stays on haiku.
+- Quota: watch `stock usage --windows`; quota exhaustion is handled by the
+  plan-I `retry_quota_leftovers` system.
 - `CORE_LLM_BACKEND=codex_cli` remains available (previous default; codex with
   claude fallback). MiniMax is retired; `minimax` routes to codex_cli and
   direct `get_client("minimax")` fails closed.

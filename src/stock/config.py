@@ -97,7 +97,8 @@ class Settings(BaseSettings):
     #   "minimax"            : legacy value; ignored and routed to codex_cli.
     # The operator switch lives in .env -- these are only fallback defaults.
     core_llm_backend: str = "claude_cli"
-    core_claude_model: str = "claude-fable-5"
+    # Fable 5 is BANNED (operator directive 2026-06-14). Use Opus 4.8.
+    core_claude_model: str = "claude-opus-4-8"
     # Blank lets codex pick its own configured default (currently gpt-5.5).
     # Override in .env if you want to pin a specific codex-supported model.
     core_codex_model: str = ""

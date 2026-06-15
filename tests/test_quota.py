@@ -1,4 +1,4 @@
-"""tests.test_quota -- 5h quota windows + leftover-job retry (plan I)."""
+﻿"""tests.test_quota -- 5h quota windows + leftover-job retry (plan I)."""
 from __future__ import annotations
 
 import sqlite3
@@ -186,7 +186,7 @@ def test_claude_cli_limit_detection_persists_event(
         with pytest_mod.raises(ClaudeCliUnavailable, match="usage limit"):
             client.chat(
                 messages=[{"role": "user", "content": "hi"}],
-                model="claude-fable-5", max_tokens=10,
+                model="claude-opus-4-8", max_tokens=10,
                 conn=mem_db, caller="research.generate_daily",
             )
 
@@ -215,7 +215,7 @@ def test_claude_cli_long_output_not_flagged_as_limit(mem_db, monkeypatch) -> Non
         client = ClaudeCliClient()
         resp = client.chat(
             messages=[{"role": "user", "content": "hi"}],
-            model="claude-fable-5", max_tokens=10,
+            model="claude-opus-4-8", max_tokens=10,
             conn=mem_db, caller="research.generate_daily",
         )
 
