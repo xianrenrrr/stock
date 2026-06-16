@@ -140,6 +140,80 @@ def test_probability_guardrails_cap_stale_thematic_upcall_without_confirmation()
     assert "stale/thematic" in adjusted.rationale
 
 
+def test_probability_guardrails_floor_down_into_geopolitical_riskon() -> None:
+    """A mild down-fade into a fresh risk-on geopolitical catalyst is floored.
+
+    Regression for the 2026-06-12 Iran-peace semiconductor relief rally, where
+    down-fades (0981.HK, 688981.SS) were issued on 'no fresh company-specific
+    hard catalyst' and run over by the macro relief rally.
+    """
+    output = PredictionOutput(
+        direction="down",
+        prob_up=0.49,
+        expected_return_bps=-30,
+        confidence=0.55,
+        rationale="Failed gap-up; no fresh company-specific hard catalyst.",
+        key_factors=["extended", "technical fade"],
+    )
+    features = [{
+        "sentiment": "bullish",
+        "catalyst_type": "macro",
+        "summary": "Trump Iran peace deal sparks semiconductor relief rally.",
+        "ts": "2026-06-12T11:00:00+00:00",
+    }]
+    prices = [
+        {"ts": "2026-06-10", "c": 70.0, "v": 1000},
+        {"ts": "2026-06-11", "c": 73.0, "v": 1100},
+        {"ts": "2026-06-12", "c": 75.5, "v": 1200},
+    ]
+
+    adjusted = apply_probability_guardrails(
+        "0981.HK",
+        output,
+        features,
+        prices,
+        as_of=datetime(2026, 6, 12, 14, 0, tzinfo=timezone.utc),
+    )
+
+    assert adjusted.prob_up == pytest.approx(0.50)
+    assert adjusted.expected_return_bps >= 0
+    assert "geopolitical" in adjusted.rationale
+
+
+def test_probability_guardrails_skip_upcall_cap_under_geopolitical_riskon() -> None:
+    """A stale/thematic up-call is NOT capped when a fresh risk-on geo catalyst is live."""
+    output = PredictionOutput(
+        direction="up",
+        prob_up=0.62,
+        expected_return_bps=80,
+        confidence=0.68,
+        rationale="AI/semis demand stays supportive into the relief rally.",
+        key_factors=["AI infrastructure", "risk-on tape"],
+    )
+    features = [{
+        "sentiment": "bullish",
+        "catalyst_type": "macro",
+        "novelty": "high",
+        "summary": "Iran ceasefire fuels broad semiconductor risk-on rally.",
+        "ts": "2026-06-12T11:00:00+00:00",
+    }]
+    prices = [
+        {"ts": "2026-06-10", "c": 100.0, "v": 1000},
+        {"ts": "2026-06-11", "c": 103.0, "v": 1100},
+        {"ts": "2026-06-12", "c": 106.0, "v": 1200},
+    ]
+
+    adjusted = apply_probability_guardrails(
+        "AMAT",
+        output,
+        features,
+        prices,
+        as_of=datetime(2026, 6, 12, 14, 0, tzinfo=timezone.utc),
+    )
+
+    assert adjusted.prob_up == pytest.approx(0.62)
+
+
 def test_probability_guardrails_cap_post_catalyst_exhaustion() -> None:
     """Day-2/day-3 hard-catalyst continuations are capped after an 8%+ rally."""
     output = PredictionOutput(
@@ -200,7 +274,7 @@ def _seed_ai_infra_peer_breadth(conn: sqlite3.Connection) -> None:
 def test_probability_guardrails_floor_ai_bearish_positive_breadth(
     mem_db: sqlite3.Connection,
 ) -> None:
-    """Broad positive AI/semis tape blocks sub-0.49 bearish stale calls."""
+    """Broad positive AI/semis tape forces bearish stale calls to neutral."""
     _seed_ai_infra_peer_breadth(mem_db)
     output = PredictionOutput(
         direction="down",
@@ -229,9 +303,9 @@ def test_probability_guardrails_floor_ai_bearish_positive_breadth(
         conn=mem_db,
     )
 
-    assert adjusted.prob_up == pytest.approx(0.49)
-    assert adjusted.confidence <= 0.51
-    assert adjusted.expected_return_bps == -10
+    assert adjusted.prob_up == pytest.approx(0.50)
+    assert adjusted.confidence <= 0.50
+    assert adjusted.expected_return_bps == 0
     assert "Probability floored" in adjusted.rationale
 
 

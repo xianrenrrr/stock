@@ -31,7 +31,7 @@ PRICE_LOOKBACK: int = 10
 AI_INFRA_BREADTH_MIN_OBSERVATIONS: int = 5
 AI_INFRA_BREADTH_THRESHOLD: float = 0.65
 AI_INFRA_MEDIAN_RETURN_THRESHOLD: float = 0.015
-AI_INFRA_BEARISH_BREADTH_FLOOR: float = 0.49
+AI_INFRA_BEARISH_BREADTH_FLOOR: float = 0.50
 CALIBRATION_NEUTRAL_PROB: float = 0.50
 PEER_READTHROUGH_DOWNCALL_MIN: float = 0.47
 PEER_READTHROUGH_DOWNCALL_FLOOR: float = 0.50
@@ -311,6 +311,42 @@ def _has_fresh_directional_hard_catalyst(
     return False
 
 
+# Exogenous geopolitical/macro-shock catalysts the predictor otherwise treats as
+# passive "backdrop". When one is fresh AND risk-on, a relief rally can run over
+# mild down-fades issued on "no fresh company-specific hard catalyst" -- the
+# 2026-06-12 Iran-peace semiconductor rally (0981.HK, 688981.SS) is the case.
+GEOPOLITICAL_CATALYST_LEXICON: tuple[str, ...] = (
+    "iran", "hormuz", "sanction", "tariff", "ceasefire", "opec",
+    "geopolit", "israel", "strait", "peace deal", "russia", "ukraine",
+)
+
+
+def _has_active_geopolitical_riskon(
+    features: list[dict[str, Any]], as_of: datetime
+) -> bool:
+    """True when a fresh (<=24h) feature is a bullish/risk-on geopolitical catalyst.
+
+    Text-scan (not catalyst_type) so it is independent of the news-feature
+    extractor's taxonomy, which does not emit a geopolitical class.
+    """
+    for feat in features:
+        text = (
+            str(feat.get("summary", "")) + " " + str(feat.get("title", ""))
+        ).lower()
+        if not any(kw in text for kw in GEOPOLITICAL_CATALYST_LEXICON):
+            continue
+        sentiment = str(feat.get("sentiment", "")).strip().lower()
+        if sentiment not in {"bullish", "positive", "risk-on"}:
+            continue
+        ts = _parse_feature_ts(feat.get("ts"))
+        if ts is None:
+            continue
+        age = as_of - ts
+        if timedelta(0) <= age <= timedelta(hours=24):
+            return True
+    return False
+
+
 def _recent_return(prices: list[dict[str, Any]], bars: int = 2) -> float | None:
     if len(prices) <= bars:
         return None
@@ -500,11 +536,37 @@ def apply_probability_guardrails(
         or _text_mentions_peer_readthrough(output)
     )
     fresh_hard_catalyst = _has_fresh_hard_catalyst(features, now)
+    active_geo_riskon = _has_active_geopolitical_riskon(features, now)
+
+    # A fresh risk-on geopolitical catalyst (e.g. an Iran-peace relief rally) is a
+    # real directional signal, not backdrop: do not cap up-calls into it, and floor
+    # mild down-fades issued without a fresh negative hard catalyst toward neutral.
+    if (
+        active_geo_riskon
+        and output.direction == "down"
+        and output.prob_up < CALIBRATION_NEUTRAL_PROB
+        and not _has_fresh_negative_hard_catalyst(features, now)
+    ):
+        logger.info(
+            "geopolitical risk-on down-call floor for %s: %.2f -> %.2f",
+            ticker_upper, output.prob_up, CALIBRATION_NEUTRAL_PROB,
+        )
+        output.prob_up = CALIBRATION_NEUTRAL_PROB
+        output.confidence = min(output.confidence, CALIBRATION_NEUTRAL_PROB)
+        output.expected_return_bps = max(output.expected_return_bps, 0)
+        output.rationale = (
+            output.rationale.rstrip()
+            + " Probability floored to neutral: a fresh risk-on geopolitical"
+            " catalyst is active and there is no fresh negative hard catalyst, so"
+            " a mild down-fade into a relief rally is not supported."
+        )
+        return output
 
     if (
         output.direction == "up"
         and output.prob_up > STALE_UPCALL_CAP
         and not fresh_hard_catalyst
+        and not active_geo_riskon
         and _has_stale_or_thematic_news(features)
     ):
         supported_exception = (
@@ -569,7 +631,7 @@ def apply_probability_guardrails(
         )
         output.prob_up = AI_INFRA_BEARISH_BREADTH_FLOOR
         output.confidence = min(output.confidence, 1.0 - AI_INFRA_BEARISH_BREADTH_FLOOR)
-        output.expected_return_bps = max(output.expected_return_bps, -10)
+        output.expected_return_bps = max(output.expected_return_bps, 0)
         output.rationale = (
             output.rationale.rstrip()
             + " Probability floored because AI/semis peer breadth is positive "
@@ -586,7 +648,10 @@ def apply_probability_guardrails(
 
     cap: float | None = None
     reason: str | None = None
-    if (
+    if active_geo_riskon:
+        # Fresh risk-on geopolitical catalyst supports the up-call -- do not cap.
+        cap = None
+    elif (
         aged_positive_hard_catalyst
         and not fresh_hard_catalyst
         and recent_ret is not None
