@@ -33,6 +33,7 @@ from stock import (
     emailer,
     entry_signals,
     events,
+    feedback_router,
     grading,
     holdings,
     intent,
@@ -515,6 +516,55 @@ def _job_learn_from_feedback() -> None:
                         "Reply generation failed for inbound %s", inbound_id
                     )
             elif result.intent == "instruction":
+                # Not every instruction is a research ask. A feature request
+                # ("split CN/US reports", "shorter notes") used to be enqueued as
+                # an equity deep-dive, producing a nonsensical supply-chain note
+                # about a code change. Categorize first; only deep-dive asks hit
+                # the research queue. Fails open to deep_dive so a genuine research
+                # ask is never dropped.
+                try:
+                    category = feedback_router.categorize_feedback(
+                        entry.text, recipient=entry.recipient, conn=conn
+                    ).category
+                except Exception:
+                    logger.exception(
+                        "feedback_router.categorize failed for entry %s; "
+                        "defaulting to deep_dive", inbound_id,
+                    )
+                    category = "deep_dive"
+
+                if category == "feature_request":
+                    try:
+                        topic_short = str(entry.text).strip().replace("\n", " ")[:120]
+                        fr_body = (
+                            f"已记录功能需求（feature request）：{topic_short}\n\n"
+                            "已转交系统开发流程，不会作为股票深度研究处理。\n\n"
+                            "Not financial advice."
+                        )
+                        cursor = conn.execute(
+                            "INSERT INTO research_reports"
+                            " (kind, topic, layer_focus, body, cost_usd, created_at)"
+                            " VALUES ('feature_request', ?, NULL, ?, 0, ?)",
+                            (topic_short, fr_body, datetime.now(timezone.utc).isoformat()),
+                        )
+                        conn.commit()
+                        fr_rid = int(cursor.lastrowid or 0) or None
+                        run_id = conversation.get_run_id(conn, inbound_id)
+                        conversation.record_outbound(
+                            entry.recipient, fr_body, conn,
+                            run_id=run_id, related_research_id=fr_rid,
+                        )
+                        logger.info(
+                            "Instruction routed to feature_request for %s: topic=%r",
+                            entry.recipient, topic_short,
+                        )
+                    except Exception:
+                        logger.exception(
+                            "feature_request capture failed for inbound %s",
+                            inbound_id,
+                        )
+                    continue
+
                 try:
                     topic = entry.text
                     action_queue.enqueue_actions(

@@ -1,0 +1,22 @@
+[SYSTEM]
+You categorize a single inbound instruction from the hedge-fund partner ("boss") of an AI-supply-chain research analyst system ("AI助手"). The instruction has already been classified as an instruction (not a question or acknowledgment). Your only job is to decide where this instruction should land:
+
+- "deep_dive" -- the boss wants research/analysis on a company, sector, ticker, or market theme (e.g. "do a deep-dive on AVGO", "more A-shares coverage", "look into HBM supply"). These go to the equity-research deep-dive queue.
+- "feature_request" -- the boss wants to change how the AI助手 SYSTEM itself behaves: its code, report format, scheduling, push timing, data partitioning, or product features (e.g. "split the report into CN and US tracks", "push each report when it finishes", "make notes shorter", "route feedback through a classifier"). These are engineering/product changes, NOT research topics.
+- "other" -- neither of the above, or you cannot tell.
+
+Key test: would fulfilling this require WRITING A RESEARCH NOTE (deep_dive) or CHANGING THE SOFTWARE (feature_request)? A request to analyze a stock is deep_dive. A request to change how reports are generated, formatted, partitioned, scheduled, or pushed is feature_request.
+
+Output ONLY a JSON object with this exact shape:
+{"category": "deep_dive|feature_request|other", "confidence": 0.0-1.0, "summary": "<10-30 char summary>"}
+
+Do not output anything else. No prose, no <think> blocks, just JSON.
+
+[USER]
+Recipient alias: {recipient}
+Instruction text:
+"""
+{text}
+"""
+
+Return only the JSON object described above.
