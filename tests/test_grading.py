@@ -13,6 +13,8 @@ from stock.grading import (
     PriceRefreshResult,
     _append_model_improvements_to_rules,
     _extract_model_improvement_section,
+    _format_error_patterns,
+    _is_geopolitical,
     compute_stats,
     generate_grading_note,
     recent_outcomes,
@@ -69,6 +71,38 @@ def _insert_outcome(
         (prediction_id, actual_return, direction_hit, brier, scored_at),
     )
     conn.commit()
+
+
+def test_is_geopolitical_detects_catalyst_lexicon() -> None:
+    assert _is_geopolitical("Iran-deal semiconductor relief rally")
+    assert _is_geopolitical("OPEC cuts and Hormuz tension")
+    assert not _is_geopolitical("Earnings beat + guidance raise")
+
+
+def test_format_error_patterns_surfaces_geopolitical_misses(
+    mem_db: sqlite3.Connection,
+) -> None:
+    """Misses that cite a geopolitical catalyst are broken out as a blind spot."""
+    now = datetime.now(timezone.utc)
+    fresh = now.isoformat()
+
+    # Two geopolitical-driven down-fade misses (the 06-12 SMIC pattern).
+    for tkr in ("0981.HK", "688981.SS"):
+        pid = _insert_prediction(
+            mem_db, ticker=tkr, direction="down", prob_up=0.49,
+            rationale="No fresh hard catalyst; Iran-deal relief rally faded.",
+        )
+        _insert_outcome(mem_db, prediction_id=pid, actual_return=0.06,
+                        direction_hit=0, brier=0.6, scored_at=fresh)
+    # One ordinary, non-geopolitical hit.
+    pid = _insert_prediction(mem_db, ticker="NVDA", direction="up", prob_up=0.7,
+                             rationale="Earnings beat + guidance raise.")
+    _insert_outcome(mem_db, prediction_id=pid, actual_return=0.03,
+                    direction_hit=1, brier=0.1, scored_at=fresh)
+
+    block = _format_error_patterns(mem_db, hours=36)
+    assert "geopolitical-catalyst calls: n=2 miss=2" in block
+    assert "blind spot" in block
 
 
 # -- recent_outcomes --
@@ -496,3 +530,50 @@ def test_generate_grading_note_skips_refresh_and_score_when_disabled(
     mock_score.assert_not_called()
     mock_client.assert_not_called()
     assert note.stats.total == 0
+
+
+# --- CN/US market split (boss feature request 2026-06-17) ---------------------
+
+
+def _outcome_row(ticker, direction, hit, brier=0.2, prob_up=0.6, actual=0.01):
+    from stock.grading import OutcomeRow
+    return OutcomeRow(
+        prediction_id=1, ticker=ticker, direction=direction, prob_up=prob_up,
+        prob_up_calibrated=None, confidence=0.6, rationale="r", model_used="m",
+        strategy_arm="a", actual_return=actual, direction_hit=1 if hit else 0,
+        brier=brier, created_at="2026-06-17T00:00:00+00:00",
+        due_at="2026-06-18T00:00:00+00:00", scored_at="2026-06-17T21:00:00+00:00",
+    )
+
+
+def test_market_of_classifies_china_vs_us():
+    from stock.grading import _market_of
+    assert _market_of("688126.SS") == "CN"
+    assert _market_of("300408.SZ") == "CN"
+    assert _market_of("0700.HK") == "CN"
+    assert _market_of("NVDA") == "US"
+    assert _market_of("brk.b".upper()) == "US"  # not a china suffix
+
+
+def test_market_split_block_separates_two_tracks():
+    from stock.grading import _format_market_split_block
+    rows = [
+        _outcome_row("688126.SS", "up", hit=True),
+        _outcome_row("300408.SZ", "down", hit=False),
+        _outcome_row("NVDA", "up", hit=True),
+        _outcome_row("AMD", "up", hit=True),
+    ]
+    block = _format_market_split_block(rows)
+    assert "China" in block and "US" in block
+    # CN: 2 calls, 1 hit -> 50%; US: 2 calls, 2 hits -> 100%
+    assert "n=2, hit=50%" in block
+    assert "n=2, hit=100%" in block
+
+
+def test_market_split_block_handles_empty_market():
+    from stock.grading import _format_market_split_block
+    rows = [_outcome_row("NVDA", "up", hit=True)]
+    block = _format_market_split_block(rows)
+    assert "no scored predictions this cycle" in block  # CN side empty
+    assert "US" in block
+    assert _format_market_split_block([]) == ""

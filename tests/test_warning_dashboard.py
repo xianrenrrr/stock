@@ -143,12 +143,22 @@ def test_publish_warning_dashboard_dedupes_unchanged_content(
     mem_db.commit()
 
     first = publish_warning_dashboard(mem_db)
+    first_created = mem_db.execute(
+        "SELECT created_at FROM research_reports WHERE kind = 'warning_dashboard'"
+    ).fetchone()[0]
     second = publish_warning_dashboard(mem_db)
 
+    # Unchanged content does not re-trigger the high-risk email...
     assert first.changed is True
     assert first.research_id is not None
     assert second.changed is False
-    assert second.research_id is None
+    # ...but the stored row IS still refreshed in place (same id) so its
+    # generated_at header never goes stale, and the table stays a single row.
+    assert second.research_id == first.research_id
+    second_created = mem_db.execute(
+        "SELECT created_at FROM research_reports WHERE kind = 'warning_dashboard'"
+    ).fetchone()[0]
+    assert second_created >= first_created
     rows = mem_db.execute(
         "SELECT COUNT(*) FROM research_reports WHERE kind = 'warning_dashboard'"
     ).fetchone()

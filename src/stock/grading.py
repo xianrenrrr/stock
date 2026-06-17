@@ -282,6 +282,71 @@ def _format_stats_block(stats: GradingStats) -> str:
     return "\n".join(lines)
 
 
+# Boss feature request 2026-06-17: split the hit summary into two separate
+# tracks -- China vs US -- so the two markets are graded independently (they
+# behave very differently: A-shares/HK trade on different catalysts and hours).
+# Rule from the boss: A-share (.SS/.SZ) AND HK (.HK) both count as China by
+# listing suffix; everything else is US. History is NOT re-split -- this only
+# separates the going-forward summary in each grading note.
+CHINA_SUFFIXES: tuple[str, ...] = (".SS", ".SZ", ".HK")
+
+
+def _market_of(ticker: str) -> str:
+    """Return 'CN' for A-share/HK suffixed tickers, else 'US'."""
+    t = (ticker or "").strip().upper()
+    return "CN" if t.endswith(CHINA_SUFFIXES) else "US"
+
+
+def _format_market_split_block(rows: list[OutcomeRow]) -> str:
+    """Two separate hit summaries -- China and US -- side by side in the note."""
+    if not rows:
+        return ""
+    buckets: dict[str, list[OutcomeRow]] = {"CN": [], "US": []}
+    for r in rows:
+        buckets[_market_of(r.ticker)].append(r)
+
+    labels = {"CN": "🇨🇳 中国 (A股/港股) / China", "US": "🇺🇸 美股 / US"}
+    lines = ["双轨命中 / Hit summary by market:"]
+    for mkt in ("CN", "US"):
+        bucket = buckets[mkt]
+        if not bucket:
+            lines.append(f"- {labels[mkt]}: no scored predictions this cycle")
+            continue
+        n = len(bucket)
+        hits = sum(1 for r in bucket if r.direction_hit)
+        brier = sum(r.brier for r in bucket) / n
+        up = [r for r in bucket if r.direction == "up"]
+        down = [r for r in bucket if r.direction == "down"]
+        up_h = f"{sum(1 for r in up if r.direction_hit) / len(up) * 100:.0f}%" if up else "n/a"
+        down_h = (
+            f"{sum(1 for r in down if r.direction_hit) / len(down) * 100:.0f}%"
+            if down else "n/a"
+        )
+        lines.append(
+            f"- {labels[mkt]}: n={n}, hit={hits / n:.0%}, Brier={brier:.3f}"
+            f" (up-calls {up_h}, down-calls {down_h})"
+        )
+    return "\n".join(lines)
+
+
+# Geopolitical / macro-shock catalyst lexicon. Misses that cite these are driven
+# by an exogenous risk-on/risk-off catalyst the predictor treats as passive
+# "backdrop" -- they evade the direction/Brier/confident-miss lenses (they tend to
+# print at prob_up~=0.49, below the confident-miss threshold). Scanned at read-time
+# against stored rationale/key_factors so no schema migration is needed.
+GEOPOLITICAL_LEXICON: tuple[str, ...] = (
+    "iran", "hormuz", "sanction", "tariff", "ceasefire", "opec",
+    "geopolit", "israel", "strait", "export-control", "export curb",
+    "war ", "peace deal", "russia", "ukraine",
+)
+
+
+def _is_geopolitical(text: str) -> bool:
+    """True when text references an exogenous geopolitical/macro-shock catalyst."""
+    low = text.lower()
+    return any(keyword in low for keyword in GEOPOLITICAL_LEXICON)
+
+
 def _format_error_patterns(conn: sqlite3.Connection, *, hours: int) -> str:
     """Systematic error breakdowns so the grading LLM targets MEASURED weaknesses
     (worst direction/confidence bucket, calibration verdict, trend) -- not vibes."""
@@ -306,6 +371,24 @@ def _format_error_patterns(conn: sqlite3.Connection, *, hours: int) -> str:
         n, h = _rate("AND p.confidence >= ? AND p.confidence < ?", lo, hi)
         if n:
             lines.append(f"- conf {label}: n={n} hit={h}%")
+
+    # Geopolitical-catalyst blind spot: misses driven by an active exogenous
+    # catalyst (e.g. an Iran-peace relief rally) that the predictor discounts as
+    # backdrop. Derived from stored rationale/key_factors -- no schema change.
+    geo = conn.execute(
+        "SELECT p.rationale, p.key_factors_json, o.direction_hit FROM predictions p"
+        " JOIN outcomes o ON p.id = o.prediction_id"
+        " WHERE o.scored_at >= ?",
+        (cutoff,),
+    ).fetchall()
+    geo_rows = [r for r in geo if _is_geopolitical((r[0] or "") + " " + (r[1] or ""))]
+    if geo_rows:
+        n = len(geo_rows)
+        miss = sum(1 for r in geo_rows if not r[2])
+        lines.append(
+            f"- geopolitical-catalyst calls: n={n} miss={miss}"
+            f" ({round(miss / n * 100)}% wrong) <- exogenous-catalyst blind spot"
+        )
 
     cal = conn.execute(
         "SELECT helps, brier_raw, brier_cal FROM calibration ORDER BY version DESC LIMIT 1"
@@ -554,8 +637,9 @@ def generate_grading_note(
         refresh_block=_format_refresh_block(refreshed),
         stats_block=(
             _format_stats_block(stats)
+            + "\n\n" + _format_market_split_block(rows)
             + "\n\n" + _format_error_patterns(conn, hours=lookback_hours)
-        ),
+        ).replace("\n\n\n", "\n\n"),
         outcomes_block=_format_outcomes_block(rows),
         thesis_block=thesis_block,
         current_rules=_load_current_rules(),

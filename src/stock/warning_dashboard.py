@@ -469,7 +469,11 @@ def publish_warning_dashboard(
     days: int = 7,
     limit: int = 25,
 ) -> WarningPublishResult:
-    """Persist warning dashboard as research_reports when warning content changes."""
+    """Persist the warning dashboard as a single research_reports row.
+
+    The row is refreshed on every call so its `generated_at` header never goes
+    stale; ``changed`` reports whether the warning *content* differs from the
+    last publish (used to gate the high-risk email, not the row write)."""
     dashboard = build_warning_dashboard(conn, days=days, limit=limit)
     body = format_warning_dashboard(dashboard)
     digest = _dashboard_digest(dashboard)
@@ -480,19 +484,17 @@ def publish_warning_dashboard(
     ).fetchone()
     high_count = sum(1 for i in dashboard.items if i.severity == "high")
     medium_count = sum(1 for i in dashboard.items if i.severity == "medium")
-    if row and str(row[0]) == digest:
-        return WarningPublishResult(
-            research_id=None,
-            high_count=high_count,
-            medium_count=medium_count,
-            changed=False,
-            body=body,
-        )
+    changed = not (row and str(row[0]) == digest)
 
     now = datetime.now(timezone.utc).isoformat()
-    # Update the single existing warning_dashboard row in place instead of
-    # inserting a new one every time the warning set changes -- otherwise the
-    # table (and the synced feed) accumulates dozens of near-duplicate rows.
+    # ALWAYS refresh the stored row, even when the warning *set* is unchanged.
+    # The rendered body leads with a `generated_at` timestamp, so a row that is
+    # never rewritten shows a stale "Warning Dashboard -- <old time>" header in
+    # the daily report / synced feed while the live panel stays current. The
+    # content digest is used ONLY to gate the high-risk email (changed flag) so
+    # we do not re-spam the operator when nothing material changed. We still
+    # update the single existing row in place rather than inserting, so the table
+    # (and the synced feed) never accumulates near-duplicate rows.
     existing = conn.execute(
         "SELECT id FROM research_reports WHERE kind = 'warning_dashboard'"
         " ORDER BY id DESC LIMIT 1",
@@ -511,18 +513,19 @@ def publish_warning_dashboard(
             (body, now),
         )
         research_id = int(cursor.lastrowid or 0)
-    conn.execute(
-        "INSERT INTO cloud_sync_state (key, value, updated_at)"
-        " VALUES (?, ?, ?)"
-        " ON CONFLICT(key) DO UPDATE SET value=excluded.value,"
-        " updated_at=excluded.updated_at",
-        (key, digest, now),
-    )
+    if changed:
+        conn.execute(
+            "INSERT INTO cloud_sync_state (key, value, updated_at)"
+            " VALUES (?, ?, ?)"
+            " ON CONFLICT(key) DO UPDATE SET value=excluded.value,"
+            " updated_at=excluded.updated_at",
+            (key, digest, now),
+        )
     conn.commit()
     return WarningPublishResult(
         research_id=research_id,
         high_count=high_count,
         medium_count=medium_count,
-        changed=True,
+        changed=changed,
         body=body,
     )
