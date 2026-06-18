@@ -19,6 +19,7 @@ from stock.orchestrator import (
     _job_ingest_and_extract,
     _job_pull_broker_positions,
     _job_reflect_weekly,
+    _job_research_push,
     _job_run_predictions,
     _job_score_daily,
     _job_weekly_qa_dive,
@@ -796,3 +797,96 @@ def test_pop_next_topic_empty_sector_returns_none(
     monkeypatch.setattr("stock.orchestrator.TOPIC_QUEUE_PATH", str(queue))
 
     assert _pop_next_topic("ai_demand") is None
+
+
+# -- CN/US 双轨 research push -------------------------------------------------
+
+
+def _fake_daily_research(tracks: list[str]):
+    """Build a generate_daily_research stub that records + persists each track."""
+    from stock.research import ResearchReport, _persist_research
+
+    def _gen(conn: sqlite3.Connection, *, track=None, **_kw) -> ResearchReport:
+        tracks.append(track)
+        rid = _persist_research(
+            conn, kind="daily", topic=None, layer_focus="L",
+            body=f"{track} note", cost_usd=0.0, track=track,
+        )
+        return ResearchReport(
+            research_id=rid, kind="daily", topic=None, layer_focus="L",
+            body=f"{track} note", cost_usd=0.0, created_at="t", track=track,
+        )
+
+    return _gen
+
+
+def test_job_research_push_runs_cn_then_us(
+    mock_conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Both tracks run in order and each note is persisted independently."""
+    from stock.market_track import CN, US
+
+    tracks: list[str] = []
+    monkeypatch.setattr(
+        "stock.orchestrator.generate_daily_research", _fake_daily_research(tracks)
+    )
+
+    _job_research_push()
+
+    assert tracks == [CN, US]
+    rows = mock_conn.execute(
+        "SELECT track FROM research_reports WHERE kind = 'daily' ORDER BY id"
+    ).fetchall()
+    assert [r[0] for r in rows] == [CN, US]
+
+
+def test_job_research_push_one_leg_failure_does_not_block_other(
+    mock_conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A non-network failure on the CN leg still lets the US leg push."""
+    from stock.market_track import CN, US
+    from stock.research import ResearchReport, _persist_research
+
+    attempted: list[str] = []
+
+    def _gen(conn: sqlite3.Connection, *, track=None, **_kw) -> ResearchReport:
+        attempted.append(track)
+        if track == CN:
+            raise ValueError("CN generation blew up")
+        rid = _persist_research(
+            conn, kind="daily", topic=None, layer_focus="L",
+            body="US note", cost_usd=0.0, track=track,
+        )
+        return ResearchReport(
+            research_id=rid, kind="daily", topic=None, layer_focus="L",
+            body="US note", cost_usd=0.0, created_at="t", track=track,
+        )
+
+    monkeypatch.setattr("stock.orchestrator.generate_daily_research", _gen)
+
+    _job_research_push()
+
+    assert attempted == [CN, US]
+    rows = mock_conn.execute(
+        "SELECT track FROM research_reports WHERE kind = 'daily'"
+    ).fetchall()
+    assert [r[0] for r in rows] == [US]
+
+
+def test_job_research_push_cost_ceiling_stops_after_first_leg(
+    mock_conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CostCeilingError on the CN leg skips the US leg (ceiling is global)."""
+    from stock.market_track import CN
+
+    attempted: list[str] = []
+
+    def _gen(conn: sqlite3.Connection, *, track=None, **_kw):
+        attempted.append(track)
+        raise CostCeilingError("over budget")
+
+    monkeypatch.setattr("stock.orchestrator.generate_daily_research", _gen)
+
+    _job_research_push()
+
+    assert attempted == [CN]

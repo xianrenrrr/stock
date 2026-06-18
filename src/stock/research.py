@@ -29,6 +29,7 @@ from stock.events import (
 )
 from stock.holdings import Holding, format_holdings_block, list_holdings
 from stock.ingest.insiders import format_insider_block, recent_for_ticker
+from stock.market_track import CN, US, market_track
 from stock.models import (
     ChatMessage,
     ChatResponse,
@@ -114,6 +115,9 @@ class ResearchReport(BaseModel):
     body: str
     cost_usd: float
     created_at: str
+    # CN/US 双轨: 'CN' / 'US' for a track-scoped daily note, None for a legacy
+    # combined note or non-daily kinds.
+    track: str | None = None
 
 
 @lru_cache(maxsize=1)
@@ -175,8 +179,14 @@ def _session_label(now: datetime) -> str:
     return "evening (post-US-close / Asia next-morning)"
 
 
-def _build_watchlist_block(conn: sqlite3.Connection) -> str:
-    """Pull recent predictions per active watchlist ticker for the prompt."""
+def _build_watchlist_block(
+    conn: sqlite3.Connection, *, track: str | None = None
+) -> str:
+    """Pull recent predictions per active watchlist ticker for the prompt.
+
+    When ``track`` is 'CN' or 'US', only tickers on that report track are kept
+    (CN/US 双轨); ``None`` keeps every ticker (legacy combined note).
+    """
     cutoff = (
         datetime.now(timezone.utc) - timedelta(hours=WATCHLIST_PREDICTION_LOOKBACK_HOURS)
     ).isoformat()
@@ -192,6 +202,8 @@ def _build_watchlist_block(conn: sqlite3.Connection) -> str:
         " ORDER BY p.ticker",
         (cutoff,),
     ).fetchall()
+    if track:
+        rows = [r for r in rows if market_track(str(r[0])) == track]
 
     if not rows:
         return "(no fresh predictions in the lookback window — schedule may not have produced one yet)"
@@ -209,11 +221,19 @@ def _build_watchlist_block(conn: sqlite3.Connection) -> str:
     return "\n".join(lines)
 
 
-def _build_watchlist_movers_block(conn: sqlite3.Connection) -> str:
-    """Force broad-watchlist urgent movers into the daily research prompt."""
+def _build_watchlist_movers_block(
+    conn: sqlite3.Connection, *, track: str | None = None
+) -> str:
+    """Force broad-watchlist urgent movers into the daily research prompt.
+
+    When ``track`` is set, only tickers on that report track are scanned
+    (CN/US 双轨); ``None`` scans the whole active watchlist.
+    """
     rows = conn.execute(
         "SELECT ticker FROM watchlist WHERE active = 1 ORDER BY ticker"
     ).fetchall()
+    if track:
+        rows = [r for r in rows if market_track(str(r[0])) == track]
     if not rows:
         return "(no active watchlist tickers)"
 
@@ -393,16 +413,48 @@ def _persist_research(
     layer_focus: str | None,
     body: str,
     cost_usd: float,
+    track: str | None = None,
 ) -> int:
     """Insert a research_reports row and return its id."""
     now = datetime.now(timezone.utc).isoformat()
     cursor = conn.execute(
-        "INSERT INTO research_reports (kind, topic, body, layer_focus, cost_usd, created_at)"
-        " VALUES (?, ?, ?, ?, ?, ?)",
-        (kind, topic, body, layer_focus, cost_usd, now),
+        "INSERT INTO research_reports"
+        " (kind, topic, body, layer_focus, cost_usd, track, created_at)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (kind, topic, body, layer_focus, cost_usd, track, now),
     )
     conn.commit()
     return int(cursor.lastrowid or 0)
+
+
+def _track_directive(track: str | None) -> str:
+    """Prompt block scoping a daily note to its CN/US 双轨 report track.
+
+    Empty string for ``None`` (legacy combined note). The directive tells the
+    analyst which listings to cover and which to defer to the other track's note.
+    """
+    # NB: this directive INTENTIONALLY overrides the static "Region split" block
+    # in prompts/research.txt that asks for China + US sub-blocks within one note.
+    # In 双轨 mode each push is a single-region note, so we tell the model to emit
+    # one region only and not to render an (empty) sub-block for the other.
+    if track == CN:
+        return (
+            "## 报告分区 / Report track: 中国 A/H (本篇只写中国)\n"
+            "这是 CN/US 双轨中的**中国侧**,作为一篇独立完整的中国命中报告推送。只覆盖"
+            "中国上市标的:沪市(.SS)、深市(.SZ)、港股(.HK);A/H 两地上市名按主上市地归"
+            "中国侧,从任一腿都算中国。**不要**讨论美股标的(NVDA、TSM、AVGO、美股 ADR "
+            "等),也**不要**再分'中美两栏'——美股由另一篇美股报告单独覆盖。若某板块今天"
+            "只有美股催化剂,在本篇一句带过并指向美股报告即可。"
+        )
+    if track == US:
+        return (
+            "## 报告分区 / Report track: 美股 (本篇只写美股)\n"
+            "这是 CN/US 双轨中的**美股侧**,作为一篇独立完整的美股命中报告推送。只覆盖"
+            "美国上市标的(含美股 ADR,如 TSM、BABA)。**不要**讨论 A股 / 港股标的"
+            "(.SS / .SZ / .HK),也**不要**再分'中美两栏'——中国标的由另一篇中国报告"
+            "单独覆盖。"
+        )
+    return ""
 
 
 def generate_daily_research(
@@ -411,8 +463,16 @@ def generate_daily_research(
     focus_layer_name: str | None = None,
     language: str | None = None,
     max_chars: int = DEFAULT_MAX_CHARS,
+    track: str | None = None,
 ) -> ResearchReport:
-    """Run the daily AI-supply-chain research cycle and persist the note."""
+    """Run the daily AI-supply-chain research cycle and persist the note.
+
+    When ``track`` is 'CN' or 'US', the watchlist / conviction / holdings / stop
+    universe is filtered to that track and the prompt is scoped to it, so the two
+    CN/US 双轨 pushes cover disjoint name sets. ``None`` keeps the legacy combined
+    note. History/grading is never partitioned -- this only splits the two
+    forward-looking daily reports.
+    """
     settings = get_settings()
     chain: SupplyChain = load_chain()
 
@@ -428,8 +488,8 @@ def generate_daily_research(
     lang = (language or settings.research_language or "zh").strip() or "zh"
 
     # Assemble prompt context
-    watchlist_block = _build_watchlist_block(conn)
-    watchlist_movers_block = _build_watchlist_movers_block(conn)
+    watchlist_block = _build_watchlist_block(conn, track=track)
+    watchlist_movers_block = _build_watchlist_movers_block(conn, track=track)
     news_block = _build_news_block(conn)
     performance_block = _build_performance_block(conn, days=7)
     focus_layer_players = format_layer_players(focus_layer)
@@ -484,6 +544,8 @@ def generate_daily_research(
             t = pick.ticker.upper()
             if t and t not in stop_loss_tickers:
                 stop_loss_tickers.append(t)
+    if track:
+        stop_loss_tickers = [t for t in stop_loss_tickers if market_track(t) == track]
     stop_loss_block = format_stop_loss_block(conn, stop_loss_tickers[:30])
     # F36: unusual options activity from the last 3 sessions, top 12.
     # Caller-renders an empty string when nothing fired (silent on quiet days).
@@ -507,15 +569,23 @@ def generate_daily_research(
     chokepoint_block = format_chokepoint_leaderboard_block(conn, days=21)
     # F42: conviction watchlist (~10 names) -- the deeply-tracked layer
     # above the 39-ticker ingest universe. Live prices + F24 stops.
-    conviction_block = format_conviction_watchlist_block(
-        conn, load_conviction(enabled_only=True),
-    )
+    conviction_names = load_conviction(enabled_only=True)
+    if track:
+        conviction_names = [
+            c for c in conviction_names if market_track(c.ticker) == track
+        ]
+    conviction_block = format_conviction_watchlist_block(conn, conviction_names)
     feedback_block = recent_feedback_block()
     anomaly_block = format_anomaly_block(recent_anomalies(conn, days=2))
     previous_followups_block = action_queue.format_previous_followups(
         action_queue.recent_completed(conn, hours=18), conn
     )
-    holdings_block = format_holdings_block(list_holdings(conn, active_only=True), conn)
+    holdings_for_note = list_holdings(conn, active_only=True)
+    if track:
+        holdings_for_note = [
+            h for h in holdings_for_note if market_track(h.ticker) == track
+        ]
+    holdings_block = format_holdings_block(holdings_for_note, conn)
     conversation_context_block = format_context_block(
         recent_turns(conn, recipient=None, limit=6)
     )
@@ -530,6 +600,7 @@ def generate_daily_research(
         language=lang,
         now_utc=now.isoformat(timespec="minutes"),
         session_label=_session_label(now),
+        track_directive=_track_directive(track),
         focus_layer_name=focus_layer.layer,
         focus_layer_function=focus_layer.function,
         watchlist_block=watchlist_block,
@@ -589,6 +660,7 @@ def generate_daily_research(
         layer_focus=focus_layer.layer,
         body=body,
         cost_usd=response.cost_usd,
+        track=track,
     )
 
     # Auto-queue follow-up topics from the just-generated note (best-effort)
@@ -629,6 +701,7 @@ def generate_daily_research(
         body=body,
         cost_usd=response.cost_usd,
         created_at=now.isoformat(),
+        track=track,
     )
 
 

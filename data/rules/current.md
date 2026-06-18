@@ -39,6 +39,7 @@
    - Peer earnings/guidance that directly damages the thesis.
    - Regulatory or legal events with plausible near-term financial impact.
 7. If a fresh negative catalyst is already followed by an extended-down move, do not go below `0.44` unless volume is extreme and sector/macro is also hostile.
+8. Dilution decay: once a negative offering/dilution catalyst enters day 2-3 and the stock is already `extended down`, floor `prob_up` at `0.48` and cap confidence at `0.50`; the easy move has traded and squeeze risk dominates (PL/SMCI day-2/3 short pattern went 0/2).
 
 ## Soft Catalyst Rules
 1. Soft-catalyst-only predictions must stay in `0.48-0.52`.
@@ -57,6 +58,7 @@
 5. Failed gap-up with no fresh hard catalyst is a hard gate against an up call; use `0.47-0.50`, and only move below `0.47` when downside volume or hostile breadth confirms:
    - `0.47-0.50` on neutral volume.
    - `0.44-0.47` if volume is at least `1.5x` average and sector breadth is not supportive.
+   - Washout-day hard gate: if the PRIOR session was a broad washout session (sector ETF/leaders broadly down), force `prob_up` for ANY down call with no fresh negative hard catalyst to `0.50-0.51` on the next session; the washout-day failed gap-up signal expires after that session and cannot justify a down call on its own.
 6. A single strong close after stale news does not override extension, weak macro, or a recent post-catalyst fade.
 
 ## Extension And Mean Reversion
@@ -76,6 +78,7 @@
    - If up more than `12%` in 2-5 sessions with no same-day hard catalyst, cap up calls at `0.51`.
    - If it then closes below open, below prior close, or on fading volume, prefer `0.47-0.49`.
    - Do not use low-volume “near-high” closes as continuation signals after parabolic moves.
+   - Strong-breadth exception (Asian/A-share semis): when US/global semi breadth is strongly up (e.g. SOXX up more than `3%`) and the parabolic name has no fresh same-day negative hard catalyst, apply the Sector §8 short suppression even if a same-group Asian median/leader breadth reading is unavailable — force `prob_up >= 0.50` instead of fading the parabola. Treat the strongly-up US semi tape as sufficient supportive breadth for Asian semiconductors, which squeeze hardest on these days.
 
 ## Sector And Peer Breadth
 1. Sector breadth can prevent an aggressive contrarian call, but it cannot by itself justify a bullish call above `0.52`.
@@ -98,6 +101,7 @@
    - AI data-center power: VRT, ETN, GEV, VST, CEG.
 6. Negative peer earnings reactions, such as AI outlook disappointment, override stale bullish sector narratives for one session only when at least two breadth indicators are hostile or the same-subsegment linkage is explicit and confirmed.
 7. A single negative peer read-through, including Broadcom-style AI outlook commentary, cannot push `prob_up` below `0.49` unless at least two breadth indicators are hostile; otherwise cap at `0.49-0.51`.
+8. Strong-breadth short suppression: when at least two breadth indicators are STRONGLY positive (for example a sector ETF such as SOXX up more than `3%`, same-group median strongly up, or a direct leader strongly up) and the stock has NO fresh negative hard catalyst, force `prob_up >= 0.50` for any down call. This override supersedes the failed-gap-up gate (Price Action §5) and the parabolic/extension-fade gate (Extension §6); under supportive breadth those bearish gates invert (12/12 down-calls wiped out on a +4.4% SOXX day from failed-gap/parabolic-exhaustion reasoning). When this strong-breadth override is the SOLE basis for lifting a call to `prob_up >= 0.50` and there is NO fresh positive hard catalyst, cap final `prob_up` at exactly `0.50` (pure neutral, not `0.51`); if the suppressed name itself shows a same-day failed gap-up or volume exhaustion, allow `prob_up = 0.49`. Override-suppressed up-calls hit only ~35%, so the override prevents the short but does not justify a positive tilt.
 
 ## Macro And Regime
 1. Macro alone should keep probabilities inside `0.47-0.53`.
@@ -109,6 +113,7 @@
    - Direct peer selloff.
 3. In a hostile macro/sector regime, do not issue soft-catalyst up calls above `0.51`.
 4. In a hostile macro/sector regime plus confirming down price action, use `0.45-0.48`.
+5. Exogenous macro/geopolitical one-off events (e.g. Iran peace, sanctions or oil-shock headlines) provide at most ONE trading session of directional breadth support. From the second session onward, force any up-call whose bullish rationale depends SOLELY on such an event to `prob_up = 0.49-0.50`. Geopolitical-catalyst calls hit only ~30% (16/23 wrong), driven by day-2+ continuation bets.
 
 ## Volume
 1. Elevated volume confirms the direction of a breakout, failed gap-up, breakdown, or post-catalyst reaction.
@@ -118,7 +123,7 @@
 5. Elevated downside volume after a failed gap-up supports `0.44-0.47`.
 
 ## Probability Calibration
-0. Use raw `prob_up` for decisions, reporting, final direction selection, and display; keep the current calibrated output fully disabled until separate up-call/down-call calibration variants beat raw Brier across multiple scored sessions.
+0. Use raw `prob_up` for decisions, reporting, final direction selection, and display; keep the current calibrated output fully disabled until separate up-call/down-call calibration variants beat raw Brier on holdout across at least 3 scored sessions.
 1. Most predictions should be `0.47-0.53`.
 2. Use `0.51-0.52` for modest price-action or sector-only bullish edges.
 3. Use `0.47-0.49` for stale narrative plus weak price action.
@@ -128,6 +133,8 @@
 7. Use `0.55+` only for fresh measurable hard catalysts with confirmation and no extension/fade warning.
 8. Never use `0.55+` for stale AI, product, analyst, partnership, index, or theme headlines.
 9. If evidence is mixed, stale, duplicated, low-volume, or conflicting across retrieved cases, force `0.49-0.51`.
+10. Direction-concentration gate: when more than `70%` of the current session's calls across the universe point the same direction, force any marginal same-direction call with `|prob_up - 0.50| < 0.04` to `0.50`. When the concentrated direction is UP, a marginal bullish call in this band that ALSO shows a same-day bearish confirmation (failed gap-up or volume exhaustion) may be set to `0.49` rather than `0.50` — trend-cohort hit-rate decayed 47.7% → 35.7%, so over-concentrated bullish tapes warrant a slight reverse tilt.
+11. Mean-reversion broad-up regime gate: when the sector ETF is up more than `3%` AND more than `70%` of the universe closed green, treat the tape as a mean-reversion broad-up regime and force `prob_up` to `0.50-0.51` for ANY down call lacking a fresh same-day negative hard catalyst. This supersedes the failed-gap-up and parabolic/extension-fade gates the same way Sector §8 does; counter-trend shorts were the dominant loss source on these days.
 
 ## Confidence Calibration
 1. Confidence measures signal quality, not conviction.

@@ -61,7 +61,7 @@ topics:
 - sector: space_tech
   topic: 'AI-enabled geospatial intelligence: Planet Labs (PL) + BlackSky (BKSY) + Rocket Lab (RKLB) -- which public company captures the most value as satellite imagery becomes a queryable AI data layer'
   enabled: true
-  last_run: ''
+  last_run: '2026-06-14'
   phase: early
 - sector: ai_demand
   topic: 'AI compute BUYERS -- who actually monetizes the GPUs: enterprise/vertical software (PLTR, NOW, CRM) that resells AI as priced product. Which has proprietary data + workflow lock-in so AI margin

@@ -121,6 +121,11 @@ CREATE TABLE IF NOT EXISTS research_reports (
     layer_focus TEXT,
     body TEXT NOT NULL,
     cost_usd REAL NOT NULL DEFAULT 0,
+    -- CN/US 双轨: which report track a 'daily' note belongs to ('CN' A/H China,
+    -- 'US' US-listed). NULL for legacy single-track notes and non-daily kinds
+    -- (reply/feature_request/deep_dive). History/grading is NOT partitioned by
+    -- this -- it only separates the two forward-looking daily pushes.
+    track TEXT,
     created_at TEXT NOT NULL
 );
 
@@ -533,6 +538,11 @@ _ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
     # failures are re-queued at the next drain instead of dying silently.
     "action_queue": [
         ("attempts", "INTEGER DEFAULT 0"),
+    ],
+    # CN/US 双轨 (2026-06-17): tag each daily note with its report track so the
+    # dashboard/APK can show the China and US pushes separately.
+    "research_reports": [
+        ("track", "TEXT"),
     ],
 }
 

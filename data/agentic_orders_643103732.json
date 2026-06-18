@@ -1,0 +1,194 @@
+{
+  "account": "643103732",
+  "orders": [
+    {
+      "ticker": "VEEV",
+      "side": "sell",
+      "order_class": "stop_loss",
+      "type": "stop_limit",
+      "quantity": 9,
+      "stop_price": 152.81,
+      "limit_price": 151.28,
+      "time_in_force": "gtc",
+      "ref_id": "sl-VEEV-15281"
+    },
+    {
+      "ticker": "VEEV",
+      "side": "sell",
+      "order_class": "take_profit",
+      "type": "limit",
+      "quantity": 3,
+      "limit_price": 178.89,
+      "time_in_force": "gtc",
+      "ref_id": "tp-VEEV-17889"
+    },
+    {
+      "ticker": "CAMT",
+      "side": "sell",
+      "order_class": "stop_loss",
+      "type": "stop_limit",
+      "quantity": 23,
+      "stop_price": 172.9,
+      "limit_price": 171.17,
+      "time_in_force": "gtc",
+      "ref_id": "sl-CAMT-17290"
+    },
+    {
+      "ticker": "CAMT",
+      "side": "sell",
+      "order_class": "take_profit",
+      "type": "limit",
+      "quantity": 7,
+      "limit_price": 222.6,
+      "time_in_force": "gtc",
+      "ref_id": "tp-CAMT-22260"
+    },
+    {
+      "ticker": "RKLB",
+      "side": "sell",
+      "order_class": "stop_loss",
+      "type": "stop_limit",
+      "quantity": 20,
+      "stop_price": 84.82,
+      "limit_price": 83.97,
+      "time_in_force": "gtc",
+      "ref_id": "sl-RKLB-8482"
+    },
+    {
+      "ticker": "RKLB",
+      "side": "sell",
+      "order_class": "take_profit",
+      "type": "limit",
+      "quantity": 6,
+      "limit_price": 133.68,
+      "time_in_force": "gtc",
+      "ref_id": "tp-RKLB-13368"
+    },
+    {
+      "ticker": "TEM",
+      "side": "sell",
+      "order_class": "stop_loss",
+      "type": "stop_limit",
+      "quantity": 70,
+      "stop_price": 44.89,
+      "limit_price": 44.44,
+      "time_in_force": "gtc",
+      "ref_id": "sl-TEM-4489"
+    },
+    {
+      "ticker": "TEM",
+      "side": "sell",
+      "order_class": "take_profit",
+      "type": "limit",
+      "quantity": 23,
+      "limit_price": 59.75,
+      "time_in_force": "gtc",
+      "ref_id": "tp-TEM-5975"
+    },
+    {
+      "ticker": "NVT",
+      "side": "sell",
+      "order_class": "stop_loss",
+      "type": "stop_limit",
+      "quantity": 22,
+      "stop_price": 152.82,
+      "limit_price": 151.29,
+      "time_in_force": "gtc",
+      "ref_id": "sl-NVT-15282"
+    },
+    {
+      "ticker": "NVT",
+      "side": "sell",
+      "order_class": "take_profit",
+      "type": "limit",
+      "quantity": 7,
+      "limit_price": 185.18,
+      "time_in_force": "gtc",
+      "ref_id": "tp-NVT-18518"
+    },
+    {
+      "ticker": "JBL",
+      "side": "sell",
+      "order_class": "stop_loss",
+      "type": "stop_limit",
+      "quantity": 9,
+      "stop_price": 352.61,
+      "limit_price": 349.08,
+      "time_in_force": "gtc",
+      "ref_id": "sl-JBL-35261"
+    },
+    {
+      "ticker": "JBL",
+      "side": "sell",
+      "order_class": "take_profit",
+      "type": "limit",
+      "quantity": 3,
+      "limit_price": 418.65,
+      "time_in_force": "gtc",
+      "ref_id": "tp-JBL-41865"
+    },
+    {
+      "ticker": "ASTS",
+      "side": "sell",
+      "order_class": "stop_loss",
+      "type": "stop_limit",
+      "quantity": 12,
+      "stop_price": 63.43,
+      "limit_price": 62.8,
+      "time_in_force": "gtc",
+      "ref_id": "sl-ASTS-6343"
+    },
+    {
+      "ticker": "ASTS",
+      "side": "sell",
+      "order_class": "take_profit",
+      "type": "limit",
+      "quantity": 4,
+      "limit_price": 112.29,
+      "time_in_force": "gtc",
+      "ref_id": "tp-ASTS-11229"
+    },
+    {
+      "ticker": "AMKR",
+      "side": "sell",
+      "order_class": "stop_loss",
+      "type": "stop_limit",
+      "quantity": 24,
+      "stop_price": 73.12,
+      "limit_price": 72.39,
+      "time_in_force": "gtc",
+      "ref_id": "sl-AMKR-7312"
+    },
+    {
+      "ticker": "AMKR",
+      "side": "sell",
+      "order_class": "take_profit",
+      "type": "limit",
+      "quantity": 8,
+      "limit_price": 97.76,
+      "time_in_force": "gtc",
+      "ref_id": "tp-AMKR-9776"
+    },
+    {
+      "ticker": "ASX",
+      "side": "sell",
+      "order_class": "stop_loss",
+      "type": "stop_limit",
+      "quantity": 42,
+      "stop_price": 33.71,
+      "limit_price": 33.37,
+      "time_in_force": "gtc",
+      "ref_id": "sl-ASX-3371"
+    },
+    {
+      "ticker": "ASX",
+      "side": "sell",
+      "order_class": "take_profit",
+      "type": "limit",
+      "quantity": 14,
+      "limit_price": 43.29,
+      "time_in_force": "gtc",
+      "ref_id": "tp-ASX-4329"
+    }
+  ]
+}

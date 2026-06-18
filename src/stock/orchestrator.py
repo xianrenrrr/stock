@@ -54,6 +54,7 @@ from stock.features import extract_features
 from stock.ingest import fetch_news, fetch_prices
 from stock.ingest.insiders import persist_insiders
 from stock.learn import reflect_weekly
+from stock.market_track import CN, US
 from stock.models import CostCeilingError
 from stock.predict import predict_ticker
 from stock.research import (
@@ -703,59 +704,79 @@ def _job_pull_feedback() -> None:
         logger.exception("pull-feedback job failed (delivery + research still proceed)")
 
 
-def _job_research_push() -> None:
-    """Generate the daily AI-supply-chain research note and push to WeChat recipients.
+def _generate_research_track(conn: sqlite3.Connection, track: str) -> bool:
+    """Generate + persist one CN/US 双轨 daily note, retrying network blips.
 
-    Resilient to transient network failures: DNS / connection errors during the LLM
-    call get retried with exponential backoff (30s, 90s, 180s) before giving up.
+    Returns True on success (the note is now in research_reports and will push),
+    False if this track was skipped or gave up. Raises CostCeilingError so the
+    caller can stop the remaining track(s) -- the ceiling is global, so the next
+    leg would only hit the same wall.
+    """
+    last_exc: Exception | None = None
+    for attempt, delay in enumerate([0, *_RESEARCH_RETRY_DELAYS_SECS]):
+        if delay:
+            logger.info(
+                "Research push (%s): retrying in %ds (attempt %d) after %s",
+                track, delay, attempt, type(last_exc).__name__,
+            )
+            time.sleep(delay)
+        try:
+            report = generate_daily_research(conn, track=track)
+        except (
+            openai.APIConnectionError,
+            openai.APITimeoutError,
+            httpx.ConnectError,
+            httpx.ReadTimeout,
+            ConnectionError,
+            TimeoutError,
+        ) as exc:
+            last_exc = exc
+            continue
+        except CostCeilingError:
+            raise
+        except Exception:
+            logger.exception(
+                "Research push (%s) failed (non-network error, no retry)", track
+            )
+            return False
+
+        logger.info(
+            "Research generated track=%s id=%d layer=%s cost=$%.4f",
+            track, report.research_id, report.layer_focus, report.cost_usd,
+        )
+        # Note already in research_reports; cloud_sync will push it to Render
+        # and the APK polls /channel/api/notes. No WeChat GUI delivery needed.
+        return True
+
+    logger.error(
+        "Research push (%s): gave up after %d retries; last error: %s",
+        track, len(_RESEARCH_RETRY_DELAYS_SECS), last_exc,
+    )
+    return False
+
+
+def _job_research_push() -> None:
+    """Generate the CN/US 双轨 daily notes and push them to the channel.
+
+    Boss spec (2026-06-17): 分时段,那个完成推那个 -- run the China (A/H) note and
+    the US note sequentially and persist each the moment it finishes, so cloud_sync
+    pushes them independently rather than holding both until they're ready. CN runs
+    first, then US; a failure on one leg does not block the other.
+
+    Resilient to transient network failures: DNS / connection errors during each
+    leg's LLM call get retried with exponential backoff (30s, 90s, 180s).
     """
     conn = get_conn()
     try:
-        report = None
-        last_exc: Exception | None = None
-        for attempt, delay in enumerate([0, *_RESEARCH_RETRY_DELAYS_SECS]):
-            if delay:
-                logger.info(
-                    "Research push: retrying in %ds (attempt %d) after %s",
-                    delay, attempt, type(last_exc).__name__,
-                )
-                time.sleep(delay)
+        for track in (CN, US):
             try:
-                report = generate_daily_research(conn)
-                break
-            except (
-                openai.APIConnectionError,
-                openai.APITimeoutError,
-                httpx.ConnectError,
-                httpx.ReadTimeout,
-                ConnectionError,
-                TimeoutError,
-            ) as exc:
-                last_exc = exc
-                continue
+                _generate_research_track(conn, track)
             except CostCeilingError:
-                logger.warning("Cost ceiling reached during research push, skipping")
+                logger.warning(
+                    "Cost ceiling reached during %s research push; "
+                    "skipping remaining track(s)", track,
+                )
                 return
-            except Exception:
-                logger.exception("Research push failed (non-network error, no retry)")
-                return
-
-        if report is None:
-            logger.error(
-                "Research push: gave up after %d retries; last error: %s",
-                len(_RESEARCH_RETRY_DELAYS_SECS), last_exc,
-            )
-            return
-
-        logger.info(
-            "Research generated id=%d layer=%s cost=$%.4f",
-            report.research_id,
-            report.layer_focus,
-            report.cost_usd,
-        )
-
-        # Note already in research_reports; cloud_sync will push it to Render
-        # and the APK polls /channel/api/notes. No WeChat GUI delivery needed.
     finally:
         conn.close()
 

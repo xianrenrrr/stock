@@ -1,0 +1,19 @@
+{
+  "placed_at": "2026-06-16T08:44:51+00:00",
+  "account": "643103732",
+  "account_nickname": "Agentic",
+  "stop_losses_placed": 9,
+  "take_profits_placed": 0,
+  "note": "cash account reserves 100% shares for sell stop; no OCO/bracket via API so take-profit cannot co-exist with full-position stop. Full protective stops placed on all 9 positions per never-omit-the-stop mandate.",
+  "stops": [
+    "ASX 42@33.71",
+    "AMKR 24@73.12",
+    "ASTS 12@63.43",
+    "JBL 9@352.61",
+    "NVT 22@152.82",
+    "TEM 70@44.89",
+    "RKLB 20@84.82",
+    "CAMT 23@172.90",
+    "VEEV 9@152.81"
+  ]
+}

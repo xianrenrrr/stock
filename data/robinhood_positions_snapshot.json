@@ -1,5 +1,5 @@
 {
-  "as_of": "2026-06-10T21:30:34.8332979Z",
+  "as_of": "2026-06-17T21:31:11.2393957Z",
   "accounts": [
     {
       "account_number": "641749338",
@@ -34,6 +34,11 @@
           "symbol": "CRDO",
           "quantity": 20,
           "average_buy_price": 210
+        },
+        {
+          "symbol": "SPCX",
+          "quantity": -50,
+          "average_buy_price": 182.7
         }
       ]
     },

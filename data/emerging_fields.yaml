@@ -84,3 +84,16 @@ fields:
   - fusion energy public companies AI technology shift
   - fusion energy hidden gem small cap stocks
   - fusion energy supply chain bottleneck listed companies
+- id: robotics_autonomy
+  name: Robotics Autonomy
+  status: candidate
+  source: web_discovery.auto_field_detection
+  rationale: '- Photonics repriced as AI infrastructure By spring 2026 the market stopped treating photonics as slow-moving telecom and began pricing it as enabling infrastructure for AI, autonomy, and
+    defense, with broad YTD gains (AAO'
+  evidence_count: 1
+  first_seen: '2026-06-16T02:01:01+00:00'
+  last_seen: '2026-06-16T02:01:01+00:00'
+  suggested_queries:
+  - robotics autonomy public companies AI technology shift
+  - robotics autonomy hidden gem small cap stocks
+  - robotics autonomy supply chain bottleneck listed companies

@@ -130,8 +130,8 @@ There are 39 active APScheduler jobs in local mode.
 |---|---:|---|---|
 | `ingest_and_extract` | Mon-Fri 02:00, 14:00 | Fetch prices/news and extract features for active tickers. | `news`, `prices`, `features` |
 | `run_predictions` | Mon-Fri 02:15, 14:15 | Run prediction cycle for watchlist. | `predictions` |
-| `research_push_morning` | Mon-Fri 02:30 | Generate morning research note and push/sync it. | `research_reports(kind='daily')` |
-| `research_push_evening` | Mon-Fri 14:30 | Generate evening research note and push/sync it. | `research_reports(kind='daily')` |
+| `research_push_morning` | Mon-Fri 02:30 | Generate the CN/US 双轨 morning notes (China A/H first, then US) and push/sync each as it finishes. | `research_reports(kind='daily', track in ('CN','US'))` |
+| `research_push_evening` | Mon-Fri 14:30 | Generate the CN/US 双轨 evening notes (China A/H first, then US) and push/sync each as it finishes. | `research_reports(kind='daily', track in ('CN','US'))` |
 | `daily_action_email` | Mon-Fri 14:45 | Email the latest daily research/action report to `DAILY_REPORT_EMAIL_TO`. | SMTP email |
 | `learn_from_feedback` | every 5 min | Process boss replies, classify intent, queue follow-ups, apply prompt rewrites when safe. | `conversations`, `action_queue`, `prompt_rewrites` |
 | `sync_to_render` | every 5 sec | Push local notes/tokens to Render and pull dashboard replies (near-instant reply latency; also keeps the Render free tier warm). No-op if `RENDER_SYNC_URL` is empty. | Render sync state |
@@ -158,6 +158,24 @@ Dashboard message handling: identical re-sends within 6h are de-duplicated
 second deep-dive or generate a duplicate reply. Deep dives (`generate_deep_dive`)
 prepend live yfinance quotes for any tickers named in the request so answers cite
 current prices, not stale local bars.
+
+CN/US 双轨 daily push (boss spec 2026-06-17): each `research_push_*` job runs
+`generate_daily_research` twice -- once with `track='CN'` (A-share .SS/.SZ + H-share
+.HK; A/H dual-listed names land in CN by `stock.market_track`), then once with
+`track='US'` (US-listed incl. ADRs). Each note is persisted (== pushed via
+cloud_sync) the moment it finishes, so the two reports arrive staggered, not side by
+side ("分时段,那个完成推那个"). The watchlist / conviction / holdings / stop universe
+is filtered to the track; the prompt carries a track directive scoping coverage. One
+leg failing (or exhausting network retries) does not block the other; a global cost
+ceiling stops the remaining leg. History is NOT partitioned -- grading, calibration,
+and hit-rate stay global ("历史不用拆分了"); `track` only separates the two
+forward-looking pushes. Legacy notes and non-daily kinds have `track = NULL`.
+
+Boss-feedback routing (commit 31d5dbd): `learn_from_feedback` classifies each boss
+instruction via `stock.feedback_router` -- a `feature_request` (change to the AI助手
+system itself) is captured as `research_reports(kind='feature_request')` instead of
+being misrouted into the equity deep-dive queue; a `deep_dive` ask still enqueues a
+research follow-up. Fails open to `deep_dive` so a genuine research ask is never lost.
 | `daily_self_review` | daily 06:00 | Compile operational self-review packet and run configured autopilot. | `pipeline/daily_review_YYYY-MM-DD.md` |
 | `reflect_weekly` | Sat 06:00 | Weekly prediction-rules reflection. | `data/rules/vNNN.md`, `data/rules/current.md` |
 | `health_check_weekly` | Sat 07:00 | Per-holding weekly health-check deep dive. | `research_reports(kind='health_check')` |
