@@ -1,5 +1,5 @@
 {
-  "as_of": "2026-06-17T21:31:11.2393957Z",
+  "as_of": "2026-06-18T00:00:00Z",
   "accounts": [
     {
       "account_number": "641749338",
@@ -13,12 +13,12 @@
         {
           "symbol": "RXRX",
           "quantity": 100,
-          "average_buy_price": 3
+          "average_buy_price": 3.0
         },
         {
           "symbol": "VEEV",
           "quantity": 2,
-          "average_buy_price": 161
+          "average_buy_price": 161.0
         },
         {
           "symbol": "SDGR",
@@ -33,12 +33,12 @@
         {
           "symbol": "CRDO",
           "quantity": 20,
-          "average_buy_price": 210
+          "average_buy_price": 210.0
         },
         {
           "symbol": "SPCX",
-          "quantity": -50,
-          "average_buy_price": 182.7
+          "quantity": -100,
+          "average_buy_price": 178.75
         }
       ]
     },
@@ -49,47 +49,42 @@
         {
           "symbol": "NVT",
           "quantity": 22,
-          "average_buy_price": 160
+          "average_buy_price": 160.0
         },
         {
           "symbol": "JBL",
           "quantity": 9,
-          "average_buy_price": 345
+          "average_buy_price": 345.0
         },
         {
           "symbol": "CAMT",
           "quantity": 23,
-          "average_buy_price": 162
+          "average_buy_price": 162.0
         },
         {
           "symbol": "TEM",
           "quantity": 70,
-          "average_buy_price": 48
+          "average_buy_price": 48.0
         },
         {
           "symbol": "RKLB",
           "quantity": 20,
-          "average_buy_price": 135
-        },
-        {
-          "symbol": "VEEV",
-          "quantity": 9,
-          "average_buy_price": 168
+          "average_buy_price": 135.0
         },
         {
           "symbol": "ASTS",
           "quantity": 12,
-          "average_buy_price": 100
+          "average_buy_price": 100.0
         },
         {
           "symbol": "AMKR",
           "quantity": 24,
-          "average_buy_price": 66
+          "average_buy_price": 66.0
         },
         {
           "symbol": "ASX",
           "quantity": 42,
-          "average_buy_price": 36
+          "average_buy_price": 36.0
         }
       ]
     }

@@ -76,7 +76,7 @@
    - If broad market or same-group tape is hostile, do not use oversold rebound above `0.51`.
 6. For A-share/HK/Asia parabolic moves:
    - If up more than `12%` in 2-5 sessions with no same-day hard catalyst, cap up calls at `0.51`.
-   - If it then closes below open, below prior close, or on fading volume, prefer `0.47-0.49`.
+   - If it then closes below open, below prior close, or on fading volume, prefer `0.47-0.49` ONLY when there is a fresh same-day negative hard catalyst; otherwise (no fresh same-day negative hard catalyst) force `prob_up >= 0.50` and do NOT issue a down call on pure exhaustion / failed-gap reasoning — China extended-up shorts hit only 19%, so the prior `0.47-0.51` cap still leaked too many losing shorts.
    - Do not use low-volume “near-high” closes as continuation signals after parabolic moves.
    - Strong-breadth exception (Asian/A-share semis): when US/global semi breadth is strongly up (e.g. SOXX up more than `3%`) and the parabolic name has no fresh same-day negative hard catalyst, apply the Sector §8 short suppression even if a same-group Asian median/leader breadth reading is unavailable — force `prob_up >= 0.50` instead of fading the parabola. Treat the strongly-up US semi tape as sufficient supportive breadth for Asian semiconductors, which squeeze hardest on these days.
 
@@ -113,7 +113,7 @@
    - Direct peer selloff.
 3. In a hostile macro/sector regime, do not issue soft-catalyst up calls above `0.51`.
 4. In a hostile macro/sector regime plus confirming down price action, use `0.45-0.48`.
-5. Exogenous macro/geopolitical one-off events (e.g. Iran peace, sanctions or oil-shock headlines) provide at most ONE trading session of directional breadth support. From the second session onward, force any up-call whose bullish rationale depends SOLELY on such an event to `prob_up = 0.49-0.50`. Geopolitical-catalyst calls hit only ~30% (16/23 wrong), driven by day-2+ continuation bets.
+5. Exogenous macro/geopolitical one-off events (e.g. Iran peace, sanctions or oil-shock headlines) provide at most ONE trading session of directional breadth support. From the second session onward, force any directional call (up OR down) whose rationale depends SOLELY on such an event to `prob_up = 0.50`. Geopolitical-catalyst calls hit only ~30% (16/23 wrong), driven by day-2+ continuation bets.
 
 ## Volume
 1. Elevated volume confirms the direction of a breakout, failed gap-up, breakdown, or post-catalyst reaction.
@@ -134,7 +134,7 @@
 8. Never use `0.55+` for stale AI, product, analyst, partnership, index, or theme headlines.
 9. If evidence is mixed, stale, duplicated, low-volume, or conflicting across retrieved cases, force `0.49-0.51`.
 10. Direction-concentration gate: when more than `70%` of the current session's calls across the universe point the same direction, force any marginal same-direction call with `|prob_up - 0.50| < 0.04` to `0.50`. When the concentrated direction is UP, a marginal bullish call in this band that ALSO shows a same-day bearish confirmation (failed gap-up or volume exhaustion) may be set to `0.49` rather than `0.50` — trend-cohort hit-rate decayed 47.7% → 35.7%, so over-concentrated bullish tapes warrant a slight reverse tilt.
-11. Mean-reversion broad-up regime gate: when the sector ETF is up more than `3%` AND more than `70%` of the universe closed green, treat the tape as a mean-reversion broad-up regime and force `prob_up` to `0.50-0.51` for ANY down call lacking a fresh same-day negative hard catalyst. This supersedes the failed-gap-up and parabolic/extension-fade gates the same way Sector §8 does; counter-trend shorts were the dominant loss source on these days.
+11. Mean-reversion broad-up regime gate: when the sector ETF is up more than `2%` OR more than `65%` of the universe closed green, treat the tape as a mean-reversion broad-up regime and force `prob_up` to `0.50-0.51` for ANY down call lacking a fresh same-day negative hard catalyst. This supersedes the failed-gap-up and parabolic/extension-fade gates the same way Sector §8 does; counter-trend shorts were the dominant loss source on these days.
 
 ## Confidence Calibration
 1. Confidence measures signal quality, not conviction.
