@@ -38,6 +38,8 @@ class BacktestResult(BaseModel):
     port_total_return: float
     bench_total_return: float
     total_excess: float
+    avg_excess_per_period: float    # mean net excess per period -- the sound figure
+    overlapping: bool               # True for daily mode (holds overlap; total is illustrative)
     sharpe_excess: float | None     # annualized Sharpe of per-period excess
     max_drawdown: float
     avg_turnover: float
@@ -122,6 +124,7 @@ def backtest_topn(
         return BacktestResult(
             periods=0, top_n=top_n, benchmark=benchmark,
             port_total_return=0.0, bench_total_return=0.0, total_excess=0.0,
+            avg_excess_per_period=0.0, overlapping=not weekly,
             sharpe_excess=None, max_drawdown=0.0, avg_turnover=0.0,
             win_rate=0.0, avg_cost_drag=0.0,
             note="no scoreable periods in window",
@@ -142,6 +145,8 @@ def backtest_topn(
         port_total_return=round(port_equity - 1.0, 6),
         bench_total_return=round(bench_equity - 1.0, 6),
         total_excess=round((port_equity - 1.0) - (bench_equity - 1.0), 6),
+        avg_excess_per_period=round(mean_ex, 6),
+        overlapping=not weekly,
         sharpe_excess=round(sharpe, 3) if sharpe is not None else None,
         max_drawdown=round(max_dd, 6),
         avg_turnover=round(sum(turnovers) / len(turnovers), 4),
@@ -156,15 +161,21 @@ def format_backtest(r: BacktestResult) -> str:
     if r.periods == 0:
         return f"Backtest: {r.note}"
     sh = f"{r.sharpe_excess:.2f}" if r.sharpe_excess is not None else "n/a"
-    return "\n".join([
+    total_label = (
+        "compounded excess (ILLUSTRATIVE -- daily holds overlap)"
+        if r.overlapping else "TOTAL EXCESS (non-overlapping)")
+    lines = [
         f"Top-{r.top_n} basket backtest vs {r.benchmark} ({r.note})",
         f"  periods scored:   {r.periods}",
-        f"  basket return:    {r.port_total_return * 100:+.2f}%",
-        f"  benchmark return: {r.bench_total_return * 100:+.2f}%",
-        f"  TOTAL EXCESS:     {r.total_excess * 100:+.2f}%   <- the number that matters",
-        f"  excess Sharpe:    {sh}",
-        f"  max drawdown:     {r.max_drawdown * 100:.2f}%",
+        f"  AVG EXCESS/period:{r.avg_excess_per_period * 100:+.2f}%"
+        f"   <- the sound figure",
         f"  win rate vs bench:{r.win_rate * 100:.0f}%",
+        f"  excess Sharpe:    {sh}  (annualized; tiny sample -> high-variance)",
+        f"  max drawdown:     {r.max_drawdown * 100:.2f}%",
         f"  avg turnover:     {r.avg_turnover * 100:.0f}%"
         f"  (cost drag {r.avg_cost_drag * 100:.3f}%/period)",
-    ])
+        f"  basket {r.port_total_return * 100:+.2f}% vs bench"
+        f" {r.bench_total_return * 100:+.2f}%",
+        f"  {total_label}: {r.total_excess * 100:+.2f}%",
+    ]
+    return "\n".join(lines)

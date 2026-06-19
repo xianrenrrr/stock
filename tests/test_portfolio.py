@@ -90,13 +90,13 @@ def test_rank_picks_empty_when_all_down():
 # ---- #2 / #4 scoring ----------------------------------------------------
 
 def test_score_basket_excess_and_cost(conn):
-    # entry day open, exit day close for two longs + benchmark
-    _add_price(conn, "AAA", "2026-06-01", o=100.0, close=110.0)  # +10%
-    _add_price(conn, "BBB", "2026-06-01", o=100.0, close=100.0)  # 0%
-    _add_price(conn, "QQQ", "2026-06-01", o=100.0, close=102.0)  # +2%
-    _add_price(conn, "AAA", "2026-06-08", o=110.0, close=110.0)
-    _add_price(conn, "BBB", "2026-06-08", o=100.0, close=100.0)
-    _add_price(conn, "QQQ", "2026-06-08", o=102.0, close=102.0)
+    # close-to-close basis: entry = close on/before entry date, exit = close on due
+    _add_price(conn, "AAA", "2026-06-01", o=100.0, close=100.0)
+    _add_price(conn, "BBB", "2026-06-01", o=100.0, close=100.0)
+    _add_price(conn, "QQQ", "2026-06-01", o=100.0, close=100.0)
+    _add_price(conn, "AAA", "2026-06-08", o=110.0, close=110.0)  # +10%
+    _add_price(conn, "BBB", "2026-06-08", o=100.0, close=100.0)  # 0%
+    _add_price(conn, "QQQ", "2026-06-08", o=102.0, close=102.0)  # +2%
 
     picks = [Pick(ticker="AAA", weight=0.5, prob_up=0.7, score=0.7),
              Pick(ticker="BBB", weight=0.5, prob_up=0.6, score=0.6)]
@@ -143,15 +143,16 @@ def test_backtest_topn_replays_and_beats_benchmark(conn):
         conn.execute(
             "INSERT INTO outcomes (prediction_id, actual_return, direction_hit, brier,"
             " scored_at) VALUES (?, 0.05, 1, 0.1, ?)", (pid, due))
-        _add_price(conn, "AAA", created[:10], o=100.0, close=110.0)
-        _add_price(conn, "AAA", due[:10], o=110.0, close=110.0)
+        _add_price(conn, "AAA", created[:10], o=100.0, close=100.0)
+        _add_price(conn, "AAA", due[:10], o=100.0, close=110.0)   # +10% close-to-close
         _add_price(conn, "QQQ", created[:10], o=100.0, close=100.0)
-        _add_price(conn, "QQQ", due[:10], o=100.0, close=100.0)
+        _add_price(conn, "QQQ", due[:10], o=100.0, close=100.0)   # flat
     conn.commit()
     r = backtest_topn(conn, days=30, top_n=3)
     assert r.periods == 2
-    assert r.total_excess > 0
-    assert "TOTAL EXCESS" in format_backtest(r)
+    assert r.avg_excess_per_period > 0
+    assert r.overlapping is True  # daily mode
+    assert "AVG EXCESS/period" in format_backtest(r)
 
 
 def test_backtest_empty_window(conn):

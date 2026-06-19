@@ -10,7 +10,9 @@ rate is a coin flip.
 This module covers:
   #1 Top-N ranking -> weekly long basket
   #2 Benchmark-relative scoring (excess over QQQ)
-  #4 Execution realism: T+1 open fill, slippage+commission, turnover penalty
+  #4 Execution realism: close-to-close fills on the SAME basis score.score_due
+     uses to grade predictions (so basket returns reconcile with realized
+     actual_return), plus slippage+commission and a turnover penalty.
 """
 from __future__ import annotations
 
@@ -26,9 +28,10 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_BENCHMARK: str = "QQQ"
 DEFAULT_TOP_N: int = 5
-# Execution model: per-side cost in basis points (slippage + commission). A
-# weekly long-only basket pays this on the turned-over fraction each rebalance.
-ROUND_TRIP_COST_BPS: float = 10.0   # 5 bps each way; conservative for liquid US names
+# Execution model: round-trip cost in basis points (slippage + commission),
+# charged on the turned-over fraction each rebalance. Returns themselves use the
+# close-to-close basis (see _return_between) that matches our grading engine.
+ROUND_TRIP_COST_BPS: float = 10.0   # ~5 bps each way; conservative for liquid US names
 
 
 class Pick(BaseModel):
@@ -113,11 +116,15 @@ def rank_picks(
 def _return_between(
     conn: sqlite3.Connection, ticker: str, entry_iso: str, exit_iso: str,
 ) -> float | None:
-    """T+1-open-to-exit-close return: buy at the open of the first bar at/after
-    entry, sell at the close of the first bar at/after exit. None if missing."""
+    """Close-to-close return, IDENTICAL to how score.score_due grades predictions:
+    entry = last close at/before the signal date, exit = first close at/on/after the
+    due date. Using the same basis means a basket's measured return reconciles
+    exactly with the realized actual_return of its picks -- no open-fill optimism
+    that captures an intraday session the live strategy never traded. None if
+    either leg has no price. Turnover/commission are applied on top by the caller."""
     entry = conn.execute(
-        "SELECT o FROM prices WHERE ticker = ? AND ts >= substr(?,1,10)"
-        " ORDER BY ts ASC LIMIT 1",
+        "SELECT c FROM prices WHERE ticker = ? AND ts <= substr(?,1,10)"
+        " ORDER BY ts DESC LIMIT 1",
         (ticker.upper(), entry_iso),
     ).fetchone()
     exit_row = conn.execute(
