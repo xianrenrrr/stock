@@ -494,10 +494,10 @@ def test_create_scheduler_has_expected_jobs() -> None:
     + broker_snapshot_import + stop_order_propose
     + broker_positions_pull + action_queue_expedite
     + knowledge_index + macro_digest + retry_quota_leftovers
-    + gov_trades_pull = 39.
+    + gov_trades_pull + weekly_prediction + weekly_score_review = 41.
     """
     scheduler = create_scheduler()
-    assert len(scheduler.get_jobs()) == 39
+    assert len(scheduler.get_jobs()) == 41
 
 
 def test_create_scheduler_job_ids() -> None:
@@ -545,6 +545,8 @@ def test_create_scheduler_job_ids() -> None:
         "macro_digest",
         "retry_quota_leftovers",
         "gov_trades_pull",
+        "weekly_prediction",
+        "weekly_score_review",
     }
     assert job_ids == expected
 
@@ -583,7 +585,7 @@ def test_get_schedule_info_format() -> None:
     info = get_schedule_info(scheduler)
 
     assert isinstance(info, ScheduleInfo)
-    assert len(info.jobs) == 39
+    assert len(info.jobs) == 41
 
     # Each entry has name and next_run keys
     for entry in info.jobs:

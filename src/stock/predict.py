@@ -27,6 +27,26 @@ logger = logging.getLogger(__name__)
 PREDICT_PROMPT_PATH: str = "prompts/predict.txt"
 RULES_DIR: str = "data/rules"
 DEFAULT_HORIZON_MINUTES: int = 390
+# Weekly track (boss 2026-06-18): predict Sunday, score the following Saturday.
+# 1950 = 5 trading days * 390 min, used purely as the horizon marker that
+# distinguishes a weekly prediction row from a daily one in the predictions
+# table. due_at is computed by compute_weekly_due_at, not from these minutes.
+WEEKLY_HORIZON_MINUTES: int = 1950
+
+
+def compute_weekly_due_at(created_at: datetime) -> str:
+    """Due at the coming Saturday 00:00 UTC -- after that week's Friday close.
+
+    A prediction made on Sunday gets entry = the prior Friday close and exit =
+    the next Friday close (score_due picks the earliest bar at/after due_at),
+    i.e. a full Friday-to-Friday trading week.
+    """
+    # Saturday == weekday 5. Advance to the next Saturday strictly in the future.
+    due = created_at.replace(hour=0, minute=0, second=0, microsecond=0)
+    due += timedelta(days=1)
+    while due.weekday() != 5:
+        due += timedelta(days=1)
+    return due.isoformat()
 PRICE_LOOKBACK: int = 10
 AI_INFRA_BREADTH_MIN_OBSERVATIONS: int = 5
 AI_INFRA_BREADTH_THRESHOLD: float = 0.65
@@ -683,9 +703,13 @@ def apply_probability_guardrails(
 
 
 def predict_ticker(
-    ticker: str, conn: sqlite3.Connection
+    ticker: str, conn: sqlite3.Connection, *, weekly: bool = False
 ) -> PredictionResult:
-    """Run a full single-ticker prediction cycle."""
+    """Run a full single-ticker prediction cycle.
+
+    weekly=True makes a 1-week-horizon call (predict Sunday, due the coming
+    Saturday) instead of the default next-trading-day call.
+    """
     # Ensure all news has features extracted
     extract_features(ticker, conn)
 
@@ -771,7 +795,7 @@ def predict_ticker(
 
     user_message = user_template.format(
         ticker=ticker,
-        horizon="1 trading day",
+        horizon="1 trading week (close-to-close)" if weekly else "1 trading day",
         feature_summary=feature_summary,
         price_count=len(prices),
         price_history=price_history,
@@ -831,10 +855,15 @@ def predict_ticker(
         ticker, output, features, calibrated_prob, conn
     )
 
-    # Compute timestamps
+    # Compute timestamps. Weekly predictions are due the coming Saturday; daily
+    # ones the next trading-day close.
     now = datetime.now(timezone.utc)
     created_at = now.isoformat()
-    due_at = compute_due_at(now, DEFAULT_HORIZON_MINUTES)
+    horizon_minutes = WEEKLY_HORIZON_MINUTES if weekly else DEFAULT_HORIZON_MINUTES
+    due_at = (
+        compute_weekly_due_at(now) if weekly
+        else compute_due_at(now, DEFAULT_HORIZON_MINUTES)
+    )
 
     # Build context JSON for auditing. knowledge_item_count instruments the
     # knowledge base for A/B: compare hit rate of predictions with vs without
@@ -859,7 +888,7 @@ def predict_ticker(
         ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             ticker,
-            DEFAULT_HORIZON_MINUTES,
+            horizon_minutes,
             output.direction,
             output.prob_up,
             calibrated_prob,

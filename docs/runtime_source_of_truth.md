@@ -1,7 +1,7 @@
 # STOCK Runtime Source Of Truth
 
 Last verified: 2026-06-11 from `src/stock/orchestrator.py:create_scheduler()`
-(39 active jobs in local mode).
+(41 active jobs in local mode).
 
 This file is the source of truth for what runs automatically. Older roadmap
 files describe design history and may be stale.
@@ -124,7 +124,7 @@ When data exists, predictions append a per-ticker gov-trades block (with the
 
 ## Active Scheduled Jobs
 
-There are 39 active APScheduler jobs in local mode.
+There are 41 active APScheduler jobs in local mode.
 
 | Job id | Cadence UTC | What it actually does | Main output |
 |---|---:|---|---|

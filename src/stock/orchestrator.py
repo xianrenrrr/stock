@@ -246,6 +246,62 @@ def _job_run_predictions() -> None:
         conn.close()
 
 
+def _job_weekly_prediction() -> None:
+    """Boss 2026-06-18: Sunday weekly-horizon predictions, scored next Saturday."""
+    from stock.predict import WEEKLY_HORIZON_MINUTES, predict_ticker
+
+    conn = get_conn()
+    try:
+        tickers = _get_active_tickers(conn)
+        if not tickers:
+            logger.warning("No active tickers; skipping weekly predictions")
+            return
+        made = 0
+        for ticker in tickers:
+            try:
+                # Make sure the latest bars/features are in before a weekly call.
+                fetch_prices(ticker, conn)
+                result = predict_ticker(ticker, conn, weekly=True)
+                made += 1
+                logger.info(
+                    "Weekly-predicted %s %s (prob_up=%.2f) due %s",
+                    result.ticker, result.direction, result.prob_up, result.due_at[:10],
+                )
+            except CostCeilingError:
+                logger.warning("Cost ceiling reached during weekly predictions, stopping")
+                break
+            except Exception:
+                logger.exception("Weekly prediction failed for %s", ticker)
+        logger.info("Weekly predictions made: %d (horizon=%dm)", made, WEEKLY_HORIZON_MINUTES)
+    finally:
+        conn.close()
+
+
+def _job_weekly_score_review() -> None:
+    """Saturday: refresh prices, score due weekly predictions, push a review note."""
+    from stock.weekly_review import generate_weekly_review
+
+    conn = get_conn()
+    try:
+        # Refresh holdings + watchlist bars so Friday's close is present for exit.
+        for t in set(_get_active_tickers(conn)) | {
+            h.ticker for h in holdings.list_holdings(conn, active_only=True)
+        }:
+            try:
+                fetch_prices(t, conn)
+            except Exception:
+                logger.warning("weekly score: price refresh failed for %s", t)
+        result = score_due(conn)
+        logger.info("Weekly scoring: scored=%d skipped=%d", result.scored, result.already_scored)
+        review = generate_weekly_review(conn)
+        if review is not None:
+            logger.info("Weekly review note written: research_id=%s", review)
+    except Exception:
+        logger.exception("Weekly score/review failed")
+    finally:
+        conn.close()
+
+
 def _job_score_daily() -> None:
     """Score all due predictions and update bandit + calibration."""
     conn = get_conn()
@@ -1652,6 +1708,20 @@ def create_scheduler() -> BlockingScheduler:
         ),
         id="reflect_weekly",
         name="Weekly reflection",
+    )
+
+    # Boss 2026-06-18: weekly-horizon predictions made Sunday, scored Saturday.
+    scheduler.add_job(
+        _job_weekly_prediction,
+        CronTrigger(hour=16, minute=0, day_of_week="sun", timezone="UTC"),
+        id="weekly_prediction",
+        name="Sunday weekly-horizon predictions (scored next Saturday)",
+    )
+    scheduler.add_job(
+        _job_weekly_score_review,
+        CronTrigger(hour=14, minute=0, day_of_week="sat", timezone="UTC"),
+        id="weekly_score_review",
+        name="Saturday: score due weekly predictions + push review note",
     )
 
     # Web discovery (search + fetch + LLM extraction) before each research push
