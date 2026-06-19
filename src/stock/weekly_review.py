@@ -90,6 +90,30 @@ def build_weekly_review_body(rows: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _append_portfolio_blocks(conn: sqlite3.Connection, body: str) -> str:
+    """Insert the Top-N basket + Amber strategy-search sections before the disclaimer."""
+    try:
+        from stock.portfolio import format_basket_block
+        from stock.strategy_search import format_strategy_block
+
+        extra = [
+            "",
+            "## 多头篮子 / Top-N basket (vs QQQ)",
+            format_basket_block(conn),
+            "",
+            "## 策略搜索 / Strategy search",
+            format_strategy_block(conn),
+            "",
+        ]
+    except Exception:
+        logger.exception("weekly review: portfolio block render failed")
+        return body
+    marker = "Not financial advice."
+    if marker in body:
+        return body.replace(marker, "\n".join(extra) + "\n" + marker, 1)
+    return body + "\n" + "\n".join(extra)
+
+
 def generate_weekly_review(conn: sqlite3.Connection) -> int | None:
     """Build + persist the weekly review note. Returns research_id or None."""
     rows = _scored_weekly(conn)
@@ -97,6 +121,7 @@ def generate_weekly_review(conn: sqlite3.Connection) -> int | None:
         logger.info("weekly review: no scored weekly predictions in window")
         return None
     body = build_weekly_review_body(rows)
+    body = _append_portfolio_blocks(conn, body)
     cursor = conn.execute(
         "INSERT INTO research_reports (kind, topic, layer_focus, body, cost_usd, created_at)"
         " VALUES ('weekly_review', ?, NULL, ?, 0, ?)",

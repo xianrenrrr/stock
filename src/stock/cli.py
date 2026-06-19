@@ -68,6 +68,85 @@ channel_app = typer.Typer(help="Manage per-recipient dashboard tokens (channel.p
 app.add_typer(channel_app, name="channel-token")
 self_review_app = typer.Typer(help="Daily self-review packet + Codex CLI proposals.")
 app.add_typer(self_review_app, name="self-review")
+portfolio_app = typer.Typer(
+    help="Top-N basket, benchmark-relative backtest, and Amber strategy search.")
+app.add_typer(portfolio_app, name="portfolio")
+
+
+@portfolio_app.command("basket")
+def portfolio_basket_cmd(
+    top_n: Annotated[int, typer.Option("--top-n", help="Names to hold")] = 5,
+) -> None:
+    """Build + store a Top-N long basket from the latest weekly predictions."""
+    try:
+        from stock.portfolio import build_and_store_weekly_basket, format_basket_block
+
+        conn = get_conn()
+        bid = build_and_store_weekly_basket(conn, top_n=top_n)
+        if bid is None:
+            typer.echo("No basket built (no up-leaning weekly predictions).")
+            return
+        typer.echo(f"Basket #{bid} stored.\n")
+        typer.echo(format_basket_block(conn))
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
+@portfolio_app.command("score")
+def portfolio_score_cmd() -> None:
+    """Score any matured baskets vs the benchmark, net of execution cost."""
+    try:
+        from stock.portfolio import format_basket_block, score_due_baskets
+
+        conn = get_conn()
+        n = score_due_baskets(conn)
+        typer.echo(f"Scored {n} due basket(s).\n")
+        typer.echo(format_basket_block(conn))
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
+@portfolio_app.command("backtest")
+def portfolio_backtest_cmd(
+    days: Annotated[int, typer.Option("--days", help="History window")] = 30,
+    top_n: Annotated[int, typer.Option("--top-n")] = 5,
+    weekly: Annotated[bool, typer.Option("--weekly", help="Weekly rebalance")] = False,
+) -> None:
+    """Replay a Top-N basket over prediction history and report excess vs QQQ."""
+    try:
+        from stock.backtest_portfolio import backtest_topn, format_backtest
+
+        conn = get_conn()
+        result = backtest_topn(conn, days=days, top_n=top_n, weekly=weekly)
+        typer.echo(format_backtest(result))
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
+@portfolio_app.command("strategy-search")
+def portfolio_strategy_search_cmd(
+    n: Annotated[int, typer.Option("--n", help="Strategies to propose")] = 4,
+    days: Annotated[int, typer.Option("--days", help="Backtest window")] = 45,
+) -> None:
+    """Amber: have the LLM invent named strategies, backtest, keep the winners."""
+    try:
+        from stock.strategy_search import format_strategy_block, search_and_store
+
+        conn = get_conn()
+        results = search_and_store(conn, n=n, days=days)
+        if not results:
+            typer.echo("No strategies scored (insufficient history or LLM error).")
+            return
+        for r in results:
+            flag = "KEPT" if r.kept else "rejected"
+            typer.echo(f"[{flag}] {r.name}: {r.reason}")
+        typer.echo("\n" + format_strategy_block(conn))
+    except Exception:
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
 
 
 @self_review_app.command("compile")

@@ -273,6 +273,13 @@ def _job_weekly_prediction() -> None:
             except Exception:
                 logger.exception("Weekly prediction failed for %s", ticker)
         logger.info("Weekly predictions made: %d (horizon=%dm)", made, WEEKLY_HORIZON_MINUTES)
+        # Amber-learning #1: rank the weekly predictions into a Top-N long basket.
+        try:
+            from stock.portfolio import build_and_store_weekly_basket
+
+            build_and_store_weekly_basket(conn)
+        except Exception:
+            logger.exception("Weekly basket build failed")
     finally:
         conn.close()
 
@@ -293,6 +300,22 @@ def _job_weekly_score_review() -> None:
                 logger.warning("weekly score: price refresh failed for %s", t)
         result = score_due(conn)
         logger.info("Weekly scoring: scored=%d skipped=%d", result.scored, result.already_scored)
+        # Amber-learning: score the matured Top-N basket vs QQQ, then let the
+        # strategy-search agent propose/backtest new named strategies.
+        try:
+            from stock.portfolio import score_due_baskets
+
+            scored_baskets = score_due_baskets(conn)
+            logger.info("Weekly basket scoring: scored=%d", scored_baskets)
+        except Exception:
+            logger.exception("Weekly basket scoring failed")
+        try:
+            from stock.strategy_search import search_and_store
+
+            kept = [r.name for r in search_and_store(conn) if r.kept]
+            logger.info("Strategy search: kept %d (%s)", len(kept), ", ".join(kept) or "none")
+        except Exception:
+            logger.exception("Strategy search failed")
         review = generate_weekly_review(conn)
         if review is not None:
             logger.info("Weekly review note written: research_id=%s", review)

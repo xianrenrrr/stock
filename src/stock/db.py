@@ -501,6 +501,36 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_gov_trades_dedup
 CREATE INDEX IF NOT EXISTS idx_gov_trades_ticker
     ON gov_trades (ticker, transaction_date DESC);
 
+CREATE TABLE IF NOT EXISTS baskets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind TEXT NOT NULL DEFAULT 'weekly',
+    benchmark TEXT NOT NULL DEFAULT 'QQQ',
+    formed_at TEXT NOT NULL,        -- when the basket was picked
+    due_at TEXT NOT NULL,           -- when it should be scored
+    picks_json TEXT NOT NULL,       -- [{ticker, weight, prob_up, score}]
+    -- filled in at scoring time:
+    scored_at TEXT,
+    port_return REAL,
+    bench_return REAL,
+    excess_return REAL,
+    turnover REAL,
+    cost_bps REAL,
+    net_excess REAL
+);
+CREATE INDEX IF NOT EXISTS idx_baskets_due ON baskets (due_at, scored_at);
+
+CREATE TABLE IF NOT EXISTS strategy_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,             -- e.g. "AmberCarson-F031"-style portrait id
+    definition_json TEXT NOT NULL,  -- the generated strategy spec
+    backtest_json TEXT NOT NULL,    -- metrics from the historical replay
+    score REAL,                     -- headline rank metric (net excess / Sharpe)
+    kept INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_strategy_runs_score
+    ON strategy_runs (score DESC, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS signal_ablation (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     signal TEXT NOT NULL,
