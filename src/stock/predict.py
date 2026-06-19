@@ -735,24 +735,38 @@ def predict_ticker(
     internals_block, internals_hash = get_block(conn, "market_internals")
     breadth_block, breadth_hash = get_block(conn, "sector_breadth")
 
-    # Per-ticker live parts (overnight gap, next earnings) stay uncached;
-    # they are best-effort and degrade to "unavailable" lines.
+    # Plan H §5 auto-improve lever: the grading loop records ablation verdicts;
+    # if the market-tape block (internals + breadth + live quote + earnings) is
+    # measuring net-negative on hit rate, skip it here. Self-correcting: gated-off
+    # predictions are still scored, so if removing it does not help the next
+    # grading cycle re-enables it. Gov-trades is a separate signal, never gated.
+    from stock.ablation import disabled_blocks
     from stock.ingest.gov_trades import format_gov_block
     from stock.market_context import format_earnings_line, format_live_quote_line
-    market_parts = [
-        internals_block,
-        breadth_block,
-        format_live_quote_line(ticker, conn),
-        format_earnings_line(ticker),
-    ]
+    tape_disabled = "market_tape_h0" in disabled_blocks(conn)
+
+    market_parts: list[str] = []
+    if tape_disabled:
+        market_parts.append(
+            "(market-tape block auto-disabled by the ablation loop: it measured"
+            " net-negative on hit rate. It auto-reverts if removal does not help.)"
+        )
+    else:
+        market_parts += [
+            internals_block,
+            breadth_block,
+            format_live_quote_line(ticker, conn),
+            format_earnings_line(ticker),
+        ]
     gov_block = format_gov_block(ticker, conn)
     if gov_block:
         market_parts.append(gov_block)
     market_context = "\n".join(market_parts)
     context_manifest = {
         "macro": macro_hash,
-        "market_internals": internals_hash,
-        "sector_breadth": breadth_hash,
+        "market_internals": "disabled" if tape_disabled else internals_hash,
+        "sector_breadth": "disabled" if tape_disabled else breadth_hash,
+        "market_tape_disabled": tape_disabled,
     }
 
     user_message = user_template.format(

@@ -501,6 +501,19 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_gov_trades_dedup
 CREATE INDEX IF NOT EXISTS idx_gov_trades_ticker
     ON gov_trades (ticker, transaction_date DESC);
 
+CREATE TABLE IF NOT EXISTS signal_ablation (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    signal TEXT NOT NULL,
+    delta_pp REAL,
+    n_with INTEGER NOT NULL DEFAULT 0,
+    n_without INTEGER NOT NULL DEFAULT 0,
+    actionable INTEGER NOT NULL DEFAULT 0,
+    verdict TEXT NOT NULL,
+    recorded_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_signal_ablation_sig
+    ON signal_ablation (signal, recorded_at DESC);
+
 CREATE TABLE IF NOT EXISTS context_nodes (
     node TEXT NOT NULL,
     scope TEXT NOT NULL,

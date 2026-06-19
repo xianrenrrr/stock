@@ -414,6 +414,20 @@ def _format_error_patterns(conn: sqlite3.Connection, *, hours: int) -> str:
         lines.append(
             f"- trend: prior-half hit={round(prior[1]*100,1)}% -> recent-half hit={recent_h}% ({arrow})"
         )
+
+    # Plan H §5: record this cycle's signal-ablation verdicts and surface them so
+    # the auto-improve loop can cite which context blocks help vs hurt. The
+    # predict path consults the recorded verdicts to auto-disable hurting blocks.
+    try:
+        from stock import ablation
+
+        verdicts = ablation.ablation_verdicts(conn, days=30)
+        ablation.record_verdicts(conn, verdicts)
+        disabled = ablation.disabled_blocks(conn)
+        lines.append("")
+        lines.append(ablation.format_ablation_verdict_block(verdicts, disabled))
+    except Exception:
+        logger.exception("ablation verdict wiring failed (non-fatal)")
     return "\n".join(lines)
 
 

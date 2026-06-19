@@ -127,3 +127,115 @@ def format_ablation(report: dict[str, Any]) -> str:
         " treat them as weaker than the per-prediction knowledge split."
     )
     return "\n".join(lines)
+
+
+# --- Auto-improve loop wiring (plan H §5) ------------------------------------
+# The ablation report becomes a lever the system pulls on itself, not just a
+# CLI readout. Each grading cycle records verdicts; the predict path then skips
+# OPTIONAL context blocks that are measurably hurting. This is self-correcting
+# even through regime confounds: once a block is gated off, future predictions
+# run WITHOUT it and are still scored -- if hit rate does not recover, the block
+# was not the cause and the next cycle re-enables it.
+
+ACTION_MIN_N: int = 40       # both groups need this many before a verdict acts
+HURT_THRESHOLD_PP: float = -3.0   # delta this negative (or worse) -> disable
+# Only these blocks may be auto-disabled. Core inputs (news, price, rules,
+# macro) and the structural DAG are never gated. market_tape_h0 maps to the
+# per-ticker market-context block in predict_ticker.
+GATEABLE_BLOCKS: frozenset[str] = frozenset({"market_tape_h0"})
+
+
+def ablation_verdicts(
+    conn: sqlite3.Connection, *, days: int = 30
+) -> list[dict[str, Any]]:
+    """Per-signal actionable verdict: delta, sample sizes, keep/cut/insufficient."""
+    report = compute_ablation(conn, days=days)
+    out: list[dict[str, Any]] = []
+    for signal, (with_s, without_s) in report["signals"].items():
+        nw, nwo = with_s["n"], without_s["n"]
+        actionable = nw >= ACTION_MIN_N and nwo >= ACTION_MIN_N
+        delta: float | None = None
+        if with_s["hit_rate"] is not None and without_s["hit_rate"] is not None:
+            delta = round((with_s["hit_rate"] - without_s["hit_rate"]) * 100, 1)
+        if not actionable or delta is None:
+            verdict = "insufficient"
+        elif delta <= HURT_THRESHOLD_PP:
+            verdict = "cut"
+        elif delta > 0:
+            verdict = "keep"
+        else:
+            verdict = "neutral"
+        out.append({
+            "signal": signal, "delta_pp": delta, "n_with": nw, "n_without": nwo,
+            "actionable": actionable, "verdict": verdict,
+        })
+    return out
+
+
+def record_verdicts(
+    conn: sqlite3.Connection, verdicts: list[dict[str, Any]]
+) -> None:
+    """Persist one cycle of ablation verdicts for trend + auto-gate lookup."""
+    now = datetime.now(timezone.utc).isoformat()
+    for v in verdicts:
+        conn.execute(
+            "INSERT INTO signal_ablation"
+            " (signal, delta_pp, n_with, n_without, actionable, verdict, recorded_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (v["signal"], v["delta_pp"], v["n_with"], v["n_without"],
+             1 if v["actionable"] else 0, v["verdict"], now),
+        )
+    conn.commit()
+
+
+def disabled_blocks(conn: sqlite3.Connection) -> set[str]:
+    """Gateable blocks whose MOST RECENT recorded verdict says 'cut'.
+
+    Reads the persisted history (not a live recompute) so the predict path is
+    cheap and stable within a cycle. Only GATEABLE_BLOCKS can ever appear.
+    """
+    disabled: set[str] = set()
+    for signal in GATEABLE_BLOCKS:
+        row = conn.execute(
+            "SELECT verdict FROM signal_ablation WHERE signal = ?"
+            " ORDER BY recorded_at DESC, id DESC LIMIT 1",
+            (signal,),
+        ).fetchone()
+        if row and str(row[0]) == "cut":
+            disabled.add(signal)
+    return disabled
+
+
+def format_ablation_verdict_block(
+    verdicts: list[dict[str, Any]], disabled: set[str]
+) -> str:
+    """Compact verdict block for the grading prompt's error-pattern section."""
+    lines = [
+        "信号消融 / Signal ablation verdicts (hit-rate WITH vs WITHOUT each"
+        " context block -- use these to KEEP or CUT signal blocks):"
+    ]
+    for v in verdicts:
+        d = f"{v['delta_pp']:+.1f}pp" if v["delta_pp"] is not None else "n/a"
+        gate = ""
+        if v["signal"] in GATEABLE_BLOCKS:
+            gate = (
+                " [AUTO-DISABLED this cycle]" if v["signal"] in disabled
+                else " [gateable]"
+            )
+        lines.append(
+            f"- {v['signal']}: {d} (n_with={v['n_with']}, n_without={v['n_without']})"
+            f" -> {v['verdict']}{gate}"
+        )
+    if disabled:
+        lines.append(
+            "ACTION TAKEN: the system auto-disabled the [AUTO-DISABLED] block(s)"
+            " above for upcoming predictions because they measurably hurt hit"
+            " rate. This auto-reverts if removing them does not help."
+        )
+    lines.append(
+        "Note: date-shipped signals (macro/market_tape/dag) are regime-confounded;"
+        " the per-prediction knowledge split is the cleanest. Only flag a block to"
+        " CUT in your improvement section if its delta is clearly negative with"
+        " adequate sample on BOTH sides."
+    )
+    return "\n".join(lines)
