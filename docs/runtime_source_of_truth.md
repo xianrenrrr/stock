@@ -183,6 +183,8 @@ research follow-up. Fails open to `deep_dive` so a genuine research ask is never
 | `weekly_tech_dive` | Sun 04:30 | F43 tech-trend deep dive from `data/topic_queue.yaml`, now sector-rotated by ISO week across information / biopharma_ai / energy / ai_demand (buyer-side) / space_tech, and ending with a Chokepoint 5-dim research-priority score. The topic's `phase` (early/emerging/mature) flows into scoring. | `research_reports(kind='tech_dive')`, `tech_dive_runs` (now incl. `phase` + `score_*` columns) |
 | `insiders_pull` | Sun 05:00 | Pull SEC Form 4 insider filings. | `insider_filings` |
 | `weekly_entry_scan` | Sun 06:00 | Scan conviction/DD names for pullback entry zones. | `research_reports(kind='entry_signals')` |
+| `weekly_prediction` | Sun 16:00 | Weekly-horizon (Fri→Fri) predictions for active tickers, then ranks them into a Top-N equal-weight long basket (Amber-learning #1). | `predictions(horizon=1950)`, `baskets(kind='weekly')` |
+| `weekly_score_review` | Sat 14:00 | Score due weekly predictions, score the matured Top-N basket vs QQQ net of execution cost (#2/#4), run the Amber strategy-search agent (#5, keeps strategies that beat the prob_up baseline over ≥6 periods), and push the review note with both blocks. | `outcomes`, `baskets`, `strategy_runs`, `research_reports(kind='weekly_review')` |
 | `ai_loop_measure` | Mon 06:30 | Measure AI commercial-loop risk panel. | `ai_loop_health` |
 | `company_dd_dive` | Wed 09:15 | Run one queue-rotated company DD checklist. | `pipeline/dd/<TICKER>.md`, `research_reports` |
 | `web_discovery_morning` | Mon-Fri pre-morning push | Search/fetch/extract web discovery context. | `web_research` |
