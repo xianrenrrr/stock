@@ -321,14 +321,21 @@ def test_recent_completed_filters_by_window(mem_db: sqlite3.Connection) -> None:
 # --- failed-item retry (2026-06-12) ------------------------------------------
 
 
-def _insert_failed(conn, *, topic: str, attempts, hours_ago: float = 1.0) -> int:
+def _insert_failed(
+    conn,
+    *,
+    topic: str,
+    attempts,
+    hours_ago: float = 1.0,
+    error: str = "ClaudeCliUnavailable",
+) -> int:
     from datetime import datetime, timedelta, timezone
 
     queued = (datetime.now(timezone.utc) - timedelta(hours=hours_ago)).isoformat()
     cur = conn.execute(
         "INSERT INTO action_queue (raw_text, topic, status, error, queued_at, attempts)"
-        " VALUES (?, ?, 'failed', 'ClaudeCliUnavailable', ?, ?)",
-        (topic, topic, queued, attempts),
+        " VALUES (?, ?, 'failed', ?, ?, ?)",
+        (topic, topic, error, queued, attempts),
     )
     conn.commit()
     return int(cur.lastrowid or 0)
@@ -349,11 +356,45 @@ def test_requeue_failed_respects_caps(mem_db) -> None:
     from stock import action_queue
 
     _insert_failed(mem_db, topic="too many attempts", attempts=3)
-    _insert_failed(mem_db, topic="too old", attempts=1, hours_ago=72)
+    _insert_failed(
+        mem_db,
+        topic="too old non cli",
+        attempts=1,
+        hours_ago=72,
+        error="RuntimeError('bad input')",
+    )
 
     assert action_queue.requeue_failed(mem_db) == 0
     statuses = [r[0] for r in mem_db.execute("SELECT status FROM action_queue")]
     assert statuses == ["failed", "failed"]
+
+
+def test_requeue_failed_retries_old_cli_unavailable(mem_db) -> None:
+    from stock import action_queue
+
+    _insert_failed(
+        mem_db,
+        topic="old transient cli outage",
+        attempts=1,
+        hours_ago=720,
+        error="ClaudeCliUnavailable('`claude -p` exit=1: ')",
+    )
+    _insert_failed(
+        mem_db,
+        topic="old cli outage over cap",
+        attempts=3,
+        hours_ago=720,
+        error="ClaudeCliUnavailable('`claude -p` exit=1: ')",
+    )
+
+    assert action_queue.requeue_failed(mem_db) == 1
+    rows = mem_db.execute(
+        "SELECT topic, status FROM action_queue ORDER BY id"
+    ).fetchall()
+    assert rows == [
+        ("old transient cli outage", "pending"),
+        ("old cli outage over cap", "failed"),
+    ]
 
 
 def test_mark_running_counts_attempts(mem_db) -> None:

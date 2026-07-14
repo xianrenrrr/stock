@@ -232,6 +232,12 @@ def _mark_pending_again(conn: sqlite3.Connection, item_id: int) -> None:
 
 RETRY_MAX_ATTEMPTS: int = 3
 RETRY_MAX_AGE_HOURS: int = 48
+_TRANSIENT_CLI_ERROR_MARKERS: tuple[str, ...] = (
+    "ClaudeCliUnavailable",
+    "CodexCliUnavailable",
+    "`claude -p`",
+    "codex exec",
+)
 
 
 def requeue_failed(
@@ -244,19 +250,26 @@ def requeue_failed(
 
     A deep dive killed by a transient CLI failure (timeout, 5h usage-window
     exhaustion, flaky subprocess) must not be lost forever -- this is the
-    queue-item mirror of the plan-I scheduler-job retry. Rows older than
-    max_age_hours or already tried max_attempts times stay failed (legacy
-    rows with NULL attempts count as one attempt).
+    queue-item mirror of the plan-I scheduler-job retry. Non-CLI failures older
+    than max_age_hours or rows already tried max_attempts times stay failed
+    (legacy rows with NULL attempts count as one attempt).
     """
     cutoff = (
         datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
     ).isoformat()
+    cli_error_clause = " OR ".join(
+        "error LIKE ?" for _ in _TRANSIENT_CLI_ERROR_MARKERS
+    )
     cursor = conn.execute(
         "UPDATE action_queue SET status = 'pending', started_at = NULL,"
         " completed_at = NULL"
-        " WHERE status = 'failed' AND queued_at >= ?"
+        " WHERE status = 'failed' AND (queued_at >= ? OR " + cli_error_clause + ")"
         " AND COALESCE(attempts, 1) < ?",
-        (cutoff, max_attempts),
+        (
+            cutoff,
+            *(f"%{marker}%" for marker in _TRANSIENT_CLI_ERROR_MARKERS),
+            max_attempts,
+        ),
     )
     conn.commit()
     requeued = int(cursor.rowcount or 0)
