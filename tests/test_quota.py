@@ -123,7 +123,9 @@ def test_mark_job_events_retried(mem_db: sqlite3.Connection) -> None:
 
 
 def test_usage_windows_bucketing(mem_db: sqlite3.Connection) -> None:
-    base = _NOW.replace(hour=10, minute=1)  # 10:00 UTC -> window starting 10:00
+    base = datetime.now(timezone.utc).replace(
+        hour=10, minute=1, second=0, microsecond=0,
+    )  # 10:00 UTC -> window starting 10:00
     for offset_hours, provider in ((0, "codex_cli"), (1, "codex_cli"), (6, "claude_cli")):
         mem_db.execute(
             "INSERT INTO llm_calls (model, provider, input_tokens, output_tokens,"

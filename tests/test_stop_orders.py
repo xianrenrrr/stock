@@ -30,7 +30,7 @@ def conn() -> sqlite3.Connection:
 
 def _seed_prices(conn: sqlite3.Connection, ticker: str, closes: list[float]) -> None:
     """Insert a simple ascending series of daily bars for a ticker."""
-    base = datetime(2026, 4, 1, tzinfo=timezone.utc)
+    base = datetime.now(timezone.utc) - timedelta(days=len(closes) - 1)
     for i, c in enumerate(closes):
         ts = (base + timedelta(days=i)).strftime("%Y-%m-%d")
         conn.execute(

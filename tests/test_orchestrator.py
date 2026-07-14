@@ -627,6 +627,7 @@ def test_job_learn_from_feedback_routes_intents(
     env_settings: object,
 ) -> None:
     """_job_learn_from_feedback dispatches question->reply and instruction->queue."""
+    from stock.feedback_router import FeedbackCategory
     from stock.intent import IntentResult
     from stock.wechat_inbox import FeedbackEntry
 
@@ -668,6 +669,12 @@ def test_job_learn_from_feedback_routes_intents(
     monkeypatch.setattr(
         "stock.orchestrator.prompt_rewriter.propose_rewrite",
         lambda ids, conn: [],
+    )
+    monkeypatch.setattr(
+        "stock.orchestrator.feedback_router.categorize_feedback",
+        lambda text, recipient, conn: FeedbackCategory(
+            category="deep_dive", confidence=0.9, summary="research",
+        ),
     )
 
     from stock.orchestrator import _job_learn_from_feedback
