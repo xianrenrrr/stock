@@ -10,7 +10,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from stock import emailer
+from stock import action_queue, emailer
 from stock.config import get_settings
 from stock.models import (
     ChatMessage,
@@ -212,6 +212,7 @@ def _section_boss_feedback(conn: sqlite3.Connection, since: str, until: str) -> 
 
 def _section_action_queue(conn: sqlite3.Connection) -> str:
     """Pending + recent action items."""
+    requeued = action_queue.requeue_failed(conn)
     pending = conn.execute(
         "SELECT id, topic, queued_at FROM action_queue"
         " WHERE status = 'pending' ORDER BY queued_at DESC LIMIT 20"
@@ -223,6 +224,8 @@ def _section_action_queue(conn: sqlite3.Connection) -> str:
 
     out = [_section_header("Action queue")]
     out.append(f"- Pending: {len(pending)}")
+    if requeued:
+        out.append(f"- Requeued retryable failures: {requeued}")
     for aid, topic, queued_at in pending[:10]:
         out.append(f"  - #{aid} ({str(queued_at)[:16]}): {str(topic)[:200]}")
     if failed:

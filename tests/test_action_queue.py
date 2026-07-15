@@ -397,6 +397,29 @@ def test_requeue_failed_retries_old_cli_unavailable(mem_db) -> None:
     ]
 
 
+def test_self_review_action_queue_section_requeues_retryable_cli_failure(mem_db) -> None:
+    from stock import self_review
+
+    _insert_failed(
+        mem_db,
+        topic="old transient cli outage",
+        attempts=0,
+        hours_ago=720,
+        error="ClaudeCliUnavailable('`claude -p` exit=1: ')",
+    )
+
+    section = self_review._section_action_queue(mem_db)
+
+    assert "Requeued retryable failures: 1" in section
+    assert "Pending: 1" in section
+    assert "Failed:" not in section
+    (status,) = mem_db.execute(
+        "SELECT status FROM action_queue WHERE topic = ?",
+        ("old transient cli outage",),
+    ).fetchone()
+    assert status == "pending"
+
+
 def test_mark_running_counts_attempts(mem_db) -> None:
     from stock import action_queue
 
