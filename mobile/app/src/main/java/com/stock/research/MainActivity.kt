@@ -275,19 +275,33 @@ private fun LatestNoteCard(detail: StockClient.NoteDetail?) {
                 return@Card
             }
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = kindLabel(detail.kind),
-                    color = AccentOrange,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                detail.topic?.let {
-                    Text("  •  ${cleanTopic(it)}", color = TextDim, fontSize = 12.sp)
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = kindLabel(detail.kind),
+                        color = AccentOrange,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(formatTimestamp(detail.createdAt), color = TextDim, fontSize = 11.sp)
                 }
-                detail.layerFocus?.let { Text("  •  $it", color = TextDim, fontSize = 12.sp) }
-                Spacer(Modifier.width(6.dp))
-                Text(formatTimestamp(detail.createdAt), color = TextDim, fontSize = 11.sp)
+                val headline = cleanTopic(detail.topic) ?: detail.layerFocus
+                headline?.let {
+                    Text(
+                        text = it,
+                        color = TextDim,
+                        fontSize = 12.sp,
+                        modifier = Modifier.fillMaxWidth(),
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
             Spacer(Modifier.height(10.dp))
             MarkdownView(markdown = detail.body)
@@ -544,6 +558,7 @@ private fun DeepResearchItem(note: StockClient.NoteSummary, onClick: () -> Unit)
                 color = TextMain,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.fillMaxWidth(),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -552,12 +567,16 @@ private fun DeepResearchItem(note: StockClient.NoteSummary, onClick: () -> Unit)
                 text = "${kindLabel(note.kind)} - ${formatTimestamp(note.createdAt)}",
                 color = TextDim,
                 fontSize = 11.sp,
+                modifier = Modifier.fillMaxWidth(),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
             Spacer(Modifier.height(5.dp))
             Text(
                 text = cleanPreview(note.bodyPreview),
                 color = TextDim,
                 fontSize = 12.sp,
+                modifier = Modifier.fillMaxWidth(),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -608,9 +627,11 @@ private fun HistoryItem(note: StockClient.NoteSummary, onClick: () -> Unit) {
                     ).joinToString(" • "),
                     color = TextDim,
                     fontSize = 12.sp,
+                    modifier = Modifier.weight(1f),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
+                Spacer(Modifier.width(8.dp))
                 Text(formatTimestamp(note.createdAt), color = TextDim, fontSize = 11.sp)
             }
             Spacer(Modifier.height(2.dp))
@@ -663,6 +684,11 @@ private fun buildMarkdownTextView(ctx: Context): TextView {
         textSize = 14.5f
         setTextColor(AndroidColor.parseColor("#E6EDF3"))
         setLineSpacing(0f, 1.25f)
+        setHorizontallyScrolling(false)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            breakStrategy = android.text.Layout.BREAK_STRATEGY_HIGH_QUALITY
+            hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NORMAL
+        }
     }
 }
 
