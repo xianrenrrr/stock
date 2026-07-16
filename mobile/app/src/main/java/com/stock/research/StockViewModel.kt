@@ -15,6 +15,7 @@ import kotlinx.coroutines.withContext
 data class DashboardState(
     val recipient: String? = null,
     val notes: List<StockClient.NoteSummary> = emptyList(),
+    val deepResearch: List<StockClient.NoteSummary> = emptyList(),
     val selected: StockClient.NoteDetail? = null,
     val loading: Boolean = false,
     val sending: Boolean = false,
@@ -33,17 +34,30 @@ class StockViewModel(private val client: StockClient) : ViewModel() {
 
     private var pollJob: Job? = null
     private var fastPollJob: Job? = null
+    private val deepResearchKinds = listOf(
+        "deep_dive",
+        "tech_dive",
+        "deep_qa",
+        "dd_checklist",
+        "earnings_review",
+        "health_check",
+    ).joinToString(",")
 
     /** Initial load: identify, list notes, fetch the latest body. */
     fun bootstrap() {
         viewModelScope.launch {
             _state.value = _state.value.copy(loading = true, errorMessage = null)
             try {
-                val (me, notes) = withContext(Dispatchers.IO) {
+                val (me, loadedNotes) = withContext(Dispatchers.IO) {
                     val identity = client.me()
                     val recent = client.listNotes(days = 14, limit = 30)
-                    identity to recent
+                    val deep = client.listNotes(
+                        days = 45, limit = 12, kinds = deepResearchKinds,
+                    )
+                    identity to Pair(recent, deep)
                 }
+                val notes = loadedNotes.first
+                val deepResearch = loadedNotes.second
                 val latest = notes.firstOrNull()
                 val detail = if (latest != null) {
                     withContext(Dispatchers.IO) { client.fetchNote(latest.researchId) }
@@ -51,6 +65,7 @@ class StockViewModel(private val client: StockClient) : ViewModel() {
                 _state.value = _state.value.copy(
                     recipient = me.recipient,
                     notes = notes,
+                    deepResearch = deepResearch,
                     selected = detail,
                     loading = false,
                     lastRefreshedAt = System.currentTimeMillis(),
@@ -195,6 +210,9 @@ class StockViewModel(private val client: StockClient) : ViewModel() {
                     val notes = withContext(Dispatchers.IO) {
                         client.listNotes(days = 14, limit = 30)
                     }
+                    val deepResearch = withContext(Dispatchers.IO) {
+                        client.listNotes(days = 45, limit = 12, kinds = deepResearchKinds)
+                    }
                     val newest = notes.firstOrNull()
                     if (newest != null && newest.researchId > latestResearchIdBefore) {
                         val detail = withContext(Dispatchers.IO) {
@@ -202,6 +220,7 @@ class StockViewModel(private val client: StockClient) : ViewModel() {
                         }
                         _state.value = _state.value.copy(
                             notes = notes,
+                            deepResearch = deepResearch,
                             selected = detail,
                             replyStatus = "已收到回复",
                             lastRefreshedAt = System.currentTimeMillis(),
@@ -210,6 +229,7 @@ class StockViewModel(private val client: StockClient) : ViewModel() {
                     }
                     _state.value = _state.value.copy(
                         notes = notes,
+                        deepResearch = deepResearch,
                         lastRefreshedAt = System.currentTimeMillis(),
                     )
                 } catch (_: Throwable) {
@@ -230,6 +250,9 @@ class StockViewModel(private val client: StockClient) : ViewModel() {
                     val notes = withContext(Dispatchers.IO) {
                         client.listNotes(days = 14, limit = 30)
                     }
+                    val deepResearch = withContext(Dispatchers.IO) {
+                        client.listNotes(days = 45, limit = 12, kinds = deepResearchKinds)
+                    }
                     val latest = notes.firstOrNull()
                     val current = _state.value
                     val detail = if (latest != null && latest.researchId != current.selected?.researchId) {
@@ -237,6 +260,7 @@ class StockViewModel(private val client: StockClient) : ViewModel() {
                     } else current.selected
                     _state.value = current.copy(
                         notes = notes,
+                        deepResearch = deepResearch,
                         selected = detail,
                         lastRefreshedAt = System.currentTimeMillis(),
                     )

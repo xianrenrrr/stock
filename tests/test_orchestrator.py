@@ -697,6 +697,60 @@ def test_job_learn_from_feedback_routes_intents(
     assert len(rows) == 1
 
 
+def test_job_learn_from_feedback_queues_research_question(
+    mock_conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch,
+    env_settings: object,
+) -> None:
+    """Research-shaped questions should fast-track through action_queue."""
+    from stock.intent import IntentResult
+    from stock.wechat_inbox import FeedbackEntry
+
+    text = "Can you continue the research on SITM and look into customers?"
+    fake_entries = [
+        FeedbackEntry(
+            timestamp="2026-07-14T17:15:00",
+            recipient="boss",
+            source="manual",
+            text=text,
+        ),
+    ]
+    monkeypatch.setattr(
+        "stock.orchestrator.read_feedback_entries", lambda **kw: fake_entries
+    )
+    monkeypatch.setattr("stock.conversation.embed", lambda text: [0.0] * 384)
+    monkeypatch.setattr(
+        "stock.orchestrator.intent.classify",
+        lambda text, recipient, conn: IntentResult(
+            intent="question", confidence=0.9, summary="research ask",
+        ),
+    )
+    generate_reply_calls: list[str] = []
+    monkeypatch.setattr(
+        "stock.orchestrator.generate_reply",
+        lambda conn, recipient, boss_reply, language=None: generate_reply_calls.append(
+            boss_reply
+        ) or "reply",
+    )
+    monkeypatch.setattr(
+        "stock.orchestrator.prompt_rewriter.propose_rewrite",
+        lambda ids, conn: [],
+    )
+
+    from stock.orchestrator import _job_learn_from_feedback
+
+    _job_learn_from_feedback()
+
+    queued = mock_conn.execute(
+        "SELECT topic FROM action_queue WHERE topic = ?", (text,)
+    ).fetchall()
+    assert len(queued) == 1
+    assert generate_reply_calls == []
+    ack_rows = mock_conn.execute(
+        "SELECT body FROM research_reports WHERE kind = 'reply'"
+    ).fetchall()
+    assert any("Queued deep-dive research" in row[0] for row in ack_rows)
+
+
 def test_run_orchestrator_startup(monkeypatch: pytest.MonkeyPatch) -> None:
     """Orchestrator starts and handles KeyboardInterrupt cleanly."""
     # Patch get_conn so startup DB check works

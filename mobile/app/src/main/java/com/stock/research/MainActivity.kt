@@ -172,6 +172,7 @@ private fun DashboardScreen(
                 onSendMessage = onSendMessage,
                 onClearUpload = onClearUpload,
             )
+            DeepResearchSection(notes = state.deepResearch, onPick = onPick)
             HistorySection(notes = state.notes, onPick = onPick)
             FooterDisclaimer()
         }
@@ -494,6 +495,78 @@ private fun ChatComposerCard(
 
 
 @Composable
+private fun DeepResearchSection(
+    notes: List<StockClient.NoteSummary>,
+    onPick: (Int) -> Unit,
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Panel),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Text(
+                text = "Deep Research / DD Reports",
+                color = AccentOrange,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.height(8.dp))
+            if (notes.isEmpty()) {
+                Text(
+                    text = "No deep research reports in the last 45 days.",
+                    color = TextDim,
+                    fontSize = 12.sp,
+                )
+                return@Column
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                notes.forEach { note ->
+                    DeepResearchItem(note = note, onClick = { onPick(note.researchId) })
+                }
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun DeepResearchItem(note: StockClient.NoteSummary, onClick: () -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Panel2),
+        shape = RoundedCornerShape(8.dp),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+            Text(
+                text = "#${note.researchId} " +
+                    (cleanTopic(note.topic) ?: note.layerFocus ?: kindLabel(note.kind)),
+                color = TextMain,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(3.dp))
+            Text(
+                text = "${kindLabel(note.kind)} - ${formatTimestamp(note.createdAt)}",
+                color = TextDim,
+                fontSize = 11.sp,
+            )
+            Spacer(Modifier.height(5.dp))
+            Text(
+                text = cleanPreview(note.bodyPreview),
+                color = TextDim,
+                fontSize = 12.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+
+@Composable
 private fun HistorySection(
     notes: List<StockClient.NoteSummary>,
     onPick: (Int) -> Unit,
@@ -608,6 +681,11 @@ private fun kindLabel(kind: String): String = when (kind) {
     "health_check" -> "体检"
     "reply" -> "回复"
     "alert" -> "⚠️ 警报"
+    "tech_dive" -> "Tech Dive"
+    "deep_qa" -> "Q&A Dive"
+    "dd_checklist" -> "DD Checklist"
+    "earnings_review" -> "Earnings"
+    "macro" -> "Macro"
     else -> kind
 }
 

@@ -253,6 +253,7 @@ def get_me(
 def get_notes(
     days: int = Query(default=DEFAULT_NOTES_LOOKBACK_DAYS, ge=1, le=90),
     limit: int = Query(default=DEFAULT_NOTES_LIMIT, ge=1, le=200),
+    kinds: str | None = Query(default=None),
     auth: tuple[str, str | None, sqlite3.Connection] = Depends(_require_recipient),
 ) -> NotesListResponse:
     """Return recent research notes (daily + deep-dive) sorted newest first.
@@ -263,12 +264,28 @@ def get_notes(
     """
     _recipient, _last_seen, conn = auth
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    requested_kinds = [
+        k.strip() for k in (kinds or "").split(",")
+        if k.strip()
+    ]
+    for kind in requested_kinds:
+        if not re.fullmatch(r"[A-Za-z0-9_]+", kind):
+            raise ChannelHTTPError(
+                400, "invalid_kind_filter", "kinds must be comma-separated identifiers"
+            )
+    where = "created_at >= ? AND kind != 'warning_dashboard'"
+    params: list[object] = [cutoff]
+    if requested_kinds:
+        placeholders = ",".join("?" for _ in requested_kinds)
+        where += f" AND kind IN ({placeholders})"
+        params.extend(requested_kinds)
+    params.append(limit)
     rows = conn.execute(
         "SELECT id, kind, topic, layer_focus, body, created_at"
         " FROM research_reports"
-        " WHERE created_at >= ? AND kind != 'warning_dashboard'"
+        f" WHERE {where}"
         " ORDER BY created_at DESC, id DESC LIMIT ?",
-        (cutoff, limit),
+        params,
     ).fetchall()
     notes = [
         NoteSummary(

@@ -476,6 +476,33 @@ def _job_scan_intraday_holding_moves() -> None:
 
 
 AUTO_TRACK_MAX_TICKERS: int = 3
+RESEARCH_FOLLOWUP_MARKERS: tuple[str, ...] = (
+    "continue the research",
+    "continue research",
+    "keep researching",
+    "do research",
+    "run research",
+    "trigger research",
+    "research on",
+    "research ",
+    "look into",
+    "investigate",
+    "analyze",
+    "analysis on",
+    "deep dive",
+    "deep-dive",
+    "dive deep",
+    "follow-up research",
+    "follow up research",
+    "继续",
+    "深度研究",
+)
+
+
+def _looks_like_research_followup(text: str) -> bool:
+    """Catch research requests that the intent model phrases as questions."""
+    lowered = (text or "").lower()
+    return any(marker in lowered for marker in RESEARCH_FOLLOWUP_MARKERS)
 
 
 def _auto_track_boss_tickers(conn: sqlite3.Connection, text: str) -> list[str]:
@@ -558,9 +585,47 @@ def _job_learn_from_feedback() -> None:
                 continue
 
             # Treat "unknown" the same as "question": when the cheap classifier fails
-                    # (LLM flake, JSON parse error, etc.) the boss still gets a reply
+            # (LLM flake, JSON parse error, etc.) the boss still gets a reply
             # rather than silent stash. False positives just produce a polite answer.
             if result.intent in ("question", "unknown"):
+                if _looks_like_research_followup(entry.text):
+                    try:
+                        topic = entry.text
+                        action_queue.enqueue_actions(
+                            conn, source_research_id=None, raw_items=[topic]
+                        )
+                        topic_short = str(topic).strip().replace("\n", " ")[:120]
+                        ack_body = (
+                            f"Queued deep-dive research: {topic_short} -- "
+                            "result will be pushed shortly.\n\n"
+                            "Not financial advice."
+                        )
+                        cursor = conn.execute(
+                            "INSERT INTO research_reports"
+                            " (kind, topic, layer_focus, body, cost_usd, created_at)"
+                            " VALUES ('reply', ?, NULL, ?, 0, ?)",
+                            (
+                                topic_short, ack_body,
+                                datetime.now(timezone.utc).isoformat(),
+                            ),
+                        )
+                        conn.commit()
+                        ack_rid = int(cursor.lastrowid or 0) or None
+                        run_id = conversation.get_run_id(conn, inbound_id)
+                        conversation.record_outbound(
+                            entry.recipient, ack_body, conn,
+                            run_id=run_id, related_research_id=ack_rid,
+                        )
+                        logger.info(
+                            "Question-like research follow-up queued for %s: topic=%r",
+                            entry.recipient, topic_short,
+                        )
+                    except Exception:
+                        logger.exception(
+                            "action_queue.enqueue_actions failed for research "
+                            "follow-up %s", inbound_id,
+                        )
+                    continue
                 try:
                     reply_body = generate_reply(
                         conn, recipient=entry.recipient, boss_reply=entry.text

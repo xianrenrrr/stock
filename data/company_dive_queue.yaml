@@ -33,14 +33,17 @@ companies:
   name: 拓荆科技 NAURA Tetech
   priority: 1
   enabled: true
+  last_run: 2026-06-24T09:15
 - ticker: 688498.SH
   name: 源杰科技 Yuanjie
   priority: 1
   enabled: true
+  last_run: 2026-07-01T09:15
 - ticker: 002428.SZ
   name: 云南锗业 InP substrate
   priority: 1
   enabled: true
+  last_run: 2026-07-15T09:15
 - ticker: 002222.SZ
   name: 福晶科技 Fujian Castech
   priority: 2

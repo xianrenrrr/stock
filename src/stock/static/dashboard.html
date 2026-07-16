@@ -213,6 +213,54 @@
   }
   .reply .status.ok { color: var(--good); }
   .reply .status.err { color: var(--bad); }
+  .research-panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 18px;
+  }
+  .research-panel h3 {
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 14px;
+    margin: 0 0 8px;
+  }
+  .research-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .research-item {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    cursor: pointer;
+  }
+  .research-item:hover { border-color: var(--accent-2); }
+  .research-item .title {
+    font-size: 13px;
+    color: var(--text);
+    font-weight: 650;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .research-item .sub {
+    margin-top: 3px;
+    color: var(--text-dim);
+    font-size: 11px;
+  }
+  .research-item .preview {
+    margin-top: 6px;
+    color: var(--text-dim);
+    font-size: 12px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
   .history h3 {
     color: var(--text-dim);
     font-weight: 500;
@@ -337,6 +385,11 @@
       <div class="status" id="replyStatus">系统会在下一次研报中根据你的反馈调整。</div>
     </div>
 
+    <div class="research-panel">
+      <h3>Deep Research / DD Reports</h3>
+      <div class="research-grid" id="deepResearchList">Loading...</div>
+    </div>
+
     <div class="history">
       <h3>过去 14 天</h3>
       <div id="historyList">读取中…</div>
@@ -397,12 +450,39 @@ async function loadDashboard() {
   try {
     const me = await api("/me");
     showDash(me.recipient);
-    await Promise.all([loadWarnings(), loadLatest(), loadHistory()]);
+    await Promise.all([loadWarnings(), loadLatest(), loadDeepResearch(), loadHistory()]);
   } catch (e) {
     localStorage.removeItem("stock_token");
     TOKEN = null;
     showLogin("登录失效：" + e.message);
   }
+}
+
+function noteKindLabel(kind) {
+  const labels = {
+    deep_dive: "Deep Dive",
+    tech_dive: "Tech Dive",
+    deep_qa: "Q&A Dive",
+    dd_checklist: "DD Checklist",
+    earnings_review: "Earnings",
+    health_check: "Health",
+    daily: "Daily",
+    reply: "Reply",
+    alert: "Alert",
+    grading: "Grading",
+    macro: "Macro",
+  };
+  return labels[kind] || kind || "Note";
+}
+
+async function openNote(id) {
+  const detail = await api("/notes/" + id);
+  el("latestKind").textContent = noteKindLabel(detail.kind);
+  el("latestTopic").textContent = detail.topic ? "â€¢ " + detail.topic : "";
+  el("latestLayer").textContent = detail.layer_focus ? "â€¢ " + detail.layer_focus : "";
+  el("latestTime").textContent = formatTime(detail.created_at);
+  el("latestBody").innerHTML = renderMarkdown(detail.body);
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 async function loadWarnings() {
@@ -445,6 +525,39 @@ async function loadLatest() {
   el("latestLayer").textContent = detail.layer_focus ? "• " + detail.layer_focus : "";
   el("latestTime").textContent = formatTime(detail.created_at);
   el("latestBody").innerHTML = renderMarkdown(detail.body);
+}
+
+async function loadDeepResearch() {
+  const kinds = [
+    "deep_dive",
+    "tech_dive",
+    "deep_qa",
+    "dd_checklist",
+    "earnings_review",
+    "health_check",
+  ].join(",");
+  const list = await api("/notes?days=45&limit=12&kinds=" + encodeURIComponent(kinds));
+  const wrap = el("deepResearchList");
+  if (!list.notes || list.notes.length === 0) {
+    wrap.innerHTML = "<em>No deep research reports in the last 45 days.</em>";
+    return;
+  }
+  wrap.innerHTML = list.notes.map(n => `
+    <div class="research-item" data-id="${n.research_id}">
+      <div class="title">#${n.research_id} ${escapeHtml(n.topic || n.layer_focus || noteKindLabel(n.kind))}</div>
+      <div class="sub">${escapeHtml(noteKindLabel(n.kind))} - ${formatTime(n.created_at)}</div>
+      <div class="preview">${escapeHtml(n.body_preview)}</div>
+    </div>
+  `).join("");
+  wrap.querySelectorAll(".research-item").forEach(div => {
+    div.addEventListener("click", async () => {
+      try {
+        await openNote(div.getAttribute("data-id"));
+      } catch (e) {
+        alert("åŠ è½½å¤±è´¥ï¼š" + e.message);
+      }
+    });
+  });
 }
 
 async function loadHistory() {
@@ -498,6 +611,7 @@ function escapeHtml(s) {
 function refreshAll() {
   loadWarnings().catch(() => {});
   loadLatest().catch(() => {});
+  loadDeepResearch().catch(() => {});
   loadHistory().catch(() => {});
 }
 

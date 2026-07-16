@@ -61,8 +61,9 @@ class StockClient(
         )
     }
 
-    fun listNotes(days: Int = 14, limit: Int = 50): List<NoteSummary> {
-        val obj = jsonGet("/channel/api/notes?days=$days&limit=$limit")
+    fun listNotes(days: Int = 14, limit: Int = 50, kinds: String? = null): List<NoteSummary> {
+        val kindParam = kinds?.takeIf { it.isNotBlank() }?.let { "&kinds=$it" }.orEmpty()
+        val obj = jsonGet("/channel/api/notes?days=$days&limit=$limit$kindParam")
         val arr = obj.optJSONArray("notes") ?: JSONArray()
         return (0 until arr.length()).map { i ->
             val n = arr.getJSONObject(i)
