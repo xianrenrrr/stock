@@ -82,6 +82,14 @@ WATCHLIST_PREDICTION_LOOKBACK_HOURS: int = 36
 NEWS_FEATURE_LOOKBACK_HOURS: int = 24
 NEWS_FEATURE_LIMIT: int = 25
 DEFAULT_MAX_CHARS: int = 3500
+DEEP_DIVE_FOLLOWUP_MAX_CHARS: int = 1800
+DEEP_DIVE_NEXT_STEPS_MARKERS: tuple[str, ...] = (
+    "next steps",
+    "下一步",
+    "下 一 步",
+    "后续研究",
+    "後續研究",
+)
 
 
 def _core_chat(
@@ -102,6 +110,84 @@ def _core_chat(
         conn=conn,
         caller=caller,
         cached_system=cached_system,
+    )
+
+
+def _deep_dive_has_next_steps(body: str) -> bool:
+    """Return True when a generated DD report leaves explicit follow-up work."""
+    normalized = body.casefold()
+    return any(marker in normalized for marker in DEEP_DIVE_NEXT_STEPS_MARKERS)
+
+
+def _strip_trailing_disclaimer(body: str) -> str:
+    """Remove trailing NFA line so appended amendments do not duplicate it."""
+    lines = body.rstrip().splitlines()
+    while lines and not lines[-1].strip():
+        lines.pop()
+    if lines and lines[-1].strip().casefold() == "not financial advice.":
+        lines.pop()
+    return "\n".join(lines).rstrip()
+
+
+def _append_deep_dive_followup(body: str, followup: str) -> str:
+    base = _strip_trailing_disclaimer(body)
+    addition = _strip_trailing_disclaimer(followup)
+    if not addition:
+        return base.rstrip() + "\n\nNot financial advice."
+    return (
+        f"{base}\n\n"
+        "## Local follow-up research / Next-step amendment\n\n"
+        f"{addition}\n\n"
+        "Not financial advice."
+    )
+
+
+def _run_deep_dive_followup(
+    conn: sqlite3.Connection,
+    *,
+    topic: str,
+    first_pass_body: str,
+    chain_context: str,
+    news_block: str,
+    predictions_block: str,
+    extra_block: str,
+    language: str,
+) -> ChatResponse:
+    """Run one bounded local follow-up pass for DD reports that end in next steps."""
+    prompt = f"""
+Topic: {topic}
+
+The first-pass deep-dive below ended with a Next Steps / 下一步 section.
+Do not repeat the report and do not write another TODO list. Locally execute the
+highest-value next-step research using the available context, then write a concise
+amendment with concrete findings, changed conclusions, remaining unknowns, and
+decision impact. If a requested datapoint is still unavailable, say exactly what
+is missing and how much it matters.
+
+Supply chain context:
+{chain_context}
+
+Recent news features:
+{news_block}
+
+Recent watchlist predictions:
+{predictions_block}
+
+Optional analyst note from caller:
+{extra_block}
+
+First-pass report:
+{first_pass_body}
+
+Write the amendment in {language}. Keep it under {DEEP_DIVE_FOLLOWUP_MAX_CHARS}
+characters. End with "Not financial advice."
+""".strip()
+
+    return _core_chat(
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=2200,
+        conn=conn,
+        caller="research.generate_deep_dive.followup",
     )
 
 
@@ -760,6 +846,27 @@ def generate_deep_dive(
     if not body:
         raise RuntimeError("Deep-dive generated empty body")
 
+    cost_usd = response.cost_usd
+    if _deep_dive_has_next_steps(body):
+        logger.info("deep_dive: running local follow-up pass for next steps: %s", topic)
+        check_cost_ceiling(conn, settings)
+        followup = _run_deep_dive_followup(
+            conn,
+            topic=topic,
+            first_pass_body=body,
+            chain_context=chain_context,
+            news_block=news_block,
+            predictions_block=predictions_block,
+            extra_block=extra_block,
+            language=lang,
+        )
+        followup_body = followup.content.strip()
+        if followup_body:
+            body = _append_deep_dive_followup(body, followup_body)
+            cost_usd += followup.cost_usd
+        else:
+            logger.warning("deep_dive: follow-up pass returned empty body for %s", topic)
+
     if "Not financial advice" not in body:
         body = body.rstrip() + "\n\nNot financial advice."
 
@@ -769,7 +876,7 @@ def generate_deep_dive(
         topic=topic,
         layer_focus=None,
         body=body,
-        cost_usd=response.cost_usd,
+        cost_usd=cost_usd,
     )
     return ResearchReport(
         research_id=research_id,
@@ -777,7 +884,7 @@ def generate_deep_dive(
         topic=topic,
         layer_focus=None,
         body=body,
-        cost_usd=response.cost_usd,
+        cost_usd=cost_usd,
         created_at=datetime.now(timezone.utc).isoformat(),
     )
 

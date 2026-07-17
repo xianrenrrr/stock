@@ -22,6 +22,9 @@ on:
         required: false
         default: ''
 
+permissions:
+  contents: write
+
 jobs:
   build:
     if: github.event_name == 'workflow_dispatch' || vars.BUILD_APK_ENABLED != 'false'
@@ -100,6 +103,33 @@ jobs:
           name: stock-research-release
           path: ${{ steps.apk.outputs.release }}
           retention-days: 30
+
+      - name: Publish APK drop branch
+        if: github.ref == 'refs/heads/main'
+        env:
+          DEBUG_APK: ${{ steps.apk.outputs.debug }}
+          RELEASE_APK: ${{ steps.apk.outputs.release }}
+        run: |
+          rm -rf /tmp/apk-drop
+          mkdir -p /tmp/apk-drop/apk
+          cp "$RELEASE_APK" /tmp/apk-drop/apk/stock-research-release.apk
+          cp "$DEBUG_APK" /tmp/apk-drop/apk/stock-research-debug.apk
+          cat > /tmp/apk-drop/README.md <<EOF
+          # APK Drop
+
+          Built from commit $GITHUB_SHA.
+
+          Use apk/stock-research-release.apk for normal install.
+          EOF
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan apk-drop
+          git rm -rf . || true
+          cp -R /tmp/apk-drop/. .
+          git add README.md apk
+          git commit -m "Publish APK for ${GITHUB_SHA::7}"
+          git push --force origin apk-drop
 
       - name: Print install instructions
         run: |

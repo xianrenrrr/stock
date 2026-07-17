@@ -98,3 +98,55 @@ def test_generate_deep_dive_injects_live_quotes(monkeypatch) -> None:
     assert report.kind == "deep_dive"
     # The live-quote grounding made it into the prompt sent to the model.
     assert "LIVEQUOTE: NVDA last=$123.45" in captured["prompt"]
+
+
+def test_generate_deep_dive_runs_next_steps_followup(monkeypatch) -> None:
+    """A DD report with Next Steps gets one local amendment before persistence."""
+    from stock import research
+    from stock.models import ChatResponse
+
+    conn: sqlite3.Connection = db.get_conn(":memory:")
+    calls: list[str] = []
+
+    def fake_core_chat(*, messages, max_tokens, conn, caller, cached_system=None):
+        calls.append(caller)
+        if caller == "research.generate_deep_dive.followup":
+            assert "Do not repeat the report" in messages[0]["content"]
+            assert "pull customer checks" in messages[0]["content"]
+            return ChatResponse(
+                content="Follow-up: customer checks support the thesis. Not financial advice.",
+                input_tokens=1,
+                output_tokens=1,
+                cost_usd=0.02,
+                model="x",
+            )
+        return ChatResponse(
+            content=(
+                "Initial DD.\n\n"
+                "## Next Steps\n"
+                "- pull customer checks\n\n"
+                "Not financial advice."
+            ),
+            input_tokens=1,
+            output_tokens=1,
+            cost_usd=0.03,
+            model="x",
+        )
+
+    monkeypatch.setattr(research, "_core_chat", fake_core_chat)
+    monkeypatch.setattr(research, "_build_live_quote_block", lambda *args, **kwargs: "")
+
+    report = research.generate_deep_dive(conn, topic="NVDA outlook")
+
+    assert calls == ["research.generate_deep_dive", "research.generate_deep_dive.followup"]
+    assert "Local follow-up research / Next-step amendment" in report.body
+    assert "customer checks support the thesis" in report.body
+    assert report.cost_usd == 0.05
+
+    stored = conn.execute(
+        "SELECT body, cost_usd FROM research_reports WHERE id = ?",
+        (report.research_id,),
+    ).fetchone()
+    assert stored is not None
+    assert "Next-step amendment" in stored[0]
+    assert stored[1] == 0.05
