@@ -100,8 +100,8 @@ def test_generate_deep_dive_injects_live_quotes(monkeypatch) -> None:
     assert "LIVEQUOTE: NVDA last=$123.45" in captured["prompt"]
 
 
-def test_generate_deep_dive_runs_next_steps_followup(monkeypatch) -> None:
-    """A DD report with Next Steps gets one local amendment before persistence."""
+def test_generate_deep_dive_runs_recursive_next_steps_followups(monkeypatch) -> None:
+    """A DD report with Next Steps gets three local amendments before persistence."""
     from stock import research
     from stock.models import ChatResponse
 
@@ -113,8 +113,14 @@ def test_generate_deep_dive_runs_next_steps_followup(monkeypatch) -> None:
         if caller == "research.generate_deep_dive.followup":
             assert "Do not repeat the report" in messages[0]["content"]
             assert "pull customer checks" in messages[0]["content"]
+            pass_number = len(calls) - 1
+            assert f"pass {pass_number} of 3" in messages[0]["content"]
             return ChatResponse(
-                content="Follow-up: customer checks support the thesis. Not financial advice.",
+                content=(
+                    f"Follow-up pass {pass_number}: customer checks support the "
+                    "thesis. Remaining Next Steps: monitor backlog. "
+                    "Not financial advice."
+                ),
                 input_tokens=1,
                 output_tokens=1,
                 cost_usd=0.02,
@@ -138,10 +144,17 @@ def test_generate_deep_dive_runs_next_steps_followup(monkeypatch) -> None:
 
     report = research.generate_deep_dive(conn, topic="NVDA outlook")
 
-    assert calls == ["research.generate_deep_dive", "research.generate_deep_dive.followup"]
-    assert "Local follow-up research / Next-step amendment" in report.body
-    assert "customer checks support the thesis" in report.body
-    assert report.cost_usd == 0.05
+    assert calls == [
+        "research.generate_deep_dive",
+        "research.generate_deep_dive.followup",
+        "research.generate_deep_dive.followup",
+        "research.generate_deep_dive.followup",
+    ]
+    assert "Local follow-up research pass 1 / Next-step amendment" in report.body
+    assert "Local follow-up research pass 2 / Next-step amendment" in report.body
+    assert "Local follow-up research pass 3 / Next-step amendment" in report.body
+    assert "Remaining Next Steps: monitor backlog" in report.body
+    assert abs(report.cost_usd - 0.09) < 0.000001
 
     stored = conn.execute(
         "SELECT body, cost_usd FROM research_reports WHERE id = ?",
@@ -149,4 +162,4 @@ def test_generate_deep_dive_runs_next_steps_followup(monkeypatch) -> None:
     ).fetchone()
     assert stored is not None
     assert "Next-step amendment" in stored[0]
-    assert stored[1] == 0.05
+    assert abs(stored[1] - 0.09) < 0.000001

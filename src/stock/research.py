@@ -75,6 +75,7 @@ DISCOVERY_THESIS_PROMPT_PATH: str = "prompts/discovery_thesis.txt"
 DISCOVERY_THESIS_MAX_TOKENS: int = 4500
 DAILY_RESEARCH_MAX_TOKENS: int = 4500
 DEEP_DIVE_MAX_TOKENS: int = 5500
+DEEP_DIVE_MAX_FOLLOWUP_PASSES: int = 3
 HEALTH_CHECK_MAX_TOKENS: int = 4500
 REPLY_MAX_TOKENS: int = 600
 REPLY_MAX_CHARS: int = 600
@@ -129,14 +130,14 @@ def _strip_trailing_disclaimer(body: str) -> str:
     return "\n".join(lines).rstrip()
 
 
-def _append_deep_dive_followup(body: str, followup: str) -> str:
+def _append_deep_dive_followup(body: str, followup: str, *, pass_index: int) -> str:
     base = _strip_trailing_disclaimer(body)
     addition = _strip_trailing_disclaimer(followup)
     if not addition:
         return base.rstrip() + "\n\nNot financial advice."
     return (
         f"{base}\n\n"
-        "## Local follow-up research / Next-step amendment\n\n"
+        f"## Local follow-up research pass {pass_index} / Next-step amendment\n\n"
         f"{addition}\n\n"
         "Not financial advice."
     )
@@ -152,17 +153,20 @@ def _run_deep_dive_followup(
     predictions_block: str,
     extra_block: str,
     language: str,
+    pass_index: int,
 ) -> ChatResponse:
     """Run one bounded local follow-up pass for DD reports that end in next steps."""
     prompt = f"""
 Topic: {topic}
 
-The first-pass deep-dive below ended with a Next Steps / 下一步 section.
+The deep-dive below still contains a Next Steps / 下一步 section.
+This is recursive local follow-up pass {pass_index} of {DEEP_DIVE_MAX_FOLLOWUP_PASSES}.
 Do not repeat the report and do not write another TODO list. Locally execute the
 highest-value next-step research using the available context, then write a concise
 amendment with concrete findings, changed conclusions, remaining unknowns, and
 decision impact. If a requested datapoint is still unavailable, say exactly what
-is missing and how much it matters.
+is missing and how much it matters. If work still remains after this pass, keep
+those remaining items explicit so the final report preserves them.
 
 Supply chain context:
 {chain_context}
@@ -847,8 +851,17 @@ def generate_deep_dive(
         raise RuntimeError("Deep-dive generated empty body")
 
     cost_usd = response.cost_usd
-    if _deep_dive_has_next_steps(body):
-        logger.info("deep_dive: running local follow-up pass for next steps: %s", topic)
+    followup_pass = 1
+    while (
+        followup_pass <= DEEP_DIVE_MAX_FOLLOWUP_PASSES
+        and _deep_dive_has_next_steps(body)
+    ):
+        logger.info(
+            "deep_dive: running local follow-up pass %d/%d for next steps: %s",
+            followup_pass,
+            DEEP_DIVE_MAX_FOLLOWUP_PASSES,
+            topic,
+        )
         check_cost_ceiling(conn, settings)
         followup = _run_deep_dive_followup(
             conn,
@@ -859,13 +872,22 @@ def generate_deep_dive(
             predictions_block=predictions_block,
             extra_block=extra_block,
             language=lang,
+            pass_index=followup_pass,
         )
         followup_body = followup.content.strip()
         if followup_body:
-            body = _append_deep_dive_followup(body, followup_body)
+            body = _append_deep_dive_followup(
+                body, followup_body, pass_index=followup_pass,
+            )
             cost_usd += followup.cost_usd
         else:
-            logger.warning("deep_dive: follow-up pass returned empty body for %s", topic)
+            logger.warning(
+                "deep_dive: follow-up pass %d returned empty body for %s",
+                followup_pass,
+                topic,
+            )
+            break
+        followup_pass += 1
 
     if "Not financial advice" not in body:
         body = body.rstrip() + "\n\nNot financial advice."
