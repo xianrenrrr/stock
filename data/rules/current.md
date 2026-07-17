@@ -26,7 +26,7 @@ This review period scored 42.0% hits with a coin-flip Brier (0.2512). The system
    - Stock-specific price action and volume.
    - Macro/rates/futures/geopolitical backdrop.
    - Analyst notes, product launches, partnerships, listicles, institutional-positioning headlines, and theme articles.
-2. Product launches, partnerships, MOUs, conferences, index chatter, analyst target hikes, "AI beneficiary" articles, and political-trading headlines are soft inputs unless they include disclosed near-term revenue, order size, margin, guidance, dilution, or regulatory financial impact.
+2. Product launches, partnerships, MOUs, conferences, index chatter, analyst target hikes, "AI beneficiary" articles, Starlink/space-connectivity customer-mix narratives, and political-trading headlines are soft inputs unless they include disclosed near-term revenue, order size, margin, guidance, dilution, or regulatory financial impact.
 3. Duplicate articles about one event count once.
 4. A stale positive narrative plus a strong candle is not a fresh catalyst.
 

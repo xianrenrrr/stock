@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-15T20:10:00+00:00",
+  "generated_at": "2026-07-16T20:10:00+00:00",
   "mode": "proposed",
   "order_type": "stop_limit",
   "count": 7,
@@ -9,39 +9,39 @@
       "qty": 12.0,
       "side": "sell",
       "type": "stop_limit",
-      "stop_price": 63.72,
-      "limit_price": 63.08,
+      "stop_price": 53.33,
+      "limit_price": 52.8,
       "time_in_force": "gtc",
-      "ref_id": "sl-ASTS-6372-2026-07-15",
-      "basis": "swing-low stop $63.72 (3.9% below entry $66.31); ATR(20)=$7.01, swing-low(30d)=$63.72",
-      "last_close": 66.31,
-      "computed_at": "2026-07-15T20:10:00+00:00"
+      "ref_id": "sl-ASTS-5333-2026-07-16",
+      "basis": "swing-low stop $53.33 (3.1% below entry $55.01); ATR(20)=$7.28, swing-low(30d)=$53.33",
+      "last_close": 55.01,
+      "computed_at": "2026-07-16T20:10:00+00:00"
     },
     {
       "ticker": "ASX",
       "qty": 42.0,
       "side": "sell",
       "type": "stop_limit",
-      "stop_price": 34.73,
-      "limit_price": 34.38,
+      "stop_price": 33.55,
+      "limit_price": 33.21,
       "time_in_force": "gtc",
-      "ref_id": "sl-ASX-3473-2026-07-15",
-      "basis": "ATR-based stop $34.73 (14.7% below entry $40.70); ATR(20)=$2.98, swing-low(30d)=$32.73",
-      "last_close": 40.7,
-      "computed_at": "2026-07-15T20:10:00+00:00"
+      "ref_id": "sl-ASX-3355-2026-07-16",
+      "basis": "ATR-based stop $33.55 (15.1% below entry $39.52); ATR(20)=$2.99, swing-low(30d)=$32.73",
+      "last_close": 39.52,
+      "computed_at": "2026-07-16T20:10:00+00:00"
     },
     {
       "ticker": "GOOGL",
       "qty": 40.0,
       "side": "sell",
       "type": "stop_limit",
-      "stop_price": 348.61,
-      "limit_price": 345.12,
+      "stop_price": 330.75,
+      "limit_price": 327.44,
       "time_in_force": "gtc",
-      "ref_id": "sl-GOOGL-34861-2026-07-15",
-      "basis": "ATR-based stop $348.61 (6.0% below entry $370.92); ATR(20)=$11.15, swing-low(30d)=$330.20",
-      "last_close": 370.92,
-      "computed_at": "2026-07-15T20:10:00+00:00"
+      "ref_id": "sl-GOOGL-33075-2026-07-16",
+      "basis": "ATR-based stop $330.75 (6.7% below entry $354.46); ATR(20)=$11.85, swing-low(30d)=$330.20",
+      "last_close": 354.46,
+      "computed_at": "2026-07-16T20:10:00+00:00"
     },
     {
       "ticker": "RXRX",
@@ -51,49 +51,49 @@
       "stop_price": 2.95,
       "limit_price": 2.92,
       "time_in_force": "gtc",
-      "ref_id": "sl-RXRX-295-2026-07-15",
-      "basis": "swing-low stop $2.95 (10.9% below entry $3.31); ATR(20)=$0.24, swing-low(30d)=$2.95",
-      "last_close": 3.31,
-      "computed_at": "2026-07-15T20:10:00+00:00"
+      "ref_id": "sl-RXRX-295-2026-07-16",
+      "basis": "swing-low stop $2.95 (2.3% below entry $3.02); ATR(20)=$0.25, swing-low(30d)=$2.95",
+      "last_close": 3.02,
+      "computed_at": "2026-07-16T20:10:00+00:00"
     },
     {
       "ticker": "SDGR",
       "qty": 10.0,
       "side": "sell",
       "type": "stop_limit",
-      "stop_price": 14.23,
-      "limit_price": 14.09,
+      "stop_price": 13.9,
+      "limit_price": 13.76,
       "time_in_force": "gtc",
-      "ref_id": "sl-SDGR-1423-2026-07-15",
-      "basis": "ATR-based stop $14.23 (12.6% below entry $16.27); ATR(20)=$1.02, swing-low(30d)=$13.90",
-      "last_close": 16.27,
-      "computed_at": "2026-07-15T20:10:00+00:00"
+      "ref_id": "sl-SDGR-1390-2026-07-16",
+      "basis": "swing-low stop $13.90 (10.9% below entry $15.60); ATR(20)=$1.04, swing-low(30d)=$13.90",
+      "last_close": 15.6,
+      "computed_at": "2026-07-16T20:10:00+00:00"
     },
     {
       "ticker": "TEM",
       "qty": 70.0,
       "side": "sell",
       "type": "stop_limit",
-      "stop_price": 49.32,
-      "limit_price": 48.83,
+      "stop_price": 45.5,
+      "limit_price": 45.05,
       "time_in_force": "gtc",
-      "ref_id": "sl-TEM-4932-2026-07-15",
-      "basis": "ATR-based stop $49.32 (13.9% below entry $57.25); ATR(20)=$3.97, swing-low(30d)=$45.31",
-      "last_close": 57.25,
-      "computed_at": "2026-07-15T20:10:00+00:00"
+      "ref_id": "sl-TEM-4550-2026-07-16",
+      "basis": "ATR-based stop $45.50 (15.1% below entry $53.59); ATR(20)=$4.04, swing-low(30d)=$45.31",
+      "last_close": 53.59,
+      "computed_at": "2026-07-16T20:10:00+00:00"
     },
     {
       "ticker": "VEEV",
       "qty": 2.0,
       "side": "sell",
       "type": "stop_limit",
-      "stop_price": 179.21,
-      "limit_price": 177.42,
+      "stop_price": 182.81,
+      "limit_price": 180.98,
       "time_in_force": "gtc",
-      "ref_id": "sl-VEEV-17921-2026-07-15",
-      "basis": "ATR-based stop $179.21 (7.4% below entry $193.59); ATR(20)=$7.19, swing-low(30d)=$150.39",
-      "last_close": 193.59,
-      "computed_at": "2026-07-15T20:10:00+00:00"
+      "ref_id": "sl-VEEV-18281-2026-07-16",
+      "basis": "ATR-based stop $182.81 (7.4% below entry $197.41); ATR(20)=$7.30, swing-low(30d)=$150.39",
+      "last_close": 197.41,
+      "computed_at": "2026-07-16T20:10:00+00:00"
     }
   ]
 }
