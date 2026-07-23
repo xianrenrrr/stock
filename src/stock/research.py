@@ -1360,6 +1360,42 @@ def _build_live_quote_block(
     return "\n".join(lines)
 
 
+_ACCURACY_QUERY_RE = _re_thesis.compile(
+    r"\b(accuracy|hit[- ]?rate|forecast|prediction|backtest)\b|命中|准确|預測|预测",
+    _re_thesis.IGNORECASE,
+)
+
+
+def _build_accuracy_context_block(conn: sqlite3.Connection, *, boss_reply: str) -> str:
+    """Reply grounding for boss questions about recent forecast accuracy."""
+    if not _ACCURACY_QUERY_RE.search(boss_reply):
+        return ""
+
+    from stock.score import build_horizon_accuracy
+
+    lines = [
+        "Forecast accuracy context (local scored predictions; use these numbers):"
+    ]
+    for days in (30, 60):
+        stats = build_horizon_accuracy(conn, days=days)
+        bits: list[str] = []
+        for row in stats:
+            if row.scored == 0 or row.hit_rate is None:
+                bits.append(
+                    f"{row.label}: n=0 scored, total={row.total_predictions}, "
+                    f"pending={row.pending}, hit=N/A"
+                )
+                continue
+            bits.append(
+                f"{row.label}: n={row.scored}/{row.total_predictions}, "
+                f"hit={row.hit_rate:.1%}, Brier={row.mean_brier:.3f}, "
+                f"avg_abs_move={row.mean_abs_error_bps:.0f}bps, "
+                f"max_adverse={row.max_adverse_return_bps:.0f}bps"
+            )
+        lines.append(f"- last {days}d: " + "; ".join(bits))
+    return "\n".join(lines)
+
+
 def generate_reply(
     conn: sqlite3.Connection,
     *,
@@ -1397,9 +1433,14 @@ def generate_reply(
     # and fetch the top pages so the LLM sees real source material instead of
     # making up specifics from training-data memory.
     live_quote_block = _build_live_quote_block(conn, boss_reply=boss_reply)
+    accuracy_context_block = _build_accuracy_context_block(
+        conn, boss_reply=boss_reply
+    )
     web_grounding = _gather_web_grounding(boss_reply)
     web_grounding_block = "\n\n".join(
-        block for block in [live_quote_block, web_grounding] if block
+        block
+        for block in [accuracy_context_block, live_quote_block, web_grounding]
+        if block
     ) or "(none)"
 
     # F16: if the boss mentioned a ticker, run a fresh prediction (which also

@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import datetime, timezone
 
 from stock import db
 from stock.research import (
+    _build_accuracy_context_block,
     _build_live_quote_block,
     _detect_tickers_in_text,
     _known_reply_tickers,
@@ -70,6 +72,38 @@ def test_known_reply_tickers_reads_watchlist_and_holdings() -> None:
     conn.commit()
 
     assert {"CRDO", "RKLB"}.issubset(_known_reply_tickers(conn))
+
+
+def test_accuracy_context_block_answers_forecast_accuracy_question() -> None:
+    """Forecast/hit-rate questions get local daily-vs-weekly scoreboard context."""
+    conn: sqlite3.Connection = db.get_conn(":memory:")
+    now = datetime.now(timezone.utc).isoformat()
+    for ticker, horizon, hit in (
+        ("AAPL", 390, 1),
+        ("MSFT", 390, 0),
+        ("NVDA", 1950, 1),
+    ):
+        cursor = conn.execute(
+            "INSERT INTO predictions (ticker, horizon_minutes, direction, prob_up,"
+            " confidence, rationale, key_factors_json, model_used, created_at, due_at)"
+            " VALUES (?, ?, 'up', 0.6, 0.6, 'r', '[]', 'test', ?, ?)",
+            (ticker, horizon, now, now),
+        )
+        conn.execute(
+            "INSERT INTO outcomes (prediction_id, actual_return, direction_hit,"
+            " brier, scored_at) VALUES (?, ?, ?, 0.2, ?)",
+            (cursor.lastrowid, 0.01 if hit else -0.01, hit, now),
+        )
+    conn.commit()
+
+    block = _build_accuracy_context_block(
+        conn, boss_reply="how is daily and weekly forecast accuracy"
+    )
+
+    assert "Forecast accuracy context" in block
+    assert "last 30d" in block
+    assert "daily: n=2/2, hit=50.0%" in block
+    assert "weekly: n=1/1, hit=100.0%" in block
 
 
 def test_generate_deep_dive_injects_live_quotes(monkeypatch) -> None:

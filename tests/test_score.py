@@ -10,6 +10,7 @@ import pytest
 from stock.score import (
     OutcomeDetail,
     ReportSummary,
+    build_horizon_accuracy,
     build_report,
     format_report,
     score_due,
@@ -22,6 +23,7 @@ def _insert_prediction(
     ticker: str = "AAPL",
     direction: str = "up",
     prob_up: float = 0.8,
+    horizon_minutes: int = 390,
     created_at: str = "2025-01-10T14:00:00+00:00",
     due_at: str = "2025-01-13T21:00:00+00:00",
     rationale: str = "Test rationale",
@@ -32,8 +34,8 @@ def _insert_prediction(
         "  ticker, horizon_minutes, direction, prob_up, confidence,"
         "  rationale, key_factors_json, model_used, created_at, due_at"
         ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (ticker, 390, direction, prob_up, 0.7, rationale, "[]", "test-model",
-         created_at, due_at),
+        (ticker, horizon_minutes, direction, prob_up, 0.7, rationale, "[]",
+         "test-model", created_at, due_at),
     )
     conn.commit()
     return cursor.lastrowid or 0
@@ -294,6 +296,63 @@ def test_build_report_with_data(mem_db: sqlite3.Connection) -> None:
     assert report.best_call.ticker == "AAPL"
     assert report.worst_call is not None
     assert report.worst_call.ticker == "TSLA"
+
+
+def test_build_horizon_accuracy_splits_daily_and_weekly(
+    mem_db: sqlite3.Connection,
+) -> None:
+    """Accuracy summaries are split by horizon for boss-facing forecast questions."""
+    now = datetime.now(timezone.utc)
+    recent = (now - timedelta(days=5)).isoformat()
+    due = (now - timedelta(days=1)).isoformat()
+
+    daily_hit = _insert_prediction(
+        mem_db, ticker="AAPL", direction="up", horizon_minutes=390,
+        created_at=recent, due_at=due,
+    )
+    daily_miss = _insert_prediction(
+        mem_db, ticker="MSFT", direction="up", horizon_minutes=390,
+        created_at=recent, due_at=due,
+    )
+    weekly_hit = _insert_prediction(
+        mem_db, ticker="NVDA", direction="down", horizon_minutes=1950,
+        created_at=recent, due_at=due,
+    )
+    _insert_prediction(
+        mem_db, ticker="AMD", direction="up", horizon_minutes=1950,
+        created_at=recent, due_at=due,
+    )
+    old_daily = _insert_prediction(
+        mem_db, ticker="TSLA", direction="up", horizon_minutes=390,
+        created_at=(now - timedelta(days=45)).isoformat(), due_at=due,
+    )
+    for pid, ret, hit, brier in (
+        (daily_hit, 0.04, 1, 0.04),
+        (daily_miss, -0.02, 0, 0.64),
+        (weekly_hit, -0.08, 1, 0.09),
+        (old_daily, 0.10, 1, 0.01),
+    ):
+        mem_db.execute(
+            "INSERT INTO outcomes (prediction_id, actual_return, direction_hit,"
+            " brier, scored_at) VALUES (?, ?, ?, ?, ?)",
+            (pid, ret, hit, brier, now.isoformat()),
+        )
+    mem_db.commit()
+
+    daily, weekly = build_horizon_accuracy(mem_db, days=30)
+
+    assert daily.label == "daily"
+    assert daily.total_predictions == 2
+    assert daily.scored == 2
+    assert daily.hit_rate == 0.5
+    assert daily.mean_abs_error_bps == 300.0
+    assert daily.max_adverse_return_bps == -200.0
+    assert weekly.label == "weekly"
+    assert weekly.total_predictions == 2
+    assert weekly.scored == 1
+    assert weekly.pending == 1
+    assert weekly.hit_rate == 1.0
+    assert weekly.max_adverse_return_bps == 800.0
 
 
 # -- format_report test --

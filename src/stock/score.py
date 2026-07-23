@@ -51,6 +51,20 @@ class ReportSummary(BaseModel):
     spend_usd: float
 
 
+class HorizonAccuracy(BaseModel):
+    """Accuracy stats for one prediction horizon over a date range."""
+
+    label: str
+    days: int
+    total_predictions: int
+    scored: int
+    pending: int
+    hit_rate: float | None
+    mean_brier: float | None
+    mean_abs_error_bps: float | None
+    max_adverse_return_bps: float | None
+
+
 def score_due(conn: sqlite3.Connection) -> ScoreResult:
     """Score all predictions whose due_at has passed. Idempotent."""
     now_iso = datetime.now(timezone.utc).isoformat()
@@ -220,6 +234,57 @@ def build_report(conn: sqlite3.Connection, days: int = 7) -> ReportSummary:
         total_return_bps=total_return_bps,
         spend_usd=spend_usd,
     )
+
+
+def build_horizon_accuracy(
+    conn: sqlite3.Connection, *, days: int = 60
+) -> list[HorizonAccuracy]:
+    """Build daily-vs-weekly forecast accuracy over recent scored history."""
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    specs = (
+        ("daily", "p.horizon_minutes < 1000"),
+        ("weekly", "p.horizon_minutes >= 1000"),
+    )
+    out: list[HorizonAccuracy] = []
+
+    for label, horizon_filter in specs:
+        total = conn.execute(
+            "SELECT COUNT(*) FROM predictions p"
+            f" WHERE p.created_at >= ? AND {horizon_filter}",
+            (since,),
+        ).fetchone()[0]
+        row = conn.execute(
+            "SELECT COUNT(*), AVG(o.direction_hit), AVG(o.brier),"
+            " AVG(ABS(o.actual_return)),"
+            " MIN(CASE"
+            "   WHEN p.direction = 'up' THEN o.actual_return"
+            "   ELSE -o.actual_return"
+            " END)"
+            " FROM predictions p JOIN outcomes o ON p.id = o.prediction_id"
+            f" WHERE p.created_at >= ? AND {horizon_filter}",
+            (since,),
+        ).fetchone()
+        scored = int(row[0] or 0)
+        out.append(
+            HorizonAccuracy(
+                label=label,
+                days=days,
+                total_predictions=int(total or 0),
+                scored=scored,
+                pending=int(total or 0) - scored,
+                hit_rate=round(float(row[1]), 4) if scored and row[1] is not None else None,
+                mean_brier=round(float(row[2]), 4) if scored and row[2] is not None else None,
+                mean_abs_error_bps=(
+                    round(float(row[3]) * 10000, 1)
+                    if scored and row[3] is not None else None
+                ),
+                max_adverse_return_bps=(
+                    round(float(row[4]) * 10000, 1)
+                    if scored and row[4] is not None else None
+                ),
+            )
+        )
+    return out
 
 
 def _load_outcome_detail(
