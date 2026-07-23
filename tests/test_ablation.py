@@ -94,9 +94,14 @@ def _scored(conn, *, knowledge, hit, created_days_ago=1, manifest=None):
     conn.commit()
 
 
-def test_ablation_verdict_cut_and_keep(mem_db):
+def test_ablation_verdict_cut_and_keep(mem_db, monkeypatch):
     from stock import ablation
-    # market_tape_h0 ships 2026-06-11; make WITH (recent) hurt vs WITHOUT (old).
+
+    ship = (datetime.now(timezone.utc) - timedelta(days=30)).date().isoformat()
+    monkeypatch.setitem(ablation.SHIP_DATES, "market_tape_h0", ship)
+
+    # Anchor market_tape_h0's ship date inside the test window; make WITH
+    # (recent) hurt vs WITHOUT (old).
     # 50 recent predictions all miss; 50 old predictions all hit -> tape hurts big.
     for _ in range(50):
         _scored(mem_db, knowledge=0, hit=False, created_days_ago=1)   # after ship
